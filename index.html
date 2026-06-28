@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <title>Patient File</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <!-- Shared clinic helpers — fetched fresh each load (cache-buster) so we
+         never run a stale copy and never have to bump versions in two repos. -->
+    <script>
+      (function () {
+        var v = Date.now();
+        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js"].forEach(function (f) {
+          document.write('<script src="https://amy-studio.github.io/clinic-style/' + f + '?fresh=' + v + '"><\/script>');
+        });
+      })();
+    </script>
+    <!-- Login gate: one dashboard login for the whole suite. On localhost,
+         ?preview=1 boots a stub patient so the UI can be QA'd without a session.
+         Inert in production (requires BOTH the flag AND a localhost host). -->
+    <script>
+      document.documentElement.style.visibility = "hidden";
+      (function () {
+        var isLocal = ["localhost", "127.0.0.1"].indexOf(location.hostname) !== -1;
+        if (isLocal && new URLSearchParams(location.search).get("preview") === "1") {
+          window.__pfPreview = true;
+          window.__pfUser = { id: "preview", email: "preview@local" };
+          document.documentElement.style.visibility = "visible";
+          var t = setInterval(function () { if (window.__pfBoot) { clearInterval(t); window.__pfBoot(); } }, 30);
+          return;
+        }
+        function gate() {
+          if (!window.ClinicAuth || !ClinicAuth.requireLogin) { return void setTimeout(gate, 30); }
+          ClinicAuth.requireLogin().then(function (user) {
+            if (user) {
+              window.__pfUser = user;
+              document.documentElement.style.visibility = "visible";
+              if (window.__pfBoot) window.__pfBoot();
+            }
+          }).catch(function (e) {
+            console.error("[PF] auth gate error", e);
+            document.documentElement.style.visibility = "visible";
+          });
+        }
+        gate();
+      })();
+    </script>
+
+    <style>
+      :root {
+        --navy: #1f3a5f;
+        --ink: #243447;
+        --muted: #6b7a90;
+        --line: #e6e9ef;
+        --card: rgba(255,255,255,.82);
+        --pink-bg: #f8ecef;
+        --teal-bg: #e3eeed;
+        --accent-soft: #eaf1fb;
+        --accent-ink: #1f3a5f;
+        --good: #2d8a5f;
+        --good-bg: #e7f4ec;
+        --radius: 10px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; }
+      body {
+        font-family: "Montserrat", system-ui, -apple-system, sans-serif;
+        font-weight: 400;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 600px at 10% -8%, var(--pink-bg) 0%, transparent 55%),
+          radial-gradient(1100px 600px at 100% 0%, var(--teal-bg) 0%, transparent 55%),
+          linear-gradient(180deg, #fbfcfe 0%, #f4f7fb 100%);
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+        font-size: 14px;
+      }
+      h1, h2, h3 { font-weight: 600; color: var(--navy); margin: 0; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 22px 20px 60px; }
+
+      /* Top bar */
+      .topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+      .brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+      .brand-title { font-size: 18px; font-weight: 600; color: var(--navy); letter-spacing: .2px; }
+      .brand-sub { font-size: 12px; color: var(--muted); }
+      .back-link { font-size: 13px; color: var(--navy); text-decoration: none; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; }
+
+      /* Patient header card */
+      .pcard { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; backdrop-filter: blur(6px); }
+      .phead { display: flex; align-items: center; gap: 14px; }
+      .avatar { width: 46px; height: 46px; border-radius: 50%; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; flex-shrink: 0; }
+      .pname { font-size: 18px; font-weight: 600; color: var(--navy); }
+      .pmeta { font-size: 13px; font-weight: 400; color: var(--muted); }
+      .save-btn { font-size: 13px; font-weight: 500; color: #fff; background: var(--navy); border: none; border-radius: var(--radius); padding: 9px 16px; cursor: pointer; }
+      .save-btn:disabled { opacity: .55; cursor: default; }
+
+      /* Launch row */
+      .launch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+      .launch .lbl { font-size: 12px; color: var(--muted); margin-right: 2px; }
+      .launch a { font-size: 13px; font-weight: 500; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid #d8e4f4; border-radius: var(--radius); padding: 8px 13px; text-decoration: none; }
+      .launch a:hover { background: #dfeafb; }
+
+      /* Body: nav + panel */
+      .body { display: flex; gap: 18px; align-items: flex-start; margin-top: 16px; }
+      nav.side { width: 168px; flex-shrink: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+      .navitem { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 400; color: var(--ink); padding: 8px 10px; border-radius: var(--radius); cursor: pointer; user-select: none; }
+      .navitem .ic { width: 16px; text-align: center; opacity: .8; }
+      .navitem .badge { margin-left: auto; font-size: 10px; font-weight: 500; color: var(--good); background: var(--good-bg); border-radius: 999px; padding: 1px 7px; }
+      .navitem:hover { background: #eef2f8; }
+      .navitem.active { background: var(--navy); color: #fff; font-weight: 500; }
+      .navitem.active .ic { opacity: 1; }
+
+      .panel { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+      .panel h2 { font-size: 16px; margin-bottom: 2px; }
+      .panel .panel-sub { font-size: 12px; font-weight: 400; color: var(--muted); margin: 2px 0 14px; }
+      .section { display: none; }
+      .section.active { display: block; }
+
+      /* Fields — REAL css, normal weight everywhere */
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+      .field { display: flex; flex-direction: column; }
+      .field label { font-size: 12px; font-weight: 400; color: var(--muted); margin-bottom: 4px; }
+      .field input, .field select, .field textarea {
+        font-family: inherit; font-size: 13px; font-weight: 400; color: var(--ink);
+        background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 8px 10px; width: 100%;
+      }
+      .field textarea { resize: vertical; line-height: 1.45; min-height: 56px; }
+      .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #b9c8de; box-shadow: 0 0 0 3px rgba(31,58,95,.08); }
+      .full { grid-column: 1 / -1; }
+      .field.full { grid-column: 1 / -1; }
+
+      .subhead { font-size: 12px; font-weight: 500; color: var(--navy); margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+      /* Item code chips */
+      .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+      .chip { font-size: 13px; font-weight: 400; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; display: inline-flex; align-items: center; gap: 6px; }
+      .chip .x { cursor: pointer; color: var(--muted); }
+      .chip.add { color: var(--accent-ink); border-style: dashed; border-color: #c7d6ea; cursor: pointer; background: transparent; }
+
+      /* Documents */
+      .doc { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; background: #fff; }
+      .doc .dname { font-size: 13px; font-weight: 500; color: var(--ink); }
+      .doc .dmeta { font-size: 12px; font-weight: 400; color: var(--muted); }
+      .doc a { margin-left: auto; font-size: 13px; color: var(--accent-ink); text-decoration: none; }
+      .pill { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 1px 8px; }
+      .pill.ok { color: var(--good); background: var(--good-bg); }
+      .pill.no { color: var(--muted); background: #eef1f5; }
+
+      .empty { font-size: 13px; font-weight: 400; color: var(--muted); padding: 8px 0; }
+      .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--navy); color: #fff; font-size: 13px; padding: 10px 16px; border-radius: var(--radius); opacity: 0; transition: opacity .2s; pointer-events: none; }
+      .toast.show { opacity: 1; }
+      .status { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 10px; }
+      @media (max-width: 760px) {
+        .body { flex-direction: column; }
+        nav.side { width: 100%; display: flex; flex-wrap: wrap; }
+        .navitem { flex: 1 1 auto; }
+        .grid2 { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-title">Patient File</div>
+          <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
+        </div>
+        <a class="back-link" href="https://clinic.stevenedwards.com.au">← Dashboard</a>
+      </div>
+
+      <div class="pcard">
+        <div class="phead">
+          <div class="avatar" id="pf-avatar">–</div>
+          <div style="flex:1; min-width:0">
+            <div class="pname" id="pf-name">Loading…</div>
+            <div class="pmeta" id="pf-meta"></div>
+          </div>
+          <button class="save-btn" id="pf-save" disabled>Save</button>
+          <span class="status" id="pf-status"></span>
+        </div>
+        <div class="launch">
+          <span class="lbl">Create for this patient:</span>
+          <a id="pf-make-quote" href="#">Make quote</a>
+          <a id="pf-make-pamphlet" href="#">Make pamphlet</a>
+          <a id="pf-make-list" href="#">Add to surgical list</a>
+        </div>
+      </div>
+
+      <div class="body">
+        <nav class="side" id="pf-nav">
+          <div class="navitem active" data-sec="overview"><span class="ic">◧</span> Overview</div>
+          <div class="navitem" data-sec="contact"><span class="ic">◔</span> Contact</div>
+          <div class="navitem" data-sec="surgery"><span class="ic">▦</span> Surgery</div>
+          <div class="navitem" data-sec="order"><span class="ic">✚</span> Surgeon order</div>
+          <div class="navitem" data-sec="documents"><span class="ic">▤</span> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
+          <div class="navitem" data-sec="hire"><span class="ic">▣</span> Hire</div>
+          <div class="navitem" data-sec="history"><span class="ic">↻</span> History</div>
+        </nav>
+
+        <div class="panel">
+          <!-- Overview -->
+          <div class="section active" id="sec-overview">
+            <h2>Overview</h2>
+            <div class="panel-sub">A snapshot of this patient and what's on file.</div>
+            <div id="pf-overview"></div>
+          </div>
+
+          <!-- Contact -->
+          <div class="section" id="sec-contact">
+            <h2>Contact &amp; personal</h2>
+            <div class="panel-sub">Identity and contact details — shared across every app.</div>
+            <div class="grid2">
+              <div class="field"><label>Full name</label><input id="f-full_name"></div>
+              <div class="field"><label>Date of birth</label><input id="f-dob" type="date"></div>
+              <div class="field"><label>Phone</label><input id="f-phone"></div>
+              <div class="field"><label>Email</label><input id="f-email"></div>
+              <div class="field full"><label>Address</label><input id="f-address"></div>
+              <div class="field"><label>Medicare number</label><input id="f-medicare_number"></div>
+              <div class="field"><label>Medicare IRN</label><input id="f-medicare_irn"></div>
+              <div class="field"><label>Health fund</label><input id="f-health_fund"></div>
+              <div class="field"><label>Fund membership</label><input id="f-health_fund_membership"></div>
+              <div class="field"><label>Next of kin</label><input id="f-nok_name"></div>
+              <div class="field"><label>Next of kin phone</label><input id="f-nok_phone"></div>
+            </div>
+          </div>
+
+          <!-- Surgery -->
+          <div class="section" id="sec-surgery">
+            <h2>Surgery &amp; booking</h2>
+            <div class="panel-sub">Drives the dashboard calendar and the surgical list.</div>
+            <div class="grid2">
+              <div class="field"><label>Surgery date</label><input id="f-surgery_date" type="date"></div>
+              <div class="field"><label>Surgery time</label><input id="f-surgery_time" type="time"></div>
+              <div class="field"><label>Venue</label>
+                <select id="f-surgery_venue">
+                  <option value="">—</option>
+                  <option value="sjm">Sir John Monash</option>
+                  <option value="masada">Masada</option>
+                  <option value="vsc">Vermont (VSC)</option>
+                  <option value="clinic">Clinic</option>
+                </select>
+              </div>
+              <div class="field"><label>Anaesthetist</label><input id="f-surgery_anaesthetist"></div>
+              <div class="field"><label>Duration (min)</label><input id="f-surgery_duration_min" type="number"></div>
+              <div class="field"><label>List position</label><input id="f-list_position" type="number"></div>
+              <div class="field"><label>Status</label>
+                <select id="f-surgery_status"><option value="">—</option><option>booked</option><option>confirmed</option><option>cancelled</option></select>
+              </div>
+              <div class="field"><label>Paid</label>
+                <select id="f-paid_in_full"><option value="">Not paid</option><option value="deposit">Deposit paid</option><option value="full">Paid in full</option></select>
+              </div>
+              <div class="field full"><label>Procedure</label><textarea id="f-surgery_procedure" rows="2"></textarea></div>
+            </div>
+          </div>
+
+          <!-- Surgeon order -->
+          <div class="section" id="sec-order">
+            <h2>Surgeon order</h2>
+            <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
+            <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
+            <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
+            <div class="chips" id="o-codes"></div>
+            <div class="grid2" style="margin-top:14px">
+              <div class="field"><label>Allergies</label><input id="o-allergies"></div>
+              <div class="field"><label>Prosthesis</label><input id="o-prosthesis_details"></div>
+              <div class="field"><label>Antibiotics (post-op)</label><input id="o-antibiotics_postop"></div>
+              <div class="field"><label>Theatre equipment</label><input id="o-theatre_equipment"></div>
+              <div class="field full"><label>Theatre alerts</label><input id="o-theatre_alerts"></div>
+            </div>
+            <div class="subhead">Recovery plan <span style="font-weight:400; color:var(--muted)">· feeds the pamphlet</span></div>
+            <div class="grid2">
+              <div class="field"><label>Weight-bearing</label><input id="o-weight_bearing"></div>
+              <div class="field"><label>Back to sport (weeks)</label><input id="o-sport_weeks" type="number"></div>
+              <div class="field"><label>Driving (weeks off)</label><input id="o-driving_weeks_off" type="number"></div>
+              <div class="field"><label>Normal shoes (weeks)</label><input id="o-normal_shoes_weeks" type="number"></div>
+            </div>
+          </div>
+
+          <!-- Documents -->
+          <div class="section" id="sec-documents">
+            <h2>Documents</h2>
+            <div class="panel-sub">Every PDF saved to this patient.</div>
+            <div id="pf-docs"></div>
+          </div>
+
+          <!-- Hire -->
+          <div class="section" id="sec-hire">
+            <h2>Hire &amp; equipment</h2>
+            <div class="panel-sub">Equipment hired to this patient.</div>
+            <div id="pf-hire"></div>
+          </div>
+
+          <!-- History -->
+          <div class="section" id="sec-history">
+            <h2>History</h2>
+            <div class="panel-sub">Recent changes to this record.</div>
+            <div id="pf-history"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="pf-toast"></div>
+
+    <script>
+      (function () {
+        "use strict";
+        var APPS = {
+          quote: "https://amy-studio.github.io/QuoteV18/quote-v18.html",
+          pamphlet: "https://amy-studio.github.io/patient-info-builder/",
+          list: "https://amy-studio.github.io/surgical-list-web/"
+        };
+        var VENUE = { sjm: "Sir John Monash", masada: "Masada", vsc: "Vermont (VSC)", clinic: "Clinic" };
+        var state = { patient: null, order: null, docs: [], orderId: null };
+
+        function sb() { return (window.ClinicAuth && ClinicAuth.getClient) ? ClinicAuth.getClient() : null; }
+        function qs(id) { return document.getElementById(id); }
+        function val(id) { var e = qs(id); return e ? e.value : ""; }
+        function setVal(id, v) { var e = qs(id); if (e) e.value = (v == null ? "" : v); }
+        function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
+        function toast(msg) { var t = qs("pf-toast"); t.textContent = msg; t.classList.add("show"); setTimeout(function () { t.classList.remove("show"); }, 2200); }
+        function status(msg) { qs("pf-status").textContent = msg || ""; }
+        function initials(name) { var p = String(name || "").trim().split(/\s+/); return ((p[0] || "")[0] || "") + ((p[p.length - 1] || "")[0] || ""); }
+        function isoToDmy(iso) { if (!iso) return ""; var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (m[3] + "/" + m[2] + "/" + m[1]) : iso; }
+        function ageFrom(iso) { if (!iso) return ""; var d = new Date(iso); if (isNaN(d)) return ""; var t = new Date(); var a = t.getFullYear() - d.getFullYear(); var mo = t.getMonth() - d.getMonth(); if (mo < 0 || (mo === 0 && t.getDate() < d.getDate())) a--; return a; }
+
+        // ---- nav ----
+        Array.prototype.forEach.call(document.querySelectorAll(".navitem"), function (n) {
+          n.addEventListener("click", function () {
+            document.querySelectorAll(".navitem").forEach(function (x) { x.classList.remove("active"); });
+            document.querySelectorAll(".section").forEach(function (x) { x.classList.remove("active"); });
+            n.classList.add("active");
+            var s = qs("sec-" + n.getAttribute("data-sec"));
+            if (s) s.classList.add("active");
+          });
+        });
+
+        // ---- render ----
+        function renderHeader() {
+          var p = state.patient || {};
+          qs("pf-avatar").textContent = (initials(p.full_name) || "–").toUpperCase();
+          qs("pf-name").textContent = p.full_name || "(unnamed)";
+          var bits = [];
+          if (p.dob) bits.push("Born " + isoToDmy(p.dob) + " · age " + ageFrom(p.dob));
+          if (p.health_fund) bits.push(p.health_fund);
+          if (p.surgery_date) bits.push("surgery " + isoToDmy(p.surgery_date));
+          qs("pf-meta").textContent = bits.join(" · ");
+        }
+        function renderContact() {
+          var p = state.patient || {};
+          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone"].forEach(function (k) { setVal("f-" + k, p[k]); });
+          setVal("f-dob", p.dob ? String(p.dob).slice(0, 10) : "");
+        }
+        function renderSurgery() {
+          var p = state.patient || {};
+          setVal("f-surgery_date", p.surgery_date ? String(p.surgery_date).slice(0, 10) : "");
+          setVal("f-surgery_time", p.surgery_time ? String(p.surgery_time).slice(0, 5) : "");
+          setVal("f-surgery_venue", (p.surgery_venue || "").toLowerCase());
+          ["surgery_anaesthetist", "surgery_duration_min", "list_position", "surgery_status", "surgery_procedure"].forEach(function (k) { setVal("f-" + k, p[k]); });
+          setVal("f-paid_in_full", p.paid_in_full === true ? "full" : (p.paid_in_full || ""));
+        }
+        function renderOrder() {
+          var o = state.order || {};
+          setVal("o-procedure_name", o.procedure_name);
+          ["allergies", "prosthesis_details", "antibiotics_postop", "theatre_equipment", "theatre_alerts", "weight_bearing", "sport_weeks", "driving_weeks_off", "normal_shoes_weeks"].forEach(function (k) { setVal("o-" + k, o[k]); });
+          renderCodes();
+        }
+        function renderCodes() {
+          var o = state.order || {};
+          var codes = Array.isArray(o.procedure_codes) ? o.procedure_codes : [];
+          var html = codes.map(function (c) {
+            var code = c && (c.code || c) || "";
+            var q = c && c.qty && c.qty > 1 ? " ×" + c.qty : "";
+            var d = c && c.description ? " · " + esc(String(c.description).split("–")[0].trim()).slice(0, 40) : "";
+            return '<span class="chip">' + esc(code) + q + d + '</span>';
+          }).join("");
+          html += '<span class="chip add" id="o-addcode">+ add code</span>';
+          qs("o-codes").innerHTML = html;
+        }
+        function renderOverview() {
+          var p = state.patient || {}, o = state.order || {};
+          function row(label, ok, extra) { return '<div class="doc"><span class="dname">' + label + '</span><span class="' + (ok ? 'pill ok' : 'pill no') + '">' + (ok ? 'on file' + (extra ? ' · ' + extra : '') : 'not yet') + '</span></div>'; }
+          var hasQuote = !!p.quote_pdf_url, hasPam = !!p.pamphlet_pdf_url, hasOrder = !!(o && (o.procedure_name || (o.procedure_codes && o.procedure_codes.length)));
+          var h = "";
+          h += '<div class="grid2" style="margin-bottom:10px">';
+          h += '<div class="doc"><span class="dname">Surgery</span><span class="dmeta" style="margin-left:auto">' + (p.surgery_date ? isoToDmy(p.surgery_date) + (p.surgery_venue ? " · " + (VENUE[(p.surgery_venue||"").toLowerCase()] || p.surgery_venue) : "") : "not booked") + '</span></div>';
+          h += '<div class="doc"><span class="dname">Procedure</span><span class="dmeta" style="margin-left:auto">' + esc((p.surgery_procedure || (o && o.procedure_name) || "—").slice(0, 40)) + '</span></div>';
+          h += '</div>';
+          h += row("Surgeon order", hasOrder);
+          h += row("Quote", hasQuote);
+          h += row("Pamphlet", hasPam);
+          qs("pf-overview").innerHTML = h;
+        }
+        function renderDocs() {
+          var docs = state.docs || [];
+          var b = qs("pf-doc-badge");
+          if (docs.length) { b.textContent = docs.length; b.style.display = ""; } else { b.style.display = "none"; }
+          if (!docs.length) { qs("pf-docs").innerHTML = '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>'; return; }
+          qs("pf-docs").innerHTML = docs.map(function (d) {
+            var url = d.url || (d.bucket && d.path ? ("https://kbdgbzdodbfhmusreyxh.supabase.co/storage/v1/object/public/" + d.bucket + "/" + d.path) : "");
+            var label = d.label || (d.doc_type || "Document").replace(/_/g, " ");
+            var when = d.generated_at ? isoToDmy(d.generated_at) : "";
+            return '<div class="doc"><span class="dname">' + esc(label) + '</span><span class="dmeta">' + esc(when) + '</span>' + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">View PDF ↗</a>' : '') + '</div>';
+          }).join("");
+        }
+        function renderHire() {
+          var p = state.patient || {};
+          qs("pf-hire").innerHTML = p.hire_status
+            ? '<div class="doc"><span class="dname">Hire status</span><span class="dmeta" style="margin-left:auto">' + esc(p.hire_status) + '</span></div>'
+            : '<div class="empty">No equipment hired.</div>';
+        }
+        function renderHistory() {
+          var p = state.patient || {};
+          var h = [];
+          if (p.updated_at) h.push('<div class="doc"><span class="dname">Last updated</span><span class="dmeta" style="margin-left:auto">' + isoToDmy(p.updated_at) + '</span></div>');
+          if (p.created_at) h.push('<div class="doc"><span class="dname">Created</span><span class="dmeta" style="margin-left:auto">' + isoToDmy(p.created_at) + (p.created_by ? " · " + esc(p.created_by) : "") + '</span></div>');
+          qs("pf-history").innerHTML = h.length ? h.join("") : '<div class="empty">No history yet.</div>';
+        }
+        function renderAll() { renderHeader(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderHistory(); wireLaunch(); }
+
+        function wireLaunch() {
+          var id = state.patient && state.patient.id;
+          var oid = state.orderId;
+          var q = id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&surgeon_order_id=" + encodeURIComponent(oid) : "")) : "";
+          qs("pf-make-quote").href = APPS.quote + q;
+          qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
+          qs("pf-make-list").href = APPS.list + (id ? ("?patient_id=" + encodeURIComponent(id)) : "");
+          ["pf-make-quote", "pf-make-pamphlet", "pf-make-list"].forEach(function (b) { qs(b).setAttribute("target", "_blank"); qs(b).setAttribute("rel", "noopener"); });
+        }
+
+        // ---- save ----
+        function collectPatientPatch() {
+          var patch = {};
+          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { patch[k] = val("f-" + k) || null; });
+          patch.dob = val("f-dob") || null;
+          patch.surgery_date = val("f-surgery_date") || null;
+          patch.surgery_time = val("f-surgery_time") || null;
+          patch.surgery_venue = val("f-surgery_venue") || null;
+          var dur = parseInt(val("f-surgery_duration_min"), 10); patch.surgery_duration_min = isNaN(dur) ? null : dur;
+          var lp = parseInt(val("f-list_position"), 10); patch.list_position = isNaN(lp) ? null : lp;
+          var paid = val("f-paid_in_full"); patch.paid_in_full = paid === "full" ? true : (paid || null);
+          return patch;
+        }
+        function collectOrderPatch() {
+          var patch = {};
+          patch.procedure_name = val("o-procedure_name") || null;
+          ["allergies", "prosthesis_details", "antibiotics_postop", "theatre_equipment", "theatre_alerts", "weight_bearing"].forEach(function (k) { patch[k] = val("o-" + k) || null; });
+          ["sport_weeks", "driving_weeks_off", "normal_shoes_weeks"].forEach(function (k) { var n = parseInt(val("o-" + k), 10); patch[k] = isNaN(n) ? null : n; });
+          return patch;
+        }
+        function save() {
+          if (window.__pfPreview) { toast("Preview mode — not saved"); return; }
+          var client = sb(); var id = state.patient && state.patient.id;
+          if (!client || !id) { toast("Not signed in"); return; }
+          qs("pf-save").disabled = true; status("Saving…");
+          var pPatch = collectPatientPatch();
+          var oPatch = collectOrderPatch();
+          var jobs = [];
+          if (window.ClinicPatients && ClinicPatients.update) jobs.push(ClinicPatients.update(id, pPatch));
+          else jobs.push(client.from("patients").update(pPatch).eq("id", id));
+          var hasOrderContent = Object.keys(oPatch).some(function (k) { return oPatch[k] != null && oPatch[k] !== ""; });
+          if (state.orderId) jobs.push(client.from("surgeon_orders").update(oPatch).eq("id", state.orderId));
+          else if (hasOrderContent) jobs.push(client.from("surgeon_orders").insert(Object.assign({ patient_id: id, status: "draft", procedure_codes: (state.order && state.order.procedure_codes) || [] }, oPatch)).select("id"));
+          Promise.all(jobs).then(function (res) {
+            var ins = res[res.length - 1];
+            if (!state.orderId && ins && ins.data && ins.data[0]) state.orderId = ins.data[0].id;
+            qs("pf-save").disabled = false; status(""); toast("Saved ✓");
+            Object.assign(state.patient, pPatch); state.order = Object.assign(state.order || {}, oPatch);
+            renderHeader(); renderOverview();
+          }).catch(function (e) {
+            qs("pf-save").disabled = false; status("Save failed"); toast("Save failed — " + (e && e.message ? e.message : "error"));
+            console.error("[PF] save error", e);
+          });
+        }
+        qs("pf-save").addEventListener("click", save);
+
+        // ---- load ----
+        function loadStub() {
+          state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
+          state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], allergies: "NKA", prosthesis_details: "No", antibiotics_postop: "Yes — 5 days", theatre_equipment: "Power, Podiatry Tray", theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", weight_bearing: "Non-weight bearing 2 weeks", sport_weeks: 6 };
+          state.orderId = "o1";
+          state.docs = [{ doc_type: "quote_main", label: "Quote", generated_at: "2026-06-10", url: "#" }, { doc_type: "pamphlet", label: "Recovery pamphlet", generated_at: "2026-06-06", url: "#" }];
+          qs("pf-save").disabled = false; renderAll();
+        }
+        function loadReal() {
+          var client = sb(); if (!client) { status("Not signed in"); return; }
+          var pid = new URLSearchParams(location.search).get("patient_id");
+          status("Loading…");
+          var getP = (window.ClinicPatients && ClinicPatients.get && pid) ? ClinicPatients.get(pid) : (pid ? client.from("patients").select("*").eq("id", pid).maybeSingle().then(function (r) { return r.data; }) : Promise.resolve(null));
+          Promise.resolve(getP).then(function (p) {
+            if (!p) { qs("pf-name").textContent = "No patient selected"; qs("pf-meta").textContent = "Open this file from a patient in the dashboard register."; status(""); return; }
+            state.patient = p;
+            return Promise.all([
+              client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }).limit(1),
+              client.from("patient_documents").select("*").eq("patient_id", p.id).is("archived_at", null).order("generated_at", { ascending: false })
+            ]).then(function (rr) {
+              var o = rr[0] && rr[0].data && rr[0].data[0]; if (o) { state.order = o; state.orderId = o.id; }
+              state.docs = (rr[1] && rr[1].data) || [];
+              qs("pf-save").disabled = false; status(""); renderAll();
+            });
+          }).catch(function (e) { status("Load failed"); console.error("[PF] load error", e); });
+        }
+
+        // delegated: add-code stub
+        document.addEventListener("click", function (e) {
+          if (e.target && e.target.id === "o-addcode") {
+            var c = prompt("Add an item code (e.g. F694):"); if (!c) return;
+            state.order = state.order || { procedure_codes: [] };
+            state.order.procedure_codes = state.order.procedure_codes || [];
+            state.order.procedure_codes.push({ code: c.trim().toUpperCase(), qty: 1 });
+            renderCodes();
+          }
+        });
+
+        window.__pfBoot = function () { if (window.__pfPreview) loadStub(); else loadReal(); };
+        if (window.__pfPreview && document.readyState !== "loading") window.__pfBoot();
+      })();
+    </script>
+  </body>
+</html>

@@ -496,23 +496,49 @@
           h += row("Pamphlet", hasPam);
           qs("pf-overview").innerHTML = h;
         }
+        function docCategory(t) {
+          t = (t || "").toLowerCase();
+          if (t.indexOf("pamphlet") >= 0 || t === "pib") return "Pamphlets (PIB)";
+          if (t.indexOf("cheat") >= 0 || t.indexOf("reception") >= 0) return "Reception sheets";
+          if (t.indexOf("fee") >= 0 || t.indexOf("estimate") >= 0) return "Fee estimates";
+          if (t.indexOf("consent") >= 0) return "Consent";
+          if (t.indexOf("quote") >= 0) return "Quotes";
+          return "Other";
+        }
         function renderDocs() {
-          var docs = state.docs || [];
+          var docs = (state.docs || []).filter(function (d) { return !d.archived_at; });
           var b = qs("pf-doc-badge");
           if (docs.length) { b.textContent = docs.length; b.style.display = ""; } else { b.style.display = "none"; }
           if (!docs.length) { qs("pf-docs").innerHTML = '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>'; return; }
-          qs("pf-docs").innerHTML = docs.map(function (d) {
-            var url = d.url || (d.bucket && d.path ? ("https://kbdgbzdodbfhmusreyxh.supabase.co/storage/v1/object/public/" + d.bucket + "/" + d.path) : "");
-            var label = d.label || (d.doc_type || "Document").replace(/_/g, " ");
-            var when = d.generated_at ? isoToDmy(d.generated_at) : "";
-            return '<div class="doc"><span class="dname">' + esc(label) + '</span><span class="dmeta">' + esc(when) + '</span>' + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">View PDF ↗</a>' : '') + '</div>';
+          var groups = {};
+          docs.forEach(function (d) { var c = docCategory(d.doc_type); (groups[c] = groups[c] || []).push(d); });
+          var order = ["Quotes", "Pamphlets (PIB)", "Fee estimates", "Reception sheets", "Consent", "Other"];
+          qs("pf-docs").innerHTML = order.filter(function (c) { return groups[c]; }).map(function (c) {
+            var rows = groups[c].sort(function (a, b2) { return String(b2.generated_at || b2.created_at || "").localeCompare(String(a.generated_at || a.created_at || "")); }).map(function (d) {
+              var url = d.url || (d.bucket && d.path ? ("https://kbdgbzdodbfhmusreyxh.supabase.co/storage/v1/object/public/" + d.bucket + "/" + d.path) : "");
+              var name = d.label || (d.doc_type || "Document").replace(/_/g, " ");
+              var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmy(d.generated_at || d.created_at)); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
+              return '<div class="doc"><div style="flex:1;min-width:0"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div>' + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">Open ↗</a>' : '<span class="dmeta">no file</span>') + '</div>';
+            }).join("");
+            return '<div class="subhead">' + c + ' <span style="font-weight:400;color:var(--muted)">· ' + groups[c].length + '</span></div>' + rows;
           }).join("");
         }
         function renderHire() {
+          var hires = state.hires || [];
           var p = state.patient || {};
-          qs("pf-hire").innerHTML = p.hire_status
-            ? '<div class="doc"><span class="dname">Hire status</span><span class="dmeta" style="margin-left:auto">' + esc(p.hire_status) + '</span></div>'
-            : '<div class="empty">No equipment hired.</div>';
+          if (!hires.length) {
+            qs("pf-hire").innerHTML = p.hire_status
+              ? '<div class="doc"><span class="dname">Hire status</span><span class="dmeta" style="margin-left:auto">' + esc(p.hire_status) + '</span></div>'
+              : '<div class="empty">No equipment hired.</div>';
+            return;
+          }
+          qs("pf-hire").innerHTML = hires.map(function (h) {
+            var item = (h.hire_items && h.hire_items.name) || h.item_name || ("Item " + (h.hire_item_id || ""));
+            var dates = []; if (h.start_date) dates.push("out " + isoToDmy(h.start_date)); if (h.due_date) dates.push("due " + isoToDmy(h.due_date)); if (h.return_date) dates.push("returned " + isoToDmy(h.return_date));
+            if (h.amount_paid != null) dates.push("$" + h.amount_paid + " paid");
+            var st = h.status || (h.return_date ? "returned" : "out");
+            return '<div class="doc"><div style="flex:1;min-width:0"><div class="dname">' + esc(item) + '</div><div class="dmeta">' + esc(dates.join(" · ")) + '</div></div><span class="pill ' + (st === "returned" ? "ok" : "no") + '">' + esc(st) + '</span></div>';
+          }).join("");
         }
         function renderHistory() {
           var p = state.patient || {};
@@ -587,7 +613,14 @@
           state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
           state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], side: "bilateral", admission_type: "day_procedure", anaesthesia_type: "GA", est_duration_min: 150, venue_type: "hospital", allergies: "NKA", allergies_nka: true, theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", glp1_sglt2: "none", antibiotics_postop: "Yes, for 5 days", ab_cover: "yes_5d", at_cover: "yes_15d", prosthesis_details: "No", theatre_equipment: "Yes - Power, Podiatry Tray", weight_bearing: "Non-weight bearing for 2 weeks", full_wb_at_weeks: 2, footwear: "Post-operative dressing, ankle brace", footwear_weeks: 6, sport_weeks: 6, swimming_weeks_off: 2, flying_weeks_off: 12, social_event_weeks: 4, shower_wet_at_days: 14, travel_notes: "Can fly after 12 weeks", work_desk_weeks: 2, work_active_weeks: 6, mobility_aid: "multiple", crutches_required: true, knee_scooter_weeks: 3, quote_items: ["F414ab — Ankle Brace"], supplements: ["Vitamin C 1000 mg daily"] };
           state.orderId = "o1";
-          state.docs = [{ doc_type: "quote_main", label: "Quote", generated_at: "2026-06-10", url: "#" }, { doc_type: "pamphlet", label: "Recovery pamphlet", generated_at: "2026-06-06", url: "#" }];
+          state.docs = [
+            { doc_type: "quote_sjm", label: "Quote — Sir John Monash", generated_at: "2026-06-10", sent_at: "2026-06-11", url: "#" },
+            { doc_type: "quote_masada", label: "Quote — Masada", generated_at: "2026-06-02", url: "#" },
+            { doc_type: "pamphlet_full", label: "Recovery pamphlet — ankle", generated_at: "2026-06-06", url: "#" },
+            { doc_type: "pamphlet_full", label: "Recovery pamphlet — earlier surgery", generated_at: "2025-11-20", url: "#" },
+            { doc_type: "cheat_sheet", label: "Reception cheat sheet", generated_at: "2026-06-12", url: "#" }
+          ];
+          state.hires = [{ hire_item_id: 1, hire_items: { name: "Knee scooter" }, start_date: "2026-07-02", due_date: "2026-08-13", amount_paid: 80, status: "out" }];
           qs("pf-save").disabled = false; renderAll();
         }
         function showPicker() {
@@ -628,10 +661,12 @@
             state.patient = p;
             return Promise.all([
               client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }).limit(1),
-              client.from("patient_documents").select("*").eq("patient_id", p.id).is("archived_at", null).order("generated_at", { ascending: false })
+              client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }),
+              client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; })
             ]).then(function (rr) {
               var o = rr[0] && rr[0].data && rr[0].data[0]; if (o) { state.order = o; state.orderId = o.id; }
               state.docs = (rr[1] && rr[1].data) || [];
+              state.hires = (rr[2] && rr[2].data) || [];
               qs("pf-save").disabled = false; status(""); renderAll();
             });
           }).catch(function (e) { status("Load failed"); console.error("[PF] load error", e); });

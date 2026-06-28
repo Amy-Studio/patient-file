@@ -173,6 +173,15 @@
         <a class="back-link" href="https://clinic.stevenedwards.com.au">← Dashboard</a>
       </div>
 
+      <div id="pf-picker" style="display:none">
+        <div class="pcard">
+          <h2 style="margin-bottom:4px">Open a patient file</h2>
+          <div class="panel-sub" style="margin-bottom:12px">Search the register, then click a name to open their file.</div>
+          <input id="pf-search" placeholder="Search by name…" autocomplete="off" style="font-family:inherit; font-size:14px; font-weight:400; color:var(--ink); padding:10px 12px; width:100%; border:1px solid var(--line); border-radius:var(--radius); background:#fff;">
+          <div id="pf-results" style="margin-top:12px"></div>
+        </div>
+      </div>
+
       <div class="pcard">
         <div class="phead">
           <div class="avatar" id="pf-avatar">–</div>
@@ -486,13 +495,41 @@
           state.docs = [{ doc_type: "quote_main", label: "Quote", generated_at: "2026-06-10", url: "#" }, { doc_type: "pamphlet", label: "Recovery pamphlet", generated_at: "2026-06-06", url: "#" }];
           qs("pf-save").disabled = false; renderAll();
         }
+        function showPicker() {
+          document.querySelector(".pcard").style.display = "none";
+          document.querySelector(".body").style.display = "none";
+          qs("pf-picker").style.display = "";
+          var inp = qs("pf-search"); var timer = null;
+          function run() {
+            var q = inp.value.trim();
+            if (window.__pfPreview) { renderResults([{ id: "preview", full_name: "Josh Service", dob: "1990-02-08", surgery_date: "2026-07-02" }, { id: "p2", full_name: "Chloe Grant", dob: "1995-01-01", surgery_date: "2026-06-29" }].filter(function (r) { return !q || r.full_name.toLowerCase().indexOf(q.toLowerCase()) >= 0; })); return; }
+            var client = sb(); if (!client) { qs("pf-results").innerHTML = '<div class="empty">Not signed in.</div>'; return; }
+            var query = client.from("patients").select("id,full_name,dob,surgery_date,surgery_venue").is("archived_at", null).order("surgery_date", { ascending: true, nullsFirst: false }).limit(25);
+            if (q) query = query.ilike("full_name", "%" + q + "%");
+            query.then(function (r) { renderResults((r && r.data) || []); }).catch(function () { qs("pf-results").innerHTML = '<div class="empty">Search failed.</div>'; });
+          }
+          inp.oninput = function () { clearTimeout(timer); timer = setTimeout(run, 200); };
+          run();
+          try { inp.focus(); } catch (_) {}
+        }
+        function renderResults(rows) {
+          if (!rows.length) { qs("pf-results").innerHTML = '<div class="empty">No matching patients.</div>'; return; }
+          qs("pf-results").innerHTML = rows.map(function (p) {
+            var sub = []; if (p.dob) sub.push(isoToDmy(p.dob)); if (p.surgery_date) sub.push("surgery " + isoToDmy(p.surgery_date));
+            return '<div class="doc" style="cursor:pointer" data-pid="' + esc(p.id) + '"><span class="dname">' + esc(p.full_name || "(unnamed)") + '</span><span class="dmeta" style="margin-left:auto">' + esc(sub.join(" · ")) + '</span></div>';
+          }).join("");
+          Array.prototype.forEach.call(qs("pf-results").querySelectorAll("[data-pid]"), function (el) {
+            el.addEventListener("click", function () { location.href = "?patient_id=" + encodeURIComponent(el.getAttribute("data-pid")); });
+          });
+        }
         function loadReal() {
           var client = sb(); if (!client) { status("Not signed in"); return; }
           var pid = new URLSearchParams(location.search).get("patient_id");
+          if (!pid) { showPicker(); return; }
           status("Loading…");
-          var getP = (window.ClinicPatients && ClinicPatients.get && pid) ? ClinicPatients.get(pid) : (pid ? client.from("patients").select("*").eq("id", pid).maybeSingle().then(function (r) { return r.data; }) : Promise.resolve(null));
+          var getP = (window.ClinicPatients && ClinicPatients.get) ? ClinicPatients.get(pid) : client.from("patients").select("*").eq("id", pid).maybeSingle().then(function (r) { return r.data; });
           Promise.resolve(getP).then(function (p) {
-            if (!p) { qs("pf-name").textContent = "No patient selected"; qs("pf-meta").textContent = "Open this file from a patient in the dashboard register."; status(""); return; }
+            if (!p) { qs("pf-name").textContent = "Patient not found"; qs("pf-meta").textContent = "This patient id isn't in the register."; status(""); return; }
             state.patient = p;
             return Promise.all([
               client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }).limit(1),

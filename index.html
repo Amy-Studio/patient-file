@@ -277,6 +277,7 @@
           <div class="section" id="sec-order">
             <h2>Surgeon order</h2>
             <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
+            <div id="o-surgery-picker" style="margin-bottom:14px"></div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
             <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
@@ -470,8 +471,24 @@
           });
           qs("o-extras").innerHTML = html;
         }
+        function renderSurgeryPicker() {
+          var el = qs("o-surgery-picker"); if (!el) return;
+          var orders = state.orders || [];
+          var chips = orders.map(function (o, i) {
+            var lbl = o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : (o._new ? "New surgery" : "Surgery " + (i + 1)));
+            var proc = o.procedure_name ? (" · " + String(o.procedure_name).slice(0, 26)) : "";
+            var active = state.order === o;
+            return '<span class="chip" data-oi="' + i + '" style="cursor:pointer;' + (active ? "background:#1f3a5f;color:#fff;border-color:#1f3a5f" : "") + '">' + esc(lbl + proc) + '</span>';
+          }).join("");
+          el.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Surgery' + (orders.length > 1 ? ' · ' + orders.length + ' on file' : '') + '</div><div class="chips">' + chips + '<span class="chip add" id="o-new-surgery" style="cursor:pointer">+ new surgery</span></div>';
+          Array.prototype.forEach.call(el.querySelectorAll("[data-oi]"), function (c) { c.addEventListener("click", function () { setSurgery(parseInt(c.getAttribute("data-oi"), 10)); }); });
+          var ns = qs("o-new-surgery"); if (ns) ns.addEventListener("click", newSurgery);
+        }
+        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderOrder(); }
+        function newSurgery() { var o = { id: null, procedure_codes: [], _new: true }; state.orders = state.orders || []; state.orders.unshift(o); state.order = o; state.orderId = null; renderOrder(); }
         function renderOrder() {
           if (!qs("o-fields").getAttribute("data-built")) { buildOrderFields(); qs("o-fields").setAttribute("data-built", "1"); }
+          renderSurgeryPicker();
           var o = state.order || {};
           setVal("o-procedure_name", o.procedure_name);
           ORDER_GROUPS.forEach(function (g) { g.fields.forEach(function (f) { var e = qs("o-" + f.k); if (!e) return; if (f.type === "checkbox") e.checked = !!o[f.k]; else e.value = (o[f.k] == null ? "" : o[f.k]); }); });
@@ -637,7 +654,8 @@
             if (!state.orderId && ins && ins.data && ins.data[0]) state.orderId = ins.data[0].id;
             qs("pf-save").disabled = false; status(""); toast("Saved ✓");
             Object.assign(state.patient, pPatch); state.order = Object.assign(state.order || {}, oPatch);
-            renderHeader(); renderOverview();
+            if (state.order && state.orderId) { state.order.id = state.orderId; delete state.order._new; }
+            renderHeader(); renderOverview(); renderSurgeryPicker();
           }).catch(function (e) {
             qs("pf-save").disabled = false; status("Save failed"); toast("Save failed — " + (e && e.message ? e.message : "error"));
             console.error("[PF] save error", e);
@@ -650,6 +668,7 @@
           state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
           state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], side: "bilateral", admission_type: "day_procedure", anaesthesia_type: "GA", est_duration_min: 150, venue_type: "hospital", allergies: "NKA", allergies_nka: true, theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", glp1_sglt2: "none", antibiotics_postop: "Yes, for 5 days", ab_cover: "yes_5d", at_cover: "yes_15d", prosthesis_details: "No", theatre_equipment: "Yes - Power, Podiatry Tray", weight_bearing: "Non-weight bearing for 2 weeks", full_wb_at_weeks: 2, footwear: "Post-operative dressing, ankle brace", footwear_weeks: 6, sport_weeks: 6, swimming_weeks_off: 2, flying_weeks_off: 12, social_event_weeks: 4, shower_wet_at_days: 14, travel_notes: "Can fly after 12 weeks", work_desk_weeks: 2, work_active_weeks: 6, mobility_aid: "multiple", crutches_required: true, knee_scooter_weeks: 3, quote_items: ["F414ab — Ankle Brace"], supplements: ["Vitamin C 1000 mg daily"] };
           state.orderId = "o1";
+          state.orders = [state.order, { id: "o0", session_date: "2025-11-18", procedure_name: "Left hallux valgus correction (earlier surgery)", procedure_codes: [{ code: "F782", qty: 1, description: "Primary metatarsal osteotomy" }], side: "left", admission_type: "day_procedure", weight_bearing: "Heel weight-bearing 2 weeks", sport_weeks: 8 }];
           state.docs = [
             { doc_type: "quote_sjm", label: "Quote — Sir John Monash", generated_at: "2026-06-10", sent_at: "2026-06-11", url: "#" },
             { doc_type: "quote_masada", label: "Quote — Masada", generated_at: "2026-06-02", url: "#" },
@@ -697,11 +716,12 @@
             if (!p) { qs("pf-name").textContent = "Patient not found"; qs("pf-meta").textContent = "This patient id isn't in the register."; status(""); return; }
             state.patient = p;
             return Promise.all([
-              client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }).limit(1),
+              client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }),
               client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }),
               client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; })
             ]).then(function (rr) {
-              var o = rr[0] && rr[0].data && rr[0].data[0]; if (o) { state.order = o; state.orderId = o.id; }
+              state.orders = (rr[0] && rr[0].data) || [];
+              if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; }
               state.docs = (rr[1] && rr[1].data) || [];
               state.hires = (rr[2] && rr[2].data) || [];
               qs("pf-save").disabled = false; status(""); renderAll();

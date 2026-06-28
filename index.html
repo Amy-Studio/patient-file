@@ -209,6 +209,7 @@
           <div class="navitem" data-sec="documents"><span class="ic">▤</span> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
           <div class="navitem" data-sec="hire"><span class="ic">▣</span> Hire</div>
           <div class="navitem" data-sec="history"><span class="ic">↻</span> History</div>
+          <div class="navitem" data-sec="notes"><span class="ic">✎</span> Notes</div>
         </nav>
 
         <div class="panel">
@@ -240,7 +241,6 @@
               <div class="field"><label>Medicare expiry</label><input id="f-medicare_expiry"></div>
               <div class="field"><label>MRN</label><input id="f-mrn"></div>
               <div class="field"><label>Client ID</label><input id="f-client_id"></div>
-              <div class="field full"><label>Notes</label><textarea id="f-notes" rows="2"></textarea></div>
             </div>
           </div>
 
@@ -287,8 +287,9 @@
           <!-- Documents -->
           <div class="section" id="sec-documents">
             <h2>Documents</h2>
-            <div class="panel-sub">Every PDF saved to this patient.</div>
+            <div class="panel-sub">Most recent of each kind. Click a document to preview it below.</div>
             <div id="pf-docs"></div>
+            <div id="pf-preview" style="display:none; margin-top:16px"></div>
           </div>
 
           <!-- Hire -->
@@ -303,6 +304,13 @@
             <h2>History</h2>
             <div class="panel-sub">Recent changes to this record.</div>
             <div id="pf-history"></div>
+          </div>
+
+          <!-- Notes -->
+          <div class="section" id="sec-notes">
+            <h2>Notes</h2>
+            <div class="panel-sub">Free-text notes about this patient.</div>
+            <div class="field full"><label>Notes</label><textarea id="f-notes" rows="8"></textarea></div>
           </div>
         </div>
       </div>
@@ -505,23 +513,52 @@
           if (t.indexOf("quote") >= 0) return "Quotes";
           return "Other";
         }
+        function resolveDocUrl(d) {
+          if (window.__pfPreview) return Promise.resolve(d.url && d.url !== "#" ? d.url : null);
+          var PUBLIC = { "pib-masters": 1 };
+          if (d.bucket && d.path) {
+            if (PUBLIC[d.bucket]) return Promise.resolve("https://kbdgbzdodbfhmusreyxh.supabase.co/storage/v1/object/public/" + d.bucket + "/" + d.path);
+            var client = sb();
+            if (client && client.storage) return client.storage.from(d.bucket).createSignedUrl(d.path, 3600).then(function (r) { return (r && r.data && r.data.signedUrl) || null; }).catch(function () { return null; });
+          }
+          return Promise.resolve(d.url || null);
+        }
+        function previewDoc(d) {
+          var pane = qs("pf-preview"); pane.style.display = ""; pane.innerHTML = '<div class="empty">Loading preview…</div>';
+          resolveDocUrl(d).then(function (u) {
+            if (!u) { pane.innerHTML = '<div class="empty">Couldn’t open this file — it may be missing, or try signing in again.</div>'; return; }
+            pane.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="dname" style="flex:1">' + esc(d.label || (d.doc_type || "").replace(/_/g, " ")) + '</span><a href="' + esc(u) + '" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent-ink)">Open full ↗</a><span style="font-size:13px;color:var(--muted);cursor:pointer" id="pf-preview-close">✕ close</span></div><iframe src="' + esc(u) + '" style="width:100%;height:620px;border:1px solid var(--line);border-radius:var(--radius);background:#fff"></iframe>';
+            var c = qs("pf-preview-close"); if (c) c.onclick = function () { pane.style.display = "none"; pane.innerHTML = ""; };
+            pane.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          });
+        }
         function renderDocs() {
-          var docs = (state.docs || []).filter(function (d) { return !d.archived_at; });
+          var all = (state.docs || []).filter(function (d) { return !d.archived_at; });
+          var latest = {};
+          all.forEach(function (d) {
+            var k = d.doc_type || "other"; var t = String(d.generated_at || d.created_at || "");
+            if (!latest[k] || t > String(latest[k].generated_at || latest[k].created_at || "")) latest[k] = d;
+          });
+          var docs = Object.keys(latest).map(function (k) { return latest[k]; });
+          state.docsView = docs;
           var b = qs("pf-doc-badge");
           if (docs.length) { b.textContent = docs.length; b.style.display = ""; } else { b.style.display = "none"; }
           if (!docs.length) { qs("pf-docs").innerHTML = '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>'; return; }
           var groups = {};
-          docs.forEach(function (d) { var c = docCategory(d.doc_type); (groups[c] = groups[c] || []).push(d); });
+          docs.forEach(function (d, i) { var c = docCategory(d.doc_type); (groups[c] = groups[c] || []).push(i); });
           var order = ["Quotes", "Pamphlets (PIB)", "Fee estimates", "Reception sheets", "Consent", "Other"];
           qs("pf-docs").innerHTML = order.filter(function (c) { return groups[c]; }).map(function (c) {
-            var rows = groups[c].sort(function (a, b2) { return String(b2.generated_at || b2.created_at || "").localeCompare(String(a.generated_at || a.created_at || "")); }).map(function (d) {
-              var url = d.url || (d.bucket && d.path ? ("https://kbdgbzdodbfhmusreyxh.supabase.co/storage/v1/object/public/" + d.bucket + "/" + d.path) : "");
+            var rows = groups[c].map(function (i) {
+              var d = docs[i];
               var name = d.label || (d.doc_type || "Document").replace(/_/g, " ");
-              var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmy(d.generated_at || d.created_at)); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
-              return '<div class="doc"><div style="flex:1;min-width:0"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div>' + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">Open ↗</a>' : '<span class="dmeta">no file</span>') + '</div>';
+              var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmy(d.generated_at || d.created_at)); if (d.created_by) meta.push("by " + d.created_by); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
+              return '<div class="doc" style="cursor:pointer" data-doc-i="' + i + '"><div style="flex:1;min-width:0"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink)">Preview</span></div>';
             }).join("");
-            return '<div class="subhead">' + c + ' <span style="font-weight:400;color:var(--muted)">· ' + groups[c].length + '</span></div>' + rows;
+            return '<div class="subhead">' + c + '</div>' + rows;
           }).join("");
+          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-i]"), function (el) {
+            el.addEventListener("click", function () { previewDoc(state.docsView[parseInt(el.getAttribute("data-doc-i"), 10)]); });
+          });
         }
         function renderHire() {
           var hires = state.hires || [];

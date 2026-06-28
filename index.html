@@ -235,6 +235,12 @@
               <div class="field"><label>Fund membership</label><input id="f-health_fund_membership"></div>
               <div class="field"><label>Next of kin</label><input id="f-nok_name"></div>
               <div class="field"><label>Next of kin phone</label><input id="f-nok_phone"></div>
+              <div class="field"><label>Preferred name</label><input id="f-preferred_name"></div>
+              <div class="field"><label>Sex</label><input id="f-sex"></div>
+              <div class="field"><label>Medicare expiry</label><input id="f-medicare_expiry"></div>
+              <div class="field"><label>MRN</label><input id="f-mrn"></div>
+              <div class="field"><label>Client ID</label><input id="f-client_id"></div>
+              <div class="field full"><label>Notes</label><textarea id="f-notes" rows="2"></textarea></div>
             </div>
           </div>
 
@@ -273,21 +279,9 @@
             <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
-            <div class="chips" id="o-codes"></div>
-            <div class="grid2" style="margin-top:14px">
-              <div class="field"><label>Allergies</label><input id="o-allergies"></div>
-              <div class="field"><label>Prosthesis</label><input id="o-prosthesis_details"></div>
-              <div class="field"><label>Antibiotics (post-op)</label><input id="o-antibiotics_postop"></div>
-              <div class="field"><label>Theatre equipment</label><input id="o-theatre_equipment"></div>
-              <div class="field full"><label>Theatre alerts</label><input id="o-theatre_alerts"></div>
-            </div>
-            <div class="subhead">Recovery plan <span style="font-weight:400; color:var(--muted)">· feeds the pamphlet</span></div>
-            <div class="grid2">
-              <div class="field"><label>Weight-bearing</label><input id="o-weight_bearing"></div>
-              <div class="field"><label>Back to sport (weeks)</label><input id="o-sport_weeks" type="number"></div>
-              <div class="field"><label>Driving (weeks off)</label><input id="o-driving_weeks_off" type="number"></div>
-              <div class="field"><label>Normal shoes (weeks)</label><input id="o-normal_shoes_weeks" type="number"></div>
-            </div>
+            <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
+            <div id="o-fields"></div>
+            <div id="o-extras"></div>
           </div>
 
           <!-- Documents -->
@@ -361,7 +355,7 @@
         }
         function renderContact() {
           var p = state.patient || {};
-          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone"].forEach(function (k) { setVal("f-" + k, p[k]); });
+          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes"].forEach(function (k) { setVal("f-" + k, p[k]); });
           setVal("f-dob", p.dob ? String(p.dob).slice(0, 10) : "");
         }
         function renderSurgery() {
@@ -372,11 +366,109 @@
           ["surgery_anaesthetist", "surgery_duration_min", "list_position", "surgery_status", "surgery_procedure"].forEach(function (k) { setVal("f-" + k, p[k]); });
           setVal("f-paid_in_full", p.paid_in_full === true ? "full" : (p.paid_in_full || ""));
         }
+        var ORDER_GROUPS = [
+          { title: "Procedure & theatre", fields: [
+            { k: "side", label: "Side", type: "select", opts: ["", "left", "right", "bilateral"] },
+            { k: "admission_type", label: "Admission", type: "select", opts: ["", "day_procedure", "overnight", "extended_day"] },
+            { k: "anaesthesia_type", label: "Anaesthesia", type: "text" },
+            { k: "est_duration_min", label: "Est. duration (min)", type: "number" },
+            { k: "venue_type", label: "Venue type", type: "select", opts: ["", "hospital", "clinic"] },
+            { k: "risk_stratification", label: "Risk", type: "text" },
+            { k: "tourniquet", label: "Tourniquet", type: "text" },
+            { k: "banding_rule", label: "Banding rule", type: "text" },
+            { k: "surgical_assist", label: "Surgical assist", type: "text" },
+            { k: "surgical_assistant_name", label: "Assistant name", type: "text" }
+          ]},
+          { title: "Safety & clinical", fields: [
+            { k: "allergies", label: "Allergies", type: "text" },
+            { k: "allergies_nka", label: "No known allergies (NKA)", type: "checkbox" },
+            { k: "theatre_alerts", label: "Theatre alerts", type: "text", full: true },
+            { k: "glp1_sglt2", label: "GLP-1 / SGLT2", type: "text" },
+            { k: "antibiotics_postop", label: "Antibiotics (post-op)", type: "text" },
+            { k: "ab_cover", label: "Antibiotic cover", type: "text" },
+            { k: "at_cover", label: "Antithrombotic cover", type: "text" },
+            { k: "antithrombotic_drugs", label: "Antithrombotic drugs", type: "text" },
+            { k: "prosthesis_details", label: "Prosthesis", type: "text" },
+            { k: "theatre_equipment", label: "Theatre equipment", type: "text", full: true },
+            { k: "preop_meds_to_stop", label: "Pre-op meds to stop", type: "text", full: true },
+            { k: "preop_fasting", label: "Pre-op fasting", type: "text" },
+            { k: "preop_considerations", label: "Pre-op considerations", type: "textarea", full: true }
+          ]},
+          { title: "Recovery plan · feeds the pamphlet", fields: [
+            { k: "weight_bearing", label: "Weight-bearing", type: "text", full: true },
+            { k: "partial_wb_at_weeks", label: "Partial WB (weeks)", type: "number" },
+            { k: "full_wb_at_weeks", label: "Full WB (weeks)", type: "number" },
+            { k: "footwear", label: "Footwear", type: "text" },
+            { k: "footwear_weeks", label: "Footwear (weeks)", type: "number" },
+            { k: "normal_shoes_weeks", label: "Normal shoes (weeks)", type: "number" },
+            { k: "driving_weeks_off", label: "Driving (weeks off)", type: "number" },
+            { k: "work_desk_weeks", label: "Desk work (weeks)", type: "number" },
+            { k: "work_active_weeks", label: "Active work (weeks)", type: "number" },
+            { k: "return_to_work_weeks", label: "Return to work (weeks)", type: "number" },
+            { k: "sport_weeks", label: "Sport (weeks)", type: "number" },
+            { k: "swimming_weeks_off", label: "Swimming (weeks off)", type: "number" },
+            { k: "flying_weeks_off", label: "Flying (weeks off)", type: "number" },
+            { k: "social_event_weeks", label: "Social events (weeks)", type: "number" },
+            { k: "shower_wet_at_days", label: "Shower / wet (days)", type: "number" },
+            { k: "travel_notes", label: "Travel notes", type: "text", full: true }
+          ]},
+          { title: "Mobility & aids", fields: [
+            { k: "mobility_aid", label: "Mobility aid", type: "text" },
+            { k: "crutches_required", label: "Crutches required", type: "checkbox" },
+            { k: "crutches_weeks", label: "Crutches (weeks)", type: "number" },
+            { k: "knee_scooter_weeks", label: "Knee scooter (weeks)", type: "number" },
+            { k: "wheelchair_weeks", label: "Wheelchair (weeks)", type: "number" },
+            { k: "footwear_choice", label: "Footwear choice", type: "text" },
+            { k: "prep_extra_items", label: "Prep extra items", type: "text", full: true },
+            { k: "prep_where_to_buy", label: "Where to buy", type: "text", full: true }
+          ]},
+          { title: "Follow-up & post-op", fields: [
+            { k: "followup_review_weeks", label: "Follow-up review (weeks)", type: "number" },
+            { k: "post_op_count", label: "Post-op visits", type: "number" },
+            { k: "post_op_weeks_apart", label: "Visits weeks apart", type: "number" },
+            { k: "first_postop_days", label: "First post-op (days)", type: "text" },
+            { k: "postop_medication", label: "Post-op medication", type: "text", full: true },
+            { k: "pain_plan", label: "Pain plan", type: "textarea", full: true },
+            { k: "patient_guidance", label: "Patient guidance", type: "textarea", full: true }
+          ]},
+          { title: "Notes", fields: [
+            { k: "surgeon_notes", label: "Surgeon notes", type: "textarea", full: true },
+            { k: "clinical_notes_text", label: "Clinical notes", type: "textarea", full: true },
+            { k: "other_quote_notes", label: "Quote notes", type: "textarea", full: true },
+            { k: "admin_notes", label: "Admin notes", type: "textarea", full: true }
+          ]}
+        ];
+        function buildOrderFields() {
+          qs("o-fields").innerHTML = ORDER_GROUPS.map(function (g) {
+            var fh = g.fields.map(function (f) {
+              var cls = "field" + (f.full || f.type === "textarea" ? " full" : "");
+              if (f.type === "checkbox") return '<div class="' + cls + '"><label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:18px"><input type="checkbox" id="o-' + f.k + '" style="width:auto"> ' + f.label + '</label></div>';
+              var ctrl;
+              if (f.type === "select") ctrl = '<select id="o-' + f.k + '">' + f.opts.map(function (o) { return '<option value="' + o + '">' + (o ? o.replace(/_/g, " ") : "—") + '</option>'; }).join("") + '</select>';
+              else if (f.type === "textarea") ctrl = '<textarea id="o-' + f.k + '" rows="2"></textarea>';
+              else ctrl = '<input id="o-' + f.k + '" type="' + (f.type === "number" ? "number" : "text") + '">';
+              return '<div class="' + cls + '"><label>' + f.label + '</label>' + ctrl + '</div>';
+            }).join("");
+            return '<div class="subhead">' + g.title + '</div><div class="grid2">' + fh + '</div>';
+          }).join("");
+        }
+        function renderExtras() {
+          var o = state.order || {};
+          var arrs = [["quote_items", "Quote items"], ["supplements", "Supplements"], ["boots_casts", "Boots / casts"], ["mobility_aids_quote", "Mobility aids (quoted)"]];
+          var html = "";
+          arrs.forEach(function (a) {
+            var v = o[a[0]]; if (!Array.isArray(v) || !v.length) return;
+            html += '<div class="subhead">' + a[1] + '</div><div class="chips">' + v.map(function (x) { return '<span class="chip">' + esc(typeof x === "string" ? x : (x.code || x.name || JSON.stringify(x))) + '</span>'; }).join("") + '</div>';
+          });
+          qs("o-extras").innerHTML = html;
+        }
         function renderOrder() {
+          if (!qs("o-fields").getAttribute("data-built")) { buildOrderFields(); qs("o-fields").setAttribute("data-built", "1"); }
           var o = state.order || {};
           setVal("o-procedure_name", o.procedure_name);
-          ["allergies", "prosthesis_details", "antibiotics_postop", "theatre_equipment", "theatre_alerts", "weight_bearing", "sport_weeks", "driving_weeks_off", "normal_shoes_weeks"].forEach(function (k) { setVal("o-" + k, o[k]); });
+          ORDER_GROUPS.forEach(function (g) { g.fields.forEach(function (f) { var e = qs("o-" + f.k); if (!e) return; if (f.type === "checkbox") e.checked = !!o[f.k]; else e.value = (o[f.k] == null ? "" : o[f.k]); }); });
           renderCodes();
+          renderExtras();
         }
         function renderCodes() {
           var o = state.order || {};
@@ -444,7 +536,7 @@
         // ---- save ----
         function collectPatientPatch() {
           var patch = {};
-          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { patch[k] = val("f-" + k) || null; });
+          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { patch[k] = val("f-" + k) || null; });
           patch.dob = val("f-dob") || null;
           patch.surgery_date = val("f-surgery_date") || null;
           patch.surgery_time = val("f-surgery_time") || null;
@@ -455,10 +547,13 @@
           return patch;
         }
         function collectOrderPatch() {
-          var patch = {};
-          patch.procedure_name = val("o-procedure_name") || null;
-          ["allergies", "prosthesis_details", "antibiotics_postop", "theatre_equipment", "theatre_alerts", "weight_bearing"].forEach(function (k) { patch[k] = val("o-" + k) || null; });
-          ["sport_weeks", "driving_weeks_off", "normal_shoes_weeks"].forEach(function (k) { var n = parseInt(val("o-" + k), 10); patch[k] = isNaN(n) ? null : n; });
+          var patch = { procedure_name: val("o-procedure_name") || null };
+          ORDER_GROUPS.forEach(function (g) { g.fields.forEach(function (f) {
+            var e = qs("o-" + f.k); if (!e) return;
+            if (f.type === "checkbox") patch[f.k] = !!e.checked;
+            else if (f.type === "number") { var n = parseInt(e.value, 10); patch[f.k] = isNaN(n) ? null : n; }
+            else patch[f.k] = e.value || null;
+          }); });
           return patch;
         }
         function save() {
@@ -490,7 +585,7 @@
         // ---- load ----
         function loadStub() {
           state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
-          state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], allergies: "NKA", prosthesis_details: "No", antibiotics_postop: "Yes — 5 days", theatre_equipment: "Power, Podiatry Tray", theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", weight_bearing: "Non-weight bearing 2 weeks", sport_weeks: 6 };
+          state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], side: "bilateral", admission_type: "day_procedure", anaesthesia_type: "GA", est_duration_min: 150, venue_type: "hospital", allergies: "NKA", allergies_nka: true, theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", glp1_sglt2: "none", antibiotics_postop: "Yes, for 5 days", ab_cover: "yes_5d", at_cover: "yes_15d", prosthesis_details: "No", theatre_equipment: "Yes - Power, Podiatry Tray", weight_bearing: "Non-weight bearing for 2 weeks", full_wb_at_weeks: 2, footwear: "Post-operative dressing, ankle brace", footwear_weeks: 6, sport_weeks: 6, swimming_weeks_off: 2, flying_weeks_off: 12, social_event_weeks: 4, shower_wet_at_days: 14, travel_notes: "Can fly after 12 weeks", work_desk_weeks: 2, work_active_weeks: 6, mobility_aid: "multiple", crutches_required: true, knee_scooter_weeks: 3, quote_items: ["F414ab — Ankle Brace"], supplements: ["Vitamin C 1000 mg daily"] };
           state.orderId = "o1";
           state.docs = [{ doc_type: "quote_main", label: "Quote", generated_at: "2026-06-10", url: "#" }, { doc_type: "pamphlet", label: "Recovery pamphlet", generated_at: "2026-06-06", url: "#" }];
           qs("pf-save").disabled = false; renderAll();

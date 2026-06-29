@@ -208,7 +208,6 @@
           <div class="navitem" data-sec="order"><span class="ic">✚</span> Surgeon order</div>
           <div class="navitem" data-sec="documents"><span class="ic">▤</span> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
           <div class="navitem" data-sec="hire"><span class="ic">▣</span> Hire</div>
-          <div class="navitem" data-sec="history"><span class="ic">↻</span> History</div>
           <div class="navitem" data-sec="notes"><span class="ic">✎</span> Notes</div>
         </nav>
 
@@ -298,13 +297,6 @@
             <h2>Hire &amp; equipment</h2>
             <div class="panel-sub">Equipment hired to this patient.</div>
             <div id="pf-hire"></div>
-          </div>
-
-          <!-- History -->
-          <div class="section" id="sec-history">
-            <h2>History</h2>
-            <div class="panel-sub">Recent changes to this record.</div>
-            <div id="pf-history"></div>
           </div>
 
           <!-- Notes -->
@@ -635,7 +627,7 @@
           if (p.created_at) h.push('<div class="doc"><span class="dname">Created</span><span class="dmeta" style="margin-left:auto">' + isoToDmy(p.created_at) + (p.created_by ? " · " + esc(p.created_by) : "") + '</span></div>');
           qs("pf-history").innerHTML = h.length ? h.join("") : '<div class="empty">No history yet.</div>';
         }
-        function renderAll() { renderHeader(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderHistory(); wireLaunch(); }
+        function renderAll() { renderHeader(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); wireLaunch(); }
 
         function wireLaunch() {
           var id = state.patient && state.patient.id;

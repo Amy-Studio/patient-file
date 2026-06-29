@@ -674,18 +674,27 @@
         function renderHire() {
           var hires = state.hires || [];
           var p = state.patient || {};
+          // Friendly labels for the surgery hire-checklist flag (patients.hire_status),
+          // shown only when there are no actual hire rows to display.
+          var HIRE_STATUS_LABEL = { clinic_done: "Hire arranged", clinic_pending: "Hire pending", clinic_not_needed: "No hire needed", external: "Hiring externally" };
           if (!hires.length) {
             qs("pf-hire").innerHTML = p.hire_status
-              ? '<div class="doc"><span class="dname">Hire status</span><span class="dmeta" style="margin-left:auto">' + esc(p.hire_status) + '</span></div>'
+              ? '<div class="doc"><span class="dname">Hire status</span><span class="dmeta" style="margin-left:auto">' + esc(HIRE_STATUS_LABEL[p.hire_status] || p.hire_status) + '</span></div>'
               : '<div class="empty">No equipment hired.</div>';
             return;
           }
+          // Sync 5 (GAP I): show the live hire state including OVERDUE, derived
+          // from the hires table this file already loads.
+          var todayIso = new Date().toISOString().slice(0, 10);
           qs("pf-hire").innerHTML = hires.map(function (h) {
             var item = (h.hire_items && h.hire_items.name) || h.item_name || ("Item " + (h.hire_item_id || ""));
             var dates = []; if (h.start_date) dates.push("out " + isoToDmy(h.start_date)); if (h.due_date) dates.push("due " + isoToDmy(h.due_date)); if (h.return_date) dates.push("returned " + isoToDmy(h.return_date));
             if (h.amount_paid != null) dates.push("$" + h.amount_paid + " paid");
-            var st = h.status || (h.return_date ? "returned" : "out");
-            return '<div class="doc"><div style="flex:1;min-width:0"><div class="dname">' + esc(item) + '</div><div class="dmeta">' + esc(dates.join(" · ")) + '</div></div><span class="pill ' + (st === "returned" ? "ok" : "no") + '">' + esc(st) + '</span></div>';
+            var returned = !!h.return_date || h.status === "returned";
+            var overdue = !returned && h.due_date && h.due_date < todayIso;
+            var st = returned ? "returned" : (overdue ? "overdue" : (h.status || "out"));
+            var cls = returned ? "ok" : "no";
+            return '<div class="doc"><div style="flex:1;min-width:0"><div class="dname">' + esc(item) + '</div><div class="dmeta">' + esc(dates.join(" · ")) + '</div></div><span class="pill ' + cls + '">' + esc(st) + '</span></div>';
           }).join("");
         }
         function renderHistory() {

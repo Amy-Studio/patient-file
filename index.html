@@ -393,7 +393,7 @@
           if (roEl) {
             roEl.style.display = "";
             roEl.innerHTML = '<div class="grid2">' +
-              ro("Date", o.session_date ? isoToDmy(o.session_date) : "") +
+              ro("Date", o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : "")) +
               ro("Venue", VENUE[(o.surgery_venue || "").toLowerCase()] || o.surgery_venue) +
               ro("Anaesthetist", o.anaesthetist) +
               ro("Duration", o.est_duration_min ? (o.est_duration_min + " min") : "") +
@@ -542,7 +542,13 @@
           var off = "background:var(--card);color:var(--accent-ink);border:1px solid var(--line);";
           var items = orders.map(function (o, i) {
             var name = o.procedure_name ? String(o.procedure_name).split("(")[0].trim().slice(0, 24) : ("Surgery " + (i + 1));
-            var d = o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : "");
+            // Sync 5 (GAP A): nobody writes surgeon_orders.session_date, so the
+            // real surgery date lives in patients.surgery_date. Show that for the
+            // current surgery (orders[0]); past surgeries fall back to when the
+            // order row was logged.
+            var d = (i === 0 && state.patient && state.patient.surgery_date)
+              ? isoToDmy(state.patient.surgery_date)
+              : (o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : ""));
             var active = state.order === o;
             return '<span data-oi="' + i + '" style="' + pill + (active ? on : off) + '">' + esc(name) + (d ? ' <span style="opacity:.7">· ' + esc(d) + '</span>' : '') + (i === 0 ? ' <span style="opacity:.7">· current</span>' : '') + '</span>';
           }).join("");

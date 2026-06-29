@@ -202,7 +202,7 @@
 
       <div class="body">
         <nav class="side" id="pf-nav">
-          <div class="navitem active" data-sec="overview"><span class="ic">◧</span> Overview</div>
+          <div class="navitem active" data-sec="overview"><span class="ic">☑</span> Checklist</div>
           <div class="navitem" data-sec="contact"><span class="ic">◔</span> Contact</div>
           <div class="navitem" data-sec="surgery"><span class="ic">▦</span> Surgery</div>
           <div class="navitem" data-sec="order"><span class="ic">✚</span> Surgeon order</div>
@@ -215,8 +215,8 @@
         <div class="panel">
           <!-- Overview -->
           <div class="section active" id="sec-overview">
-            <h2>Overview</h2>
-            <div class="panel-sub">A snapshot of this patient and what's on file.</div>
+            <h2>Checklist</h2>
+            <div class="panel-sub">Tick off each step — saves to the shared checklist (same as the dashboard).</div>
             <div id="pf-overview"></div>
           </div>
 
@@ -474,13 +474,25 @@
         function renderSurgeryPicker() {
           var el = qs("o-surgery-picker"); if (!el) return;
           var orders = state.orders || [];
-          var chips = orders.map(function (o, i) {
-            var lbl = o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : (o._new ? "New surgery" : "Surgery " + (i + 1)));
-            var proc = o.procedure_name ? (" · " + String(o.procedure_name).slice(0, 26)) : "";
-            var active = state.order === o;
-            return '<span class="chip" data-oi="' + i + '" style="cursor:pointer;' + (active ? "background:#1f3a5f;color:#fff;border-color:#1f3a5f" : "") + '">' + esc(lbl + proc) + '</span>';
-          }).join("");
-          el.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Surgery' + (orders.length > 1 ? ' · ' + orders.length + ' on file' : '') + '</div><div class="chips">' + chips + '<span class="chip add" id="o-new-surgery" style="cursor:pointer">+ new surgery</span></div>';
+          var current = orders[0];
+          var previous = orders.slice(1);
+          var onCurrent = orders.length === 0 || state.order === current;
+          var tab = "font-size:13px;padding:7px 14px;border-radius:var(--radius);cursor:pointer;border:1px solid var(--line)";
+          var on = ";background:#1f3a5f;color:#fff;border-color:#1f3a5f";
+          var html = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">';
+          html += '<span id="o-tab-current" style="' + tab + (onCurrent ? on : "") + '">Current surgery</span>';
+          if (previous.length) html += '<span id="o-tab-previous" style="' + tab + (!onCurrent ? on : "") + '">Previous surgeries · ' + previous.length + '</span>';
+          html += '<span class="chip add" id="o-new-surgery" style="cursor:pointer;margin-left:auto">+ new surgery</span></div>';
+          if (!onCurrent && previous.length) {
+            html += '<div class="chips" style="margin-bottom:4px">' + previous.map(function (o, i) {
+              var lbl = o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : "Surgery");
+              var proc = o.procedure_name ? (" · " + String(o.procedure_name).slice(0, 30)) : "";
+              return '<span class="chip" data-oi="' + (i + 1) + '" style="cursor:pointer;' + (state.order === o ? on.slice(1) : "") + '">' + esc(lbl + proc) + '</span>';
+            }).join("") + '</div>';
+          }
+          el.innerHTML = html;
+          var tc = qs("o-tab-current"); if (tc) tc.addEventListener("click", function () { setSurgery(0); });
+          var tp = qs("o-tab-previous"); if (tp) tp.addEventListener("click", function () { setSurgery(1); });
           Array.prototype.forEach.call(el.querySelectorAll("[data-oi]"), function (c) { c.addEventListener("click", function () { setSurgery(parseInt(c.getAttribute("data-oi"), 10)); }); });
           var ns = qs("o-new-surgery"); if (ns) ns.addEventListener("click", newSurgery);
         }
@@ -507,19 +519,41 @@
           html += '<span class="chip add" id="o-addcode">+ add code</span>';
           qs("o-codes").innerHTML = html;
         }
+        var CHECK_ITEMS = [
+          { k: "surgeon_order_done", label: "Surgeon order complete" },
+          { k: "fee_estimate_sent", label: "Fee estimate sent" },
+          { k: "fee_estimate_received", label: "Fee estimate back" },
+          { k: "quote_sent", label: "Quote sent" },
+          { k: "quote_accepted", label: "IFC signed / returned" },
+          { k: "prescreening_form", label: "Pre-screening form" },
+          { k: "booking_confirmed", label: "Booking confirmed" },
+          { k: "postop_booked", label: "Post-op booked" },
+          { k: "deposit_paid", label: "Deposit paid" },
+          { k: "pamphlet_sent", label: "Pamphlet + email sent" },
+          { k: "hires_booked", label: "Hires booked" },
+          { k: "surgical_list_done", label: "Surgical list sent" }
+        ];
         function renderOverview() {
-          var p = state.patient || {}, o = state.order || {};
-          function row(label, ok, extra) { return '<div class="doc"><span class="dname">' + label + '</span><span class="' + (ok ? 'pill ok' : 'pill no') + '">' + (ok ? 'on file' + (extra ? ' · ' + extra : '') : 'not yet') + '</span></div>'; }
-          var hasQuote = !!p.quote_pdf_url, hasPam = !!p.pamphlet_pdf_url, hasOrder = !!(o && (o.procedure_name || (o.procedure_codes && o.procedure_codes.length)));
-          var h = "";
-          h += '<div class="grid2" style="margin-bottom:10px">';
-          h += '<div class="doc"><span class="dname">Surgery</span><span class="dmeta" style="margin-left:auto">' + (p.surgery_date ? isoToDmy(p.surgery_date) + (p.surgery_venue ? " · " + (VENUE[(p.surgery_venue||"").toLowerCase()] || p.surgery_venue) : "") : "not booked") + '</span></div>';
-          h += '<div class="doc"><span class="dname">Procedure</span><span class="dmeta" style="margin-left:auto">' + esc((p.surgery_procedure || (o && o.procedure_name) || "—").slice(0, 40)) + '</span></div>';
-          h += '</div>';
-          h += row("Surgeon order", hasOrder);
-          h += row("Quote", hasQuote);
-          h += row("Pamphlet", hasPam);
-          qs("pf-overview").innerHTML = h;
+          var el = qs("pf-overview"); if (!el) return;
+          var cl = (state.patient && state.patient.checklist) || {};
+          el.innerHTML = CHECK_ITEMS.map(function (it) {
+            var v = cl[it.k]; var done = !!v;
+            var when = (done && typeof v === "string" && /\d{4}-\d{2}-\d{2}/.test(v)) ? isoToDmy(v) : "";
+            return '<label style="display:flex;align-items:center;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px;color:var(--ink)"><input type="checkbox" data-ck="' + it.k + '" ' + (done ? "checked" : "") + ' style="width:18px;height:18px;accent-color:#1f3a5f;cursor:pointer;flex-shrink:0"><span style="flex:1">' + esc(it.label) + '</span>' + (when ? '<span class="dmeta">' + esc(when) + '</span>' : '') + '</label>';
+          }).join("");
+          Array.prototype.forEach.call(el.querySelectorAll("[data-ck]"), function (c) {
+            c.addEventListener("change", function () { toggleCheck(c.getAttribute("data-ck"), c.checked); });
+          });
+        }
+        function toggleCheck(key, on) {
+          if (!state.patient) return;
+          var cl = state.patient.checklist = state.patient.checklist || {};
+          cl[key] = on ? new Date().toISOString() : null;
+          renderOverview();
+          if (window.__pfPreview) { toast("Preview — not saved"); return; }
+          var client = sb(); if (!client) return;
+          var p = (window.ClinicPatients && ClinicPatients.update) ? ClinicPatients.update(state.patient.id, { checklist: cl }) : client.from("patients").update({ checklist: cl }).eq("id", state.patient.id);
+          Promise.resolve(p).then(function () { status("Checklist saved"); setTimeout(function () { status(""); }, 1500); }).catch(function () { toast("Save failed"); });
         }
         function docCategory(t) {
           t = (t || "").toLowerCase();

@@ -307,8 +307,12 @@
           <!-- Notes -->
           <div class="section" id="sec-notes">
             <h2>Notes</h2>
-            <div class="panel-sub">Free-text notes about this patient.</div>
-            <div class="field full"><label>Notes</label><textarea id="f-notes" rows="8"></textarea></div>
+            <div class="panel-sub">Team notes — anyone can post, edit or delete. New notes alert the other staff.</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
+              <textarea id="pf-note-input" rows="3" placeholder="Write a note for the team…" style="font-family:inherit;font-size:13px;font-weight:400;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;width:100%;resize:vertical"></textarea>
+              <div><button type="button" id="pf-note-post" class="save-btn" style="font-size:13px">Post note</button></div>
+            </div>
+            <div id="pf-notes-list"></div>
           </div>
         </div>
       </div>
@@ -647,7 +651,56 @@
           if (p.created_at) h.push('<div class="doc"><span class="dname">Created</span><span class="dmeta" style="margin-left:auto">' + isoToDmy(p.created_at) + (p.created_by ? " · " + esc(p.created_by) : "") + '</span></div>');
           qs("pf-history").innerHTML = h.length ? h.join("") : '<div class="empty">No history yet.</div>';
         }
-        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); wireLaunch(); }
+        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); }
+        function renderNotes() {
+          var el = qs("pf-notes-list"); if (!el) return;
+          var notes = (state.notes || []).filter(function (n) { return !n.deleted_at; });
+          if (!notes.length) { el.innerHTML = '<div class="empty">No notes yet. Post the first one above.</div>'; state.notesView = []; return; }
+          state.notesView = notes;
+          el.innerHTML = notes.map(function (n, i) {
+            var who = n.created_by || "staff";
+            var when = n.created_at ? (isoToDmy(n.created_at) + (n.updated_at ? " · edited" : "")) : "";
+            return '<div class="doc" style="align-items:flex-start" data-note-i="' + i + '"><div style="flex:1;min-width:0"><div class="note-body" style="font-size:13px;color:var(--ink);white-space:pre-wrap">' + esc(n.body || "") + '</div><div class="dmeta" style="margin-top:4px">' + esc(who) + ' · ' + esc(when) + '</div></div><span style="display:flex;gap:12px;flex-shrink:0;margin-left:10px"><span class="note-edit" style="font-size:12px;color:var(--accent-ink);cursor:pointer">Edit</span><span class="note-del" style="font-size:12px;color:#a3402d;cursor:pointer">Delete</span></span></div>';
+          }).join("");
+          Array.prototype.forEach.call(el.querySelectorAll("[data-note-i]"), function (row) {
+            var i = parseInt(row.getAttribute("data-note-i"), 10);
+            var ed = row.querySelector(".note-edit"); if (ed) ed.addEventListener("click", function () { editNote(i, row); });
+            var dl = row.querySelector(".note-del"); if (dl) dl.addEventListener("click", function () { deleteNote(i); });
+          });
+        }
+        function postNote() {
+          var inp = qs("pf-note-input"); var body = (inp.value || "").trim(); if (!body) return;
+          if (window.__pfPreview) { state.notes = state.notes || []; state.notes.unshift({ id: "tmp", body: body, created_by: "you", created_at: new Date().toISOString() }); inp.value = ""; renderNotes(); toast("Preview — not saved"); return; }
+          var client = sb(); var pid = state.patient && state.patient.id; if (!client || !pid) { toast("Not signed in"); return; }
+          var who = (window.__pfUser && window.__pfUser.email) || "";
+          client.from("patient_notes").insert({ patient_id: pid, body: body, created_by: who }).select("*").then(function (r) {
+            if (r.error) { toast("Couldn’t post — has the notes table been added?"); return; }
+            inp.value = ""; state.notes = state.notes || []; if (r.data && r.data[0]) state.notes.unshift(r.data[0]); renderNotes(); toast("Note posted");
+          }).catch(function () { toast("Couldn’t post note"); });
+        }
+        function editNote(i, row) {
+          var n = (state.notesView || [])[i]; if (!n) return;
+          var bodyEl = row.querySelector(".note-body");
+          bodyEl.innerHTML = '<textarea rows="3" style="font-family:inherit;font-size:13px;width:100%;border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px">' + esc(n.body || "") + '</textarea><div style="margin-top:6px"><span class="note-save" style="font-size:12px;color:#fff;background:#1f3a5f;border-radius:var(--radius);padding:4px 12px;cursor:pointer">Save</span></div>';
+          var ta = bodyEl.querySelector("textarea"); try { ta.focus(); } catch (_) {}
+          bodyEl.querySelector(".note-save").addEventListener("click", function () {
+            var nb = (ta.value || "").trim(); if (!nb) return;
+            if (window.__pfPreview) { n.body = nb; n.updated_at = new Date().toISOString(); renderNotes(); toast("Preview — not saved"); return; }
+            var client = sb(); if (!client) return;
+            client.from("patient_notes").update({ body: nb, updated_at: new Date().toISOString() }).eq("id", n.id).then(function (r) {
+              if (r.error) { toast("Couldn’t save"); return; } n.body = nb; n.updated_at = new Date().toISOString(); renderNotes(); toast("Saved");
+            });
+          });
+        }
+        function deleteNote(i) {
+          var n = (state.notesView || [])[i]; if (!n) return;
+          if (!window.confirm("Delete this note?")) return;
+          if (window.__pfPreview) { n.deleted_at = new Date().toISOString(); renderNotes(); toast("Preview — not saved"); return; }
+          var client = sb(); if (!client) return;
+          client.from("patient_notes").update({ deleted_at: new Date().toISOString() }).eq("id", n.id).then(function (r) {
+            if (r.error) { toast("Couldn’t delete"); return; } n.deleted_at = new Date().toISOString(); renderNotes(); toast("Deleted");
+          });
+        }
 
         function wireLaunch() {
           var id = state.patient && state.patient.id;
@@ -662,7 +715,7 @@
         // ---- save ----
         function collectPatientPatch() {
           var patch = {};
-          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { patch[k] = val("f-" + k) || null; });
+          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
           patch.dob = val("f-dob") || null;
           patch.surgery_date = val("f-surgery_date") || null;
           patch.surgery_time = val("f-surgery_time") || null;
@@ -708,6 +761,7 @@
           });
         }
         qs("pf-save").addEventListener("click", save);
+        (function () { var b = qs("pf-note-post"); if (b) b.addEventListener("click", postNote); })();
 
         // ---- load ----
         function loadStub() {
@@ -723,6 +777,7 @@
             { doc_type: "cheat_sheet", label: "Reception cheat sheet", generated_at: "2026-06-12", url: "#" }
           ];
           state.hires = [{ hire_item_id: 1, hire_items: { name: "Knee scooter" }, start_date: "2026-07-02", due_date: "2026-08-13", amount_paid: 80, status: "out" }];
+          state.notes = [{ id: "n1", body: "Patient called — prefers a morning slot. Confirmed mobile number.", created_by: "amy@clinic", created_at: "2026-06-27T23:10:00Z" }, { id: "n2", body: "IFC posted out 24 Jun.", created_by: "steph@clinic", created_at: "2026-06-24T01:00:00Z" }];
           qs("pf-save").disabled = false; renderAll();
         }
         function showPicker() {
@@ -764,12 +819,14 @@
             return Promise.all([
               client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }),
               client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }),
-              client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; })
+              client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }),
+              client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }).then(function (r) { return r.error ? { data: [] } : r; })
             ]).then(function (rr) {
               state.orders = (rr[0] && rr[0].data) || [];
               if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; }
               state.docs = (rr[1] && rr[1].data) || [];
               state.hires = (rr[2] && rr[2].data) || [];
+              state.notes = (rr[3] && rr[3].data) || [];
               qs("pf-save").disabled = false; status(""); renderAll();
             });
           }).catch(function (e) { status("Load failed"); console.error("[PF] load error", e); });

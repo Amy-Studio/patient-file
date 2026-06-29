@@ -200,6 +200,8 @@
         </div>
       </div>
 
+      <div id="pf-surgery-switcher" style="margin-top:14px"></div>
+
       <div class="body">
         <nav class="side" id="pf-nav">
           <div class="navitem active" data-sec="overview"><span class="ic">☑</span> Checklist</div>
@@ -247,6 +249,9 @@
           <div class="section" id="sec-surgery">
             <h2>Surgery &amp; booking</h2>
             <div class="panel-sub">Drives the dashboard calendar and the surgical list.</div>
+            <div id="surgery-banner"></div>
+            <div id="surgery-readonly" style="display:none"></div>
+            <div id="surgery-edit">
             <div class="grid2">
               <div class="field"><label>Surgery date</label><input id="f-surgery_date" type="date"></div>
               <div class="field"><label>Surgery time</label><input id="f-surgery_time" type="time"></div>
@@ -270,13 +275,13 @@
               </div>
               <div class="field full"><label>Procedure</label><textarea id="f-surgery_procedure" rows="2"></textarea></div>
             </div>
+            </div>
           </div>
 
           <!-- Surgeon order -->
           <div class="section" id="sec-order">
             <h2>Surgeon order</h2>
             <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
-            <div id="o-surgery-picker" style="margin-bottom:14px"></div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
             <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
@@ -361,11 +366,35 @@
         }
         function renderSurgery() {
           var p = state.patient || {};
-          setVal("f-surgery_date", p.surgery_date ? String(p.surgery_date).slice(0, 10) : "");
-          setVal("f-surgery_time", p.surgery_time ? String(p.surgery_time).slice(0, 5) : "");
-          setVal("f-surgery_venue", (p.surgery_venue || "").toLowerCase());
-          ["surgery_anaesthetist", "surgery_duration_min", "list_position", "surgery_status", "surgery_procedure"].forEach(function (k) { setVal("f-" + k, p[k]); });
-          setVal("f-paid_in_full", p.paid_in_full === true ? "full" : (p.paid_in_full || ""));
+          var orders = state.orders || [];
+          var isCurrent = orders.length === 0 || !state.order || state.order === orders[0];
+          var editEl = qs("surgery-edit"), roEl = qs("surgery-readonly"), banEl = qs("surgery-banner");
+          if (isCurrent) {
+            if (editEl) editEl.style.display = "";
+            if (roEl) { roEl.style.display = "none"; roEl.innerHTML = ""; }
+            if (banEl) banEl.innerHTML = "";
+            setVal("f-surgery_date", p.surgery_date ? String(p.surgery_date).slice(0, 10) : "");
+            setVal("f-surgery_time", p.surgery_time ? String(p.surgery_time).slice(0, 5) : "");
+            setVal("f-surgery_venue", (p.surgery_venue || "").toLowerCase());
+            ["surgery_anaesthetist", "surgery_duration_min", "list_position", "surgery_status", "surgery_procedure"].forEach(function (k) { setVal("f-" + k, p[k]); });
+            setVal("f-paid_in_full", p.paid_in_full === true ? "full" : (p.paid_in_full || ""));
+            return;
+          }
+          var o = state.order || {};
+          if (editEl) editEl.style.display = "none";
+          if (banEl) banEl.innerHTML = '<div style="font-size:12px;color:var(--muted);background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;margin-bottom:10px">Past surgery — read-only. The live booking (time, list position) belongs to the current surgery.</div>';
+          function ro(label, val) { return '<div><div style="font-size:12px;color:var(--text-secondary)">' + label + '</div><div style="font-size:13px;border:0.5px solid var(--line);border-radius:var(--radius);padding:8px 10px;margin-top:4px;color:var(--ink)">' + esc(val || "—") + '</div></div>'; }
+          if (roEl) {
+            roEl.style.display = "";
+            roEl.innerHTML = '<div class="grid2">' +
+              ro("Date", o.session_date ? isoToDmy(o.session_date) : "") +
+              ro("Venue", VENUE[(o.surgery_venue || "").toLowerCase()] || o.surgery_venue) +
+              ro("Anaesthetist", o.anaesthetist) +
+              ro("Duration", o.est_duration_min ? (o.est_duration_min + " min") : "") +
+              ro("Side", o.side) +
+              ro("Status", o.status) +
+              '</div><div style="margin-top:12px">' + ro("Procedure", o.procedure_name) + '</div>';
+          }
         }
         var ORDER_GROUPS = [
           { title: "Procedure & theatre", fields: [
@@ -464,35 +493,26 @@
           qs("o-extras").innerHTML = html;
         }
         function renderSurgeryPicker() {
-          var el = qs("o-surgery-picker"); if (!el) return;
+          var el = qs("pf-surgery-switcher"); if (!el) return;
           var orders = state.orders || [];
-          var current = orders[0];
-          var previous = orders.slice(1);
-          var onCurrent = orders.length === 0 || state.order === current;
-          var tab = "font-size:13px;padding:7px 14px;border-radius:var(--radius);cursor:pointer;border:1px solid var(--line)";
-          var on = ";background:#1f3a5f;color:#fff;border-color:#1f3a5f";
-          var html = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">';
-          html += '<span id="o-tab-current" style="' + tab + (onCurrent ? on : "") + '">Current surgery</span>';
-          if (previous.length) html += '<span id="o-tab-previous" style="' + tab + (!onCurrent ? on : "") + '">Previous surgeries · ' + previous.length + '</span>';
-          html += '<span class="chip add" id="o-new-surgery" style="cursor:pointer;margin-left:auto">+ new surgery</span></div>';
-          if (!onCurrent && previous.length) {
-            html += '<div class="chips" style="margin-bottom:4px">' + previous.map(function (o, i) {
-              var lbl = o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : "Surgery");
-              var proc = o.procedure_name ? (" · " + String(o.procedure_name).slice(0, 30)) : "";
-              return '<span class="chip" data-oi="' + (i + 1) + '" style="cursor:pointer;' + (state.order === o ? on.slice(1) : "") + '">' + esc(lbl + proc) + '</span>';
-            }).join("") + '</div>';
-          }
-          el.innerHTML = html;
-          var tc = qs("o-tab-current"); if (tc) tc.addEventListener("click", function () { setSurgery(0); });
-          var tp = qs("o-tab-previous"); if (tp) tp.addEventListener("click", function () { setSurgery(1); });
+          var pill = "font-size:13px;border-radius:999px;padding:6px 14px;cursor:pointer;white-space:nowrap;";
+          var on = "background:#1f3a5f;color:#fff;";
+          var off = "background:var(--card);color:var(--accent-ink);border:1px solid var(--line);";
+          var items = orders.map(function (o, i) {
+            var name = o.procedure_name ? String(o.procedure_name).split("(")[0].trim().slice(0, 24) : ("Surgery " + (i + 1));
+            var d = o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : "");
+            var active = state.order === o;
+            return '<span data-oi="' + i + '" style="' + pill + (active ? on : off) + '">' + esc(name) + (d ? ' <span style="opacity:.7">· ' + esc(d) + '</span>' : '') + (i === 0 ? ' <span style="opacity:.7">· current</span>' : '') + '</span>';
+          }).join("");
+          el.innerHTML = '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery, Surgeon order &amp; Documents</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:10px;padding:8px">' + (items || '<span style="font-size:13px;color:var(--muted)">No surgery yet</span>') + '<span data-newsurg="1" style="' + pill + 'color:var(--accent-ink);border:1px dashed #c7d6ea;margin-left:auto">+ new surgery</span></div>';
           Array.prototype.forEach.call(el.querySelectorAll("[data-oi]"), function (c) { c.addEventListener("click", function () { setSurgery(parseInt(c.getAttribute("data-oi"), 10)); }); });
-          var ns = qs("o-new-surgery"); if (ns) ns.addEventListener("click", newSurgery);
+          var ns = el.querySelector("[data-newsurg]"); if (ns) ns.addEventListener("click", newSurgery);
         }
-        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderOrder(); }
-        function newSurgery() { var o = { id: null, procedure_codes: [], _new: true }; state.orders = state.orders || []; state.orders.unshift(o); state.order = o; state.orderId = null; renderOrder(); }
+        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
+        function newSurgery() { var o = { id: null, procedure_codes: [], _new: true }; state.orders = state.orders || []; state.orders.unshift(o); state.order = o; state.orderId = null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
         function renderOrder() {
           if (!qs("o-fields").getAttribute("data-built")) { buildOrderFields(); qs("o-fields").setAttribute("data-built", "1"); }
-          renderSurgeryPicker();
           var o = state.order || {};
           setVal("o-procedure_name", o.procedure_name);
           ORDER_GROUPS.forEach(function (g) { g.fields.forEach(function (f) { var e = qs("o-" + f.k); if (!e) return; if (f.type === "checkbox") e.checked = !!o[f.k]; else e.value = (o[f.k] == null ? "" : o[f.k]); }); });
@@ -627,7 +647,7 @@
           if (p.created_at) h.push('<div class="doc"><span class="dname">Created</span><span class="dmeta" style="margin-left:auto">' + isoToDmy(p.created_at) + (p.created_by ? " · " + esc(p.created_by) : "") + '</span></div>');
           qs("pf-history").innerHTML = h.length ? h.join("") : '<div class="empty">No history yet.</div>';
         }
-        function renderAll() { renderHeader(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); wireLaunch(); }
+        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); wireLaunch(); }
 
         function wireLaunch() {
           var id = state.patient && state.patient.id;

@@ -196,6 +196,7 @@
           <span class="lbl">Create for this patient:</span>
           <a id="pf-make-quote" href="#">Make quote</a>
           <a id="pf-make-pamphlet" href="#">Make pamphlet</a>
+          <a id="pf-make-fee-estimate" href="#">VSC fee estimate</a>
           <a id="pf-make-list" href="#">Add to surgical list</a>
         </div>
       </div>
@@ -282,6 +283,7 @@
           <div class="section" id="sec-order">
             <h2>Surgeon order</h2>
             <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
+            <div style="margin-bottom:14px"><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">Copy clinical notes</button> <span class="status" id="o-copy-status"></span></div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
             <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
@@ -472,6 +474,42 @@
             { k: "admin_notes", label: "Admin notes", type: "textarea", full: true }
           ]}
         ];
+        function clinV(k) { var x = state.order && state.order[k]; return (x === null || x === undefined || x === "") ? "" : x; }
+        function clinLine(label, key, suffix) { var val = clinV(key); return val === "" ? "" : (label + ": " + val + (suffix || "") + "\n"); }
+        function buildClinicalNote() {
+          var o = state.order || {}, p = state.patient || {};
+          var name = p.full_name || "(patient)";
+          var date = p.surgery_date ? isoToDmy(p.surgery_date) : "";
+          var venue = clinV("venue_type");
+          var out = "CLINICAL / OPERATIVE NOTE — " + name + "\n" +
+            "Date: " + (date || "—") + "   Surgeon: Dr Steven Edwards" + (venue ? ("   Venue: " + venue) : "") + "\n\n";
+          var s1 = clinLine("Procedure", "procedure_name") + clinLine("Side", "side") + clinLine("Admission", "admission_type") + clinLine("Est. duration", "est_duration_min", " min") + clinLine("Venue type", "venue_type") + clinLine("Surgical assist", "surgical_assist") + clinLine("Assistant", "surgical_assistant_name");
+          if (s1) out += "PROCEDURE\n" + s1 + "\n";
+          var codes = (o.procedure_codes || []).map(function (c) { return (c && (c.code || c)) || ""; }).filter(Boolean);
+          if (codes.length) out += "ITEM CODES\n" + codes.join(", ") + "\n\n";
+          var s2 = clinLine("Anaesthesia", "anaesthesia_type") + clinLine("Tourniquet", "tourniquet") + clinLine("Pre-op fasting", "preop_fasting");
+          if (s2) out += "ANAESTHESIA\n" + s2 + "\n";
+          var allergy = o.allergies_nka ? "Allergies: NKA (no known allergies)\n" : clinLine("Allergies", "allergies");
+          var s3 = allergy + clinLine("Theatre alerts", "theatre_alerts") + clinLine("GLP-1 / SGLT2", "glp1_sglt2") + clinLine("Pre-op meds to stop", "preop_meds_to_stop") + clinLine("Risk", "risk_stratification") + clinLine("Pre-op considerations", "preop_considerations");
+          if (s3) out += "CLINICAL ALERTS\n" + s3 + "\n";
+          var s4 = clinLine("Equipment", "theatre_equipment") + clinLine("Prosthesis", "prosthesis_details") + clinLine("Banding rule", "banding_rule");
+          if (s4) out += "INTRA-OPERATIVE\n" + s4 + "\n";
+          var s5 = clinLine("Antibiotics (post-op)", "antibiotics_postop") + clinLine("Antibiotic cover", "ab_cover") + clinLine("Antithrombotic cover", "at_cover") + clinLine("Antithrombotic drugs", "antithrombotic_drugs") + clinLine("Post-op medication", "postop_medication") + clinLine("Pain plan", "pain_plan");
+          if (s5) out += "POST-OPERATIVE MANAGEMENT\n" + s5 + "\n";
+          var crutch = o.crutches_required ? ("Crutches: Yes" + (clinV("crutches_weeks") ? (" (" + clinV("crutches_weeks") + " weeks)") : "") + "\n") : "";
+          var s6 = clinLine("Weight-bearing", "weight_bearing") + clinLine("Partial WB", "partial_wb_at_weeks", " weeks") + clinLine("Full WB", "full_wb_at_weeks", " weeks") + clinLine("Footwear", "footwear") + clinLine("Footwear period", "footwear_weeks", " weeks") + clinLine("Normal shoes", "normal_shoes_weeks", " weeks") + crutch + clinLine("Knee scooter", "knee_scooter_weeks", " weeks") + clinLine("Wheelchair", "wheelchair_weeks", " weeks") + clinLine("Mobility aid", "mobility_aid") + clinLine("Driving — off", "driving_weeks_off", " weeks") + clinLine("Shower / wet", "shower_wet_at_days", " days") + clinLine("Swimming — off", "swimming_weeks_off", " weeks") + clinLine("Flying — off", "flying_weeks_off", " weeks") + clinLine("Sport — return", "sport_weeks", " weeks") + clinLine("Desk work", "work_desk_weeks", " weeks") + clinLine("Active work", "work_active_weeks", " weeks") + clinLine("Return to work", "return_to_work_weeks", " weeks") + clinLine("Social events", "social_event_weeks", " weeks") + clinLine("Travel notes", "travel_notes");
+          if (s6) out += "RECOVERY & RESTRICTIONS\n" + s6 + "\n";
+          var s7 = clinLine("First post-op", "first_postop_days", " days") + clinLine("Follow-up review", "followup_review_weeks", " weeks") + clinLine("Post-op visits", "post_op_count") + clinLine("Visits weeks apart", "post_op_weeks_apart", " weeks");
+          if (s7) out += "FOLLOW-UP\n" + s7 + "\n";
+          var s8 = clinLine("Patient guidance", "patient_guidance") + clinLine("Surgeon notes", "surgeon_notes") + clinLine("Clinical notes", "clinical_notes_text");
+          if (s8) out += "GUIDANCE & NOTES\n" + s8 + "\n";
+          return out.replace(/\n+$/, "") + "\n";
+        }
+        function copyToClipboard(text, fbEl) {
+          function done() { if (fbEl) { fbEl.textContent = "Copied ✓"; setTimeout(function () { fbEl.textContent = ""; }, 2000); } else { toast("Copied ✓"); } }
+          function fallback() { try { var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); } catch (e) { if (fbEl) fbEl.textContent = "Copy failed"; } }
+          if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done).catch(fallback); } else { fallback(); }
+        }
         function buildOrderFields() {
           qs("o-fields").innerHTML = ORDER_GROUPS.map(function (g) {
             var fh = g.fields.map(function (f) {
@@ -709,7 +747,8 @@
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
           qs("pf-make-list").href = APPS.list + (id ? ("?patient_id=" + encodeURIComponent(id)) : "");
-          ["pf-make-quote", "pf-make-pamphlet", "pf-make-list"].forEach(function (b) { qs(b).setAttribute("target", "_blank"); qs(b).setAttribute("rel", "noopener"); });
+          qs("pf-make-fee-estimate").href = id ? ("https://amy-studio.github.io/clinic-style/fee-estimate-preview.html?patient_id=" + encodeURIComponent(id) + "&kind=quote_vsc_selffund") : "#";
+          ["pf-make-quote", "pf-make-pamphlet", "pf-make-fee-estimate", "pf-make-list"].forEach(function (b) { qs(b).setAttribute("target", "_blank"); qs(b).setAttribute("rel", "noopener"); });
         }
 
         // ---- save ----
@@ -762,6 +801,7 @@
         }
         qs("pf-save").addEventListener("click", save);
         (function () { var b = qs("pf-note-post"); if (b) b.addEventListener("click", postNote); })();
+        (function () { var b = qs("o-copy-notes"); if (b) b.addEventListener("click", function () { copyToClipboard(buildClinicalNote(), qs("o-copy-status")); }); })();
 
         // ---- load ----
         function loadStub() {

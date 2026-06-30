@@ -654,7 +654,7 @@
           state.docsView = docs;
           var b = qs("pf-doc-badge");
           if (docs.length) { b.textContent = docs.length; b.style.display = ""; } else { b.style.display = "none"; }
-          if (!docs.length) { qs("pf-docs").innerHTML = '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>'; return; }
+          if (!docs.length) { qs("pf-docs").innerHTML = state.docsError ? ('<div class="empty">⚠ Couldn\'t load documents (' + esc(state.docsError) + '). Reload the page; if it keeps happening, log out and back in.</div>') : '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>'; return; }
           var groups = {};
           docs.forEach(function (d, i) { var c = docCategory(d.doc_type); (groups[c] = groups[c] || []).push(i); });
           var order = ["Quotes", "Pamphlets (PIB)", "Fee estimates", "Reception sheets", "Consent", "Other"];
@@ -901,7 +901,7 @@
             // secondary table is slow; each section fills in as it arrives.
             state.patient = p; qs("pf-save").disabled = false; status(""); renderAll();
             pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }), "surgeries").then(function (r) { if (r && !r.error) { state.orders = r.data || []; if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });
-            pfQ(client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }), "documents").then(function (r) { if (r && !r.error) { state.docs = r.data || []; renderAll(); } else { console.warn("[PF] documents:", r && r.error && r.error.message); } });
+            pfQ(client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }), "documents").then(function (r) { if (r && !r.error) { state.docs = r.data || []; state.docsError = null; renderAll(); } else { state.docsError = (r && r.error && (r.error.__timeout ? "timed out" : r.error.message)) || "failed"; console.warn("[PF] documents:", state.docsError); renderAll(); } });
             pfQ(client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }), "hires").then(function (r) { if (r && !r.error) { state.hires = r.data || []; renderAll(); } else { console.warn("[PF] hires:", r && r.error && r.error.message); } });
             pfQ(client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }), "notes").then(function (r) { if (r && !r.error) { state.notes = r.data || []; renderAll(); } else { console.warn("[PF] notes:", r && r.error && r.error.message); } });
           }).catch(function (e) { clearWatchdog(); status("Load failed"); qs("pf-meta").textContent = "Something went wrong loading this patient. Reload the page; if it keeps happening, log out and back in from the Dashboard."; console.error("[PF] load error", e); });

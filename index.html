@@ -272,7 +272,7 @@
                 <select id="f-surgery_status"><option value="">—</option><option>booked</option><option>confirmed</option><option>cancelled</option></select>
               </div>
               <div class="field"><label>Paid</label>
-                <select id="f-paid_in_full"><option value="">Not paid</option><option value="deposit">Deposit paid</option><option value="full">Paid in full</option></select>
+                <select id="f-paid_in_full"><option value="">Not paid</option><option value="full">Paid in full</option></select>
               </div>
               <div class="field full"><label>Procedure</label><textarea id="f-surgery_procedure" rows="2"></textarea></div>
             </div>
@@ -383,7 +383,7 @@
             setVal("f-surgery_time", p.surgery_time ? String(p.surgery_time).slice(0, 5) : "");
             setVal("f-surgery_venue", (p.surgery_venue || "").toLowerCase());
             ["surgery_anaesthetist", "surgery_duration_min", "list_position", "surgery_status", "surgery_procedure"].forEach(function (k) { setVal("f-" + k, p[k]); });
-            setVal("f-paid_in_full", p.paid_in_full === true ? "full" : (p.paid_in_full || ""));
+            setVal("f-paid_in_full", p.paid_in_full === true ? "full" : "");
             return;
           }
           var o = state.order || {};
@@ -776,7 +776,7 @@
           patch.surgery_venue = val("f-surgery_venue") || null;
           var dur = parseInt(val("f-surgery_duration_min"), 10); patch.surgery_duration_min = isNaN(dur) ? null : dur;
           var lp = parseInt(val("f-list_position"), 10); patch.list_position = isNaN(lp) ? null : lp;
-          var paid = val("f-paid_in_full"); patch.paid_in_full = paid === "full" ? true : (paid || null);
+          patch.paid_in_full = (val("f-paid_in_full") === "full");
           return patch;
         }
         function collectOrderPatch() {

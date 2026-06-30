@@ -805,8 +805,10 @@
           Promise.all(jobs).then(function (res) {
             var failed = res.filter(function (r) { return r && r.error; });
             if (failed.length) {
-              qs("pf-save").disabled = false; status("Save failed");
-              toast("Save failed — please try again");
+              qs("pf-save").disabled = false;
+              var _msg = (failed[0] && failed[0].error && failed[0].error.message) ? failed[0].error.message : "please try again";
+              status("Save failed: " + _msg);
+              toast("Save failed: " + _msg);
               console.error("[PF] save error", failed.map(function (r) { return r.error; }));
               return;
             }
@@ -817,7 +819,7 @@
             if (state.order && state.orderId) { state.order.id = state.orderId; delete state.order._new; }
             renderHeader(); renderOverview(); renderSurgeryPicker();
           }).catch(function (e) {
-            qs("pf-save").disabled = false; status("Save failed"); toast("Save failed — " + (e && e.message ? e.message : "error"));
+            qs("pf-save").disabled = false; var _em = (e && e.message) ? e.message : "error"; status("Save failed: " + _em); toast("Save failed: " + _em);
             console.error("[PF] save error", e);
           });
         }

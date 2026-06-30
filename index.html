@@ -886,23 +886,24 @@
           }, 12000);
           var clearWatchdog = function () { settled = true; clearTimeout(watchdog); };
           var getP = (window.ClinicPatients && ClinicPatients.get) ? ClinicPatients.get(pid) : client.from("patients").select("*").eq("id", pid).maybeSingle().then(function (r) { return r.data; });
+          // Per-query timeout: one slow/hung table can no longer freeze the
+          // whole page. A timed-out section just stays empty; the rest render.
+          function pfQ(p, label) {
+            return Promise.race([
+              Promise.resolve(p),
+              new Promise(function (res) { setTimeout(function () { res({ data: null, error: { message: (label || "request") + " timed out", __timeout: true } }); }, 10000); })
+            ]);
+          }
           Promise.resolve(getP).then(function (p) {
-            if (!p) { clearWatchdog(); qs("pf-name").textContent = "Patient not found"; qs("pf-meta").textContent = "This patient id isn't in the register."; status(""); return; }
-            state.patient = p;
-            return Promise.all([
-              client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }),
-              client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }),
-              client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }),
-              client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }).then(function (r) { return r.error ? { data: [] } : r; })
-            ]).then(function (rr) {
-              clearWatchdog();
-              state.orders = (rr[0] && rr[0].data) || [];
-              if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; }
-              state.docs = (rr[1] && rr[1].data) || [];
-              state.hires = (rr[2] && rr[2].data) || [];
-              state.notes = (rr[3] && rr[3].data) || [];
-              qs("pf-save").disabled = false; status(""); renderAll();
-            });
+            clearWatchdog();
+            if (!p) { qs("pf-name").textContent = "Patient not found"; qs("pf-meta").textContent = "This patient id isn't in the register."; status(""); return; }
+            // Show the patient straight away so the page is usable even if a
+            // secondary table is slow; each section fills in as it arrives.
+            state.patient = p; qs("pf-save").disabled = false; status(""); renderAll();
+            pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }), "surgeries").then(function (r) { if (r && !r.error) { state.orders = r.data || []; if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });
+            pfQ(client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }), "documents").then(function (r) { if (r && !r.error) { state.docs = r.data || []; renderAll(); } else { console.warn("[PF] documents:", r && r.error && r.error.message); } });
+            pfQ(client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }), "hires").then(function (r) { if (r && !r.error) { state.hires = r.data || []; renderAll(); } else { console.warn("[PF] hires:", r && r.error && r.error.message); } });
+            pfQ(client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }), "notes").then(function (r) { if (r && !r.error) { state.notes = r.data || []; renderAll(); } else { console.warn("[PF] notes:", r && r.error && r.error.message); } });
           }).catch(function (e) { clearWatchdog(); status("Load failed"); qs("pf-meta").textContent = "Something went wrong loading this patient. Reload the page; if it keeps happening, log out and back in from the Dashboard."; console.error("[PF] load error", e); });
         }
 

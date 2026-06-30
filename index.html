@@ -853,7 +853,7 @@
             var client = sb(); if (!client) { qs("pf-results").innerHTML = '<div class="empty">Not signed in.</div>'; return; }
             var query = client.from("patients").select("id,full_name,dob,surgery_date,surgery_venue").is("archived_at", null).order("surgery_date", { ascending: true, nullsFirst: false }).limit(25);
             if (q) query = query.ilike("full_name", "%" + q + "%");
-            query.then(function (r) { renderResults((r && r.data) || []); }).catch(function () { qs("pf-results").innerHTML = '<div class="empty">Search failed.</div>'; });
+            query.then(function (r) { if (r && r.error) { qs("pf-results").innerHTML = '<div class="empty">⚠ Couldn\'t load patients: ' + esc(r.error.message || "error") + '. Reload the page, or log out and back in from the Dashboard.</div>'; console.error("[PF] picker error", r.error); return; } renderResults((r && r.data) || []); }).catch(function (e) { qs("pf-results").innerHTML = '<div class="empty">⚠ Search failed: ' + esc((e && e.message) || "error") + '</div>'; console.error("[PF] picker catch", e); });
           }
           inp.oninput = function () { clearTimeout(timer); timer = setTimeout(run, 200); };
           run();

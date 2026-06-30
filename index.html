@@ -803,6 +803,13 @@
           if (state.orderId) jobs.push(client.from("surgeon_orders").update(oPatch).eq("id", state.orderId));
           else if (hasOrderContent) jobs.push(client.from("surgeon_orders").insert(Object.assign({ patient_id: id, status: "draft", procedure_codes: (state.order && state.order.procedure_codes) || [] }, oPatch)).select("id"));
           Promise.all(jobs).then(function (res) {
+            var failed = res.filter(function (r) { return r && r.error; });
+            if (failed.length) {
+              qs("pf-save").disabled = false; status("Save failed");
+              toast("Save failed — please try again");
+              console.error("[PF] save error", failed.map(function (r) { return r.error; }));
+              return;
+            }
             var ins = res[res.length - 1];
             if (!state.orderId && ins && ins.data && ins.data[0]) state.orderId = ins.data[0].id;
             qs("pf-save").disabled = false; status(""); toast("Saved ✓");
@@ -867,9 +874,20 @@
           var pid = new URLSearchParams(location.search).get("patient_id");
           if (!pid) { showPicker(); return; }
           status("Loading…");
+          // Watchdog: a dropped connection or an expired login can leave the
+          // fetch hanging forever on "Loading…". After 12s, stop pretending
+          // and tell the user how to recover instead of spinning silently.
+          var settled = false;
+          var watchdog = setTimeout(function () {
+            if (settled) return;
+            status("Couldn't load");
+            qs("pf-name").textContent = "Couldn't load this patient";
+            qs("pf-meta").textContent = "The connection may have dropped or your login may have expired. Reload the page (Cmd or Ctrl + Shift + R). If it keeps happening, go to the Dashboard, log out and back in, then try again.";
+          }, 12000);
+          var clearWatchdog = function () { settled = true; clearTimeout(watchdog); };
           var getP = (window.ClinicPatients && ClinicPatients.get) ? ClinicPatients.get(pid) : client.from("patients").select("*").eq("id", pid).maybeSingle().then(function (r) { return r.data; });
           Promise.resolve(getP).then(function (p) {
-            if (!p) { qs("pf-name").textContent = "Patient not found"; qs("pf-meta").textContent = "This patient id isn't in the register."; status(""); return; }
+            if (!p) { clearWatchdog(); qs("pf-name").textContent = "Patient not found"; qs("pf-meta").textContent = "This patient id isn't in the register."; status(""); return; }
             state.patient = p;
             return Promise.all([
               client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }),
@@ -877,6 +895,7 @@
               client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }),
               client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }).then(function (r) { return r.error ? { data: [] } : r; })
             ]).then(function (rr) {
+              clearWatchdog();
               state.orders = (rr[0] && rr[0].data) || [];
               if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; }
               state.docs = (rr[1] && rr[1].data) || [];
@@ -884,7 +903,7 @@
               state.notes = (rr[3] && rr[3].data) || [];
               qs("pf-save").disabled = false; status(""); renderAll();
             });
-          }).catch(function (e) { status("Load failed"); console.error("[PF] load error", e); });
+          }).catch(function (e) { clearWatchdog(); status("Load failed"); qs("pf-meta").textContent = "Something went wrong loading this patient. Reload the page; if it keeps happening, log out and back in from the Dashboard."; console.error("[PF] load error", e); });
         }
 
         // delegated: add-code stub

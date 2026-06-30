@@ -843,8 +843,16 @@
           qs("pf-save").disabled = false; renderAll();
         }
         function showPicker() {
-          document.querySelector(".pcard").style.display = "none";
-          document.querySelector(".body").style.display = "none";
+          // Hide the patient-DETAIL card (the one holding #pf-name) + switcher +
+          // body. NOTE: the picker has its OWN .pcard, so document.querySelector(
+          // ".pcard") was grabbing the picker's card and leaving the detail card
+          // stuck on screen showing "Loading…". Target the detail card directly.
+          var _detail = document.getElementById("pf-name");
+          _detail = _detail && _detail.closest(".pcard");
+          if (_detail) _detail.style.display = "none";
+          var _sw = document.getElementById("pf-surgery-switcher"); if (_sw) _sw.style.display = "none";
+          var _body = document.querySelector(".body");
+          if (_body) _body.style.display = "none";
           qs("pf-picker").style.display = "";
           var inp = qs("pf-search"); var timer = null;
           function run() {

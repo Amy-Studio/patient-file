@@ -14,7 +14,7 @@
     <script>
       (function () {
         var v = Date.now();
-        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js"].forEach(function (f) {
+        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-preop-plan.js"].forEach(function (f) {
           document.write('<script src="https://amy-studio.github.io/clinic-style/' + f + '?fresh=' + v + '"><\/script>');
         });
       })();
@@ -283,7 +283,7 @@
           <div class="section" id="sec-order">
             <h2>Surgeon order</h2>
             <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
-            <div style="margin-bottom:14px"><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">Copy clinical notes</button> <span class="status" id="o-copy-status"></span></div>
+            <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">Copy clinical notes</button><button type="button" id="o-theatre-sheet" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">🖨 Theatre staff sheet</button> <span class="status" id="o-copy-status"></span></div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
             <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
@@ -826,6 +826,18 @@
         qs("pf-save").addEventListener("click", save);
         (function () { var b = qs("pf-note-post"); if (b) b.addEventListener("click", postNote); })();
         (function () { var b = qs("o-copy-notes"); if (b) b.addEventListener("click", function () { copyToClipboard(buildClinicalNote(), qs("o-copy-status")); }); })();
+        // Theatre staff sheet: open the pre-op plan on this patient's file. The
+        // surgeon ticks the theatre items, saves, and prints the personalised sheet.
+        (function () {
+          var b = qs("o-theatre-sheet"); if (!b) return;
+          b.addEventListener("click", function () {
+            if (!window.ClinicPreopPlan || !ClinicPreopPlan.openModal) { status("Theatre sheet is still loading — try again in a moment"); return; }
+            if (!state.patient || !state.patient.id) { status("Open a patient first"); return; }
+            if (!state.orderId) { status("Save the patient's surgery details first, then open the theatre sheet"); return; }
+            var ord = Object.assign({}, state.order, { id: state.orderId });
+            ClinicPreopPlan.openModal(ord, state.patient);
+          });
+        })();
 
         // ---- load ----
         function loadStub() {

@@ -209,6 +209,8 @@
           <div class="navitem" data-sec="contact"><span class="ic">◔</span> Contact</div>
           <div class="navitem" data-sec="surgery"><span class="ic">▦</span> Surgery</div>
           <div class="navitem" data-sec="order"><span class="ic">✚</span> Surgeon order</div>
+          <div class="navitem" data-sec="preop"><span class="ic">🩺</span> Pre-op planning</div>
+          <div class="navitem" data-sec="operative"><span class="ic">📋</span> Operative</div>
           <div class="navitem" data-sec="documents"><span class="ic">▤</span> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
           <div class="navitem" data-sec="hire"><span class="ic">▣</span> Hire</div>
           <div class="navitem" data-sec="notes"><span class="ic">✎</span> Notes</div>
@@ -283,12 +285,38 @@
           <div class="section" id="sec-order">
             <h2>Surgeon order</h2>
             <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
-            <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">Copy clinical notes</button><button type="button" id="o-theatre-sheet" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">🩺 Pre-op plan</button><button type="button" id="o-surgery-audit" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Surgery audit</button> <span class="status" id="o-copy-status"></span></div>
+            <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Copy clinical notes</button> <span class="status" id="o-copy-status"></span></div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
             <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
             <div id="o-fields"></div>
             <div id="o-extras"></div>
+          </div>
+
+          <!-- Pre-op planning -->
+          <div class="section" id="sec-preop">
+            <h2>Pre-op planning</h2>
+            <div class="panel-sub">Steve's pre-op plan for this patient — produces the theatre staff sheet and the patient's post-op instructions.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button type="button" id="pp-edit" style="font-size:13px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius);padding:9px 15px;cursor:pointer">✎ Fill in pre-op plan</button>
+              <button type="button" id="pp-copy" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Copy pre-op note</button>
+              <button type="button" id="pp-theatre" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">🖨 Theatre staff sheet</button>
+              <button type="button" id="pp-postop" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">🖨 Post-op instructions</button>
+              <span class="status" id="pp-status"></span>
+            </div>
+            <div class="panel-sub" style="margin-top:10px;font-size:12px">Fill in the plan first, then copy the note or print a PDF. The PDFs also appear in the modal while you're editing.</div>
+          </div>
+
+          <!-- Operative (surgery audit) -->
+          <div class="section" id="sec-operative">
+            <h2>Operative</h2>
+            <div class="panel-sub">After surgery — the surgical audit for the ACPS database.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button type="button" id="op-edit" style="font-size:13px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius);padding:9px 15px;cursor:pointer">✎ Fill in surgery audit</button>
+              <button type="button" id="op-copy" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Copy audit note</button>
+              <button type="button" id="op-summary" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">🖨 Surgical audit summary</button>
+              <span class="status" id="op-status"></span>
+            </div>
           </div>
 
           <!-- Documents -->
@@ -826,29 +854,53 @@
         qs("pf-save").addEventListener("click", save);
         (function () { var b = qs("pf-note-post"); if (b) b.addEventListener("click", postNote); })();
         (function () { var b = qs("o-copy-notes"); if (b) b.addEventListener("click", function () { copyToClipboard(buildClinicalNote(), qs("o-copy-status")); }); })();
-        // Theatre staff sheet: open the pre-op plan on this patient's file. The
-        // surgeon ticks the theatre items, saves, and prints the personalised sheet.
-        (function () {
-          var b = qs("o-theatre-sheet"); if (!b) return;
-          b.addEventListener("click", function () {
-            if (!window.ClinicPreopPlan || !ClinicPreopPlan.openModal) { status("Theatre sheet is still loading — try again in a moment"); return; }
-            if (!state.patient || !state.patient.id) { status("Open a patient first"); return; }
-            if (!state.orderId) { status("Save the patient's surgery details first, then open the pre-op plan"); return; }
-            var ord = Object.assign({}, state.order, { id: state.orderId });
-            ClinicPreopPlan.openModal(ord, state.patient);
-          });
-        })();
-        // Surgery audit: after-surgery details → branded Audit Summary + PracSuite note.
-        (function () {
-          var b = qs("o-surgery-audit"); if (!b) return;
-          b.addEventListener("click", function () {
-            if (!window.ClinicSurgeryAudit || !ClinicSurgeryAudit.openModal) { status("Surgery audit is still loading — try again in a moment"); return; }
-            if (!state.patient || !state.patient.id) { status("Open a patient first"); return; }
-            if (!state.orderId) { status("Save the patient's surgery details first, then open the audit"); return; }
-            var ord = Object.assign({}, state.order, { id: state.orderId });
-            ClinicSurgeryAudit.openModal(ord, state.patient);
-          });
-        })();
+        // ---- Surgeon workflow tabs: Pre-op planning + Operative ----
+        // Copy/print operate on the freshest SAVED surgeon order so they reflect
+        // whatever was last saved in the edit modal.
+        function surgeonOrderFresh() {
+          var base = Object.assign({}, state.order, { id: state.orderId });
+          if (!state.orderId) return Promise.resolve(base);
+          var client = sb(); if (!client) return Promise.resolve(base);
+          return client.from("surgeon_orders").select("*").eq("id", state.orderId).maybeSingle()
+            .then(function (r) { return (r && r.data) ? r.data : base; })
+            .catch(function () { return base; });
+        }
+        function pfReady(modName, msg) {
+          if (!window[modName] || !window[modName].openModal) { status(msg + " is still loading — try again in a moment"); return false; }
+          if (!state.patient || !state.patient.id) { status("Open a patient first"); return false; }
+          if (!state.orderId) { status("Save the patient's surgery details first"); return false; }
+          return true;
+        }
+        function wireBtn(id, fn) { var b = qs(id); if (b) b.addEventListener("click", fn); }
+
+        wireBtn("pp-edit", function () {
+          if (!pfReady("ClinicPreopPlan", "Pre-op plan")) return;
+          ClinicPreopPlan.openModal(Object.assign({}, state.order, { id: state.orderId }), state.patient);
+        });
+        wireBtn("pp-copy", function () {
+          if (!pfReady("ClinicPreopPlan", "Pre-op plan")) return;
+          surgeonOrderFresh().then(function (ord) { copyToClipboard(ClinicPreopPlan.buildPreopPlanNote(ord, state.patient), qs("pp-status")); });
+        });
+        wireBtn("pp-theatre", function () {
+          if (!pfReady("ClinicPreopPlan", "Pre-op plan")) return;
+          surgeonOrderFresh().then(function (ord) { ClinicPreopPlan.printTheatreInstructions(ord, state.patient); });
+        });
+        wireBtn("pp-postop", function () {
+          if (!pfReady("ClinicPreopPlan", "Pre-op plan")) return;
+          surgeonOrderFresh().then(function (ord) { ClinicPreopPlan.printPostopInstructions(ord, state.patient); });
+        });
+        wireBtn("op-edit", function () {
+          if (!pfReady("ClinicSurgeryAudit", "Surgery audit")) return;
+          ClinicSurgeryAudit.openModal(Object.assign({}, state.order, { id: state.orderId }), state.patient);
+        });
+        wireBtn("op-copy", function () {
+          if (!pfReady("ClinicSurgeryAudit", "Surgery audit")) return;
+          surgeonOrderFresh().then(function (ord) { copyToClipboard(ClinicSurgeryAudit.buildAuditNote(ord, state.patient), qs("op-status")); });
+        });
+        wireBtn("op-summary", function () {
+          if (!pfReady("ClinicSurgeryAudit", "Surgery audit")) return;
+          surgeonOrderFresh().then(function (ord) { ClinicSurgeryAudit.printAuditSummary(ord, state.patient); });
+        });
 
         // ---- load ----
         function loadStub() {

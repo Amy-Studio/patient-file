@@ -125,12 +125,40 @@
       .ord-group > summary::before { content: "\25B8"; color: var(--muted); font-size: 11px; transition: transform .15s ease; }
       .ord-group[open] > summary::before { transform: rotate(90deg); }
       .ord-group[open] > summary { border-bottom: 1px solid var(--line); }
-      .ord-group .grid2 { padding: 12px 14px; }
+      .ord-group .grid2 { padding: 10px 12px; }
+      /* week/day tick circles */
+      .wkrow { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+      .wkc { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: #fff; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--ink); cursor: pointer; user-select: none; line-height: 1; }
+      .wkc i { font-style: normal; font-size: 8px; font-weight: 500; color: var(--muted); margin-top: 1px; }
+      .wkc:hover { border-color: #b9c8de; }
+      .wkc.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+      .wkc.on i { color: #cdd9ea; }
+      .wkc-clear { color: var(--muted); font-weight: 400; }
+      /* mobility rows */
+      .mobrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+      .mobrow:last-of-type { border-bottom: none; }
+      .moblab { width: 96px; font-size: 13px; font-weight: 600; color: var(--navy); flex: none; }
+      .mobseq { display: inline-flex; gap: 4px; margin-left: auto; }
+      .seqc { font-size: 11px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); cursor: pointer; user-select: none; }
+      .seqc.on { background: var(--teal-bg); border-color: #9cc3bd; color: #2c6b62; font-weight: 600; }
+      /* saved summary view */
+      .osum-group { border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 10px 14px; margin-bottom: 8px; }
+      .osum-h { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--navy); margin-bottom: 6px; }
+      .osum-line { display: grid; grid-template-columns: 200px 1fr; gap: 10px; font-size: 13px; padding: 2.5px 0; }
+      .osum-line span { color: var(--muted); }
+      .osum-line b { font-weight: 500; color: var(--ink); }
+      @media (max-width: 640px) { .osum-line { grid-template-columns: 1fr; gap: 0; } }
+      /* patient picker table */
+      .pick-head { display: grid; grid-template-columns: 1.6fr .8fr .9fr .8fr; gap: 10px; padding: 8px 12px; font-size: 10.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+      .pick-row { display: grid; grid-template-columns: 1.6fr .8fr .9fr .8fr; gap: 10px; padding: 10px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f1f4f8; align-items: center; }
+      .pick-row:hover { background: #eef2f8; }
+      .pick-row .pk-name { font-weight: 600; color: var(--navy); }
+      .pick-row .pk-dim { color: var(--muted); font-size: 12.5px; }
 
       /* Fields — REAL css, normal weight everywhere */
-      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; }
       .field { display: flex; flex-direction: column; }
-      .field label { font-size: 12px; font-weight: 400; color: var(--muted); margin-bottom: 4px; }
+      .field label { font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 3px; }
       .field input, .field select, .field textarea {
         font-family: inherit; font-size: 13px; font-weight: 400; color: var(--ink);
         background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
@@ -292,7 +320,7 @@
           <div class="section" id="sec-order">
             <h2>Surgeon order</h2>
             <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
-            <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Copy clinical notes</button> <span class="status" id="o-copy-status"></span></div>
+            <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" id="o-edit-toggle" style="font-size:13px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius);padding:8px 15px;cursor:pointer">✎ Edit</button><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Copy clinical notes</button> <span class="status" id="o-copy-status"></span></div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
             <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
@@ -425,6 +453,14 @@
               '</div><div style="margin-top:12px">' + ro("Procedure", o.procedure_name) + '</div>';
           }
         }
+        // Friendly label maps for coded cover fields (codes stay in the DB — the
+        // surgical list + notes decoders rely on them).
+        var AB_OPTS = [["",""],["no","No"],["yes","Yes"],["yes_5d","Yes, for 5 days"],["other","Other"]];
+        var AT_OPTS = [["",""],["no","No"],["yes","Yes"],["yes_15d","Yes, for 15 days"],["yes_30d","Yes, for 30 days"],["yes_60d","Yes, for 60 days"],["other","Other"]];
+        function optLabel(opts, v) { for (var i = 0; i < opts.length; i++) if (opts[i][0] === v) return opts[i][1]; return v || ""; }
+        var WKS = [1, 2, 3, 4, 5, 6, 8, 10, 12];
+        var DAYS = [3, 5, 7, 10, 14, 21];
+        var MOB_AIDS = [["knee_scooter_weeks", "Knee scooter"], ["crutches_weeks", "Crutches"], ["wheelchair_weeks", "Wheelchair"]];
         var ORDER_GROUPS = [
           { title: "Procedure & theatre", fields: [
             { k: "side", label: "Side", type: "select", opts: ["", "left", "right", "bilateral"] },
@@ -432,10 +468,6 @@
             { k: "anaesthesia_type", label: "Anaesthesia", type: "text" },
             { k: "est_duration_min", label: "Est. duration (min)", type: "number" },
             { k: "venue_type", label: "Venue type", type: "select", opts: ["", "hospital", "clinic"] },
-            { k: "risk_stratification", label: "Risk", type: "text" },
-            { k: "tourniquet", label: "Tourniquet", type: "text" },
-            { k: "banding_rule", label: "Banding rule", type: "text" },
-            { k: "surgical_assist", label: "Surgical assist", type: "text" },
             { k: "surgical_assistant_name", label: "Assistant name", type: "text" }
           ]},
           { title: "Safety & clinical", fields: [
@@ -443,9 +475,8 @@
             { k: "allergies_nka", label: "No known allergies (NKA)", type: "checkbox" },
             { k: "theatre_alerts", label: "Theatre alerts", type: "text", full: true },
             { k: "glp1_sglt2", label: "GLP-1 / SGLT2", type: "text" },
-            { k: "antibiotics_postop", label: "Antibiotics (post-op)", type: "text" },
-            { k: "ab_cover", label: "Antibiotic cover", type: "text" },
-            { k: "at_cover", label: "Antithrombotic cover", type: "text" },
+            { k: "ab_cover", label: "Antibiotic cover", type: "lsel", lopts: AB_OPTS },
+            { k: "at_cover", label: "Antithrombotic cover", type: "lsel", lopts: AT_OPTS },
             { k: "antithrombotic_drugs", label: "Antithrombotic drugs", type: "text" },
             { k: "prosthesis_details", label: "Prosthesis", type: "text" },
             { k: "theatre_equipment", label: "Theatre equipment", type: "text", full: true },
@@ -455,45 +486,35 @@
           ]},
           { title: "Recovery plan · feeds the pamphlet", fields: [
             { k: "weight_bearing", label: "Weight-bearing", type: "text", full: true },
-            { k: "partial_wb_at_weeks", label: "Partial WB (weeks)", type: "number" },
-            { k: "full_wb_at_weeks", label: "Full WB (weeks)", type: "number" },
-            { k: "footwear", label: "Footwear", type: "text" },
-            { k: "footwear_weeks", label: "Footwear (weeks)", type: "number" },
-            { k: "normal_shoes_weeks", label: "Normal shoes (weeks)", type: "number" },
-            { k: "driving_weeks_off", label: "Driving (weeks off)", type: "number" },
-            { k: "work_desk_weeks", label: "Desk work (weeks)", type: "number" },
-            { k: "work_active_weeks", label: "Active work (weeks)", type: "number" },
-            { k: "return_to_work_weeks", label: "Return to work (weeks)", type: "number" },
-            { k: "sport_weeks", label: "Sport (weeks)", type: "number" },
-            { k: "swimming_weeks_off", label: "Swimming (weeks off)", type: "number" },
-            { k: "flying_weeks_off", label: "Flying (weeks off)", type: "number" },
-            { k: "social_event_weeks", label: "Social events (weeks)", type: "number" },
-            { k: "shower_wet_at_days", label: "Shower / wet (days)", type: "number" },
+            { k: "partial_wb_at_weeks", label: "Partial weight-bearing at", type: "wk" },
+            { k: "full_wb_at_weeks", label: "Full weight-bearing at", type: "wk" },
+            { k: "footwear", label: "Footwear", type: "text", full: true },
+            { k: "footwear_weeks", label: "Footwear worn for", type: "wk" },
+            { k: "normal_shoes_weeks", label: "Normal shoes at", type: "wk" },
+            { k: "driving_weeks_off", label: "Driving: off for", type: "wk" },
+            { k: "work_desk_weeks", label: "Desk work at", type: "wk" },
+            { k: "work_active_weeks", label: "Active work at", type: "wk" },
+            { k: "return_to_work_weeks", label: "Return to work at", type: "wk" },
+            { k: "sport_weeks", label: "Sport at", type: "wk" },
+            { k: "swimming_weeks_off", label: "Swimming: off for", type: "wk" },
+            { k: "flying_weeks_off", label: "Flying: off for", type: "wk" },
+            { k: "social_event_weeks", label: "Social events at", type: "wk" },
+            { k: "shower_wet_at_days", label: "Shower / get wet at", type: "days" },
             { k: "travel_notes", label: "Travel notes", type: "text", full: true }
           ]},
-          { title: "Mobility & aids", fields: [
-            { k: "mobility_aid", label: "Mobility aid", type: "text" },
-            { k: "crutches_required", label: "Crutches required", type: "checkbox" },
-            { k: "crutches_weeks", label: "Crutches (weeks)", type: "number" },
-            { k: "knee_scooter_weeks", label: "Knee scooter (weeks)", type: "number" },
-            { k: "wheelchair_weeks", label: "Wheelchair (weeks)", type: "number" },
-            { k: "footwear_choice", label: "Footwear choice", type: "text" },
+          { title: "Mobility & timing", fields: [
+            { k: "__mobility", label: "", type: "mobility", full: true },
             { k: "prep_extra_items", label: "Prep extra items", type: "text", full: true },
             { k: "prep_where_to_buy", label: "Where to buy", type: "text", full: true }
           ]},
           { title: "Follow-up & post-op", fields: [
-            { k: "followup_review_weeks", label: "Follow-up review (weeks)", type: "number" },
-            { k: "post_op_count", label: "Post-op visits", type: "number" },
-            { k: "post_op_weeks_apart", label: "Visits weeks apart", type: "number" },
-            { k: "first_postop_days", label: "First post-op (days)", type: "text" },
+            { k: "__postop_reviews", label: "Post-op reviews (tick each week he wants to see them)", type: "wkmulti", full: true },
             { k: "postop_medication", label: "Post-op medication", type: "text", full: true },
             { k: "pain_plan", label: "Pain plan", type: "textarea", full: true },
             { k: "patient_guidance", label: "Patient guidance", type: "textarea", full: true }
           ]},
           { title: "Notes", fields: [
-            { k: "surgeon_notes", label: "Surgeon notes", type: "textarea", full: true },
-            { k: "clinical_notes_text", label: "Clinical notes", type: "textarea", full: true },
-            { k: "other_quote_notes", label: "Quote notes", type: "textarea", full: true }
+            { k: "surgeon_notes", label: "Surgeon notes", type: "textarea", full: true }
           ]}
         ];
         function clinV(k) { var x = state.order && state.order[k]; return (x === null || x === undefined || x === "") ? "" : x; }
@@ -516,12 +537,15 @@
           if (s3) out += "CLINICAL ALERTS\n" + s3 + "\n";
           var s4 = clinLine("Equipment", "theatre_equipment") + clinLine("Prosthesis", "prosthesis_details") + clinLine("Banding rule", "banding_rule");
           if (s4) out += "INTRA-OPERATIVE\n" + s4 + "\n";
-          var s5 = clinLine("Antibiotics (post-op)", "antibiotics_postop") + clinLine("Antibiotic cover", "ab_cover") + clinLine("Antithrombotic cover", "at_cover") + clinLine("Antithrombotic drugs", "antithrombotic_drugs") + clinLine("Post-op medication", "postop_medication") + clinLine("Pain plan", "pain_plan");
+          var abL = clinV("ab_cover") ? optLabel(AB_OPTS, clinV("ab_cover")) : "";
+          var atL = clinV("at_cover") ? optLabel(AT_OPTS, clinV("at_cover")) : "";
+          var s5 = clinLine("Antibiotics (post-op)", "antibiotics_postop") + (abL ? "Antibiotic cover: " + abL + "\n" : "") + (atL ? "Antithrombotic cover: " + atL + "\n" : "") + clinLine("Antithrombotic drugs", "antithrombotic_drugs") + clinLine("Post-op medication", "postop_medication") + clinLine("Pain plan", "pain_plan");
           if (s5) out += "POST-OPERATIVE MANAGEMENT\n" + s5 + "\n";
           var crutch = o.crutches_required ? ("Crutches: Yes" + (clinV("crutches_weeks") ? (" (" + clinV("crutches_weeks") + " weeks)") : "") + "\n") : "";
           var s6 = clinLine("Weight-bearing", "weight_bearing") + clinLine("Partial WB", "partial_wb_at_weeks", " weeks") + clinLine("Full WB", "full_wb_at_weeks", " weeks") + clinLine("Footwear", "footwear") + clinLine("Footwear period", "footwear_weeks", " weeks") + clinLine("Normal shoes", "normal_shoes_weeks", " weeks") + crutch + clinLine("Knee scooter", "knee_scooter_weeks", " weeks") + clinLine("Wheelchair", "wheelchair_weeks", " weeks") + clinLine("Mobility aid", "mobility_aid") + clinLine("Driving — off", "driving_weeks_off", " weeks") + clinLine("Shower / wet", "shower_wet_at_days", " days") + clinLine("Swimming — off", "swimming_weeks_off", " weeks") + clinLine("Flying — off", "flying_weeks_off", " weeks") + clinLine("Sport — return", "sport_weeks", " weeks") + clinLine("Desk work", "work_desk_weeks", " weeks") + clinLine("Active work", "work_active_weeks", " weeks") + clinLine("Return to work", "return_to_work_weeks", " weeks") + clinLine("Social events", "social_event_weeks", " weeks") + clinLine("Travel notes", "travel_notes");
           if (s6) out += "RECOVERY & RESTRICTIONS\n" + s6 + "\n";
-          var s7 = clinLine("First post-op", "first_postop_days", " days") + clinLine("Follow-up review", "followup_review_weeks", " weeks") + clinLine("Post-op visits", "post_op_count") + clinLine("Visits weeks apart", "post_op_weeks_apart", " weeks");
+          var rvW = (state.order && state.order.order_ui && state.order.order_ui.postop_review_weeks) || [];
+          var s7 = (rvW.length ? "Post-op reviews: week " + rvW.join(", week ") + "\n" : clinLine("First post-op", "first_postop_days", " days") + clinLine("Follow-up review", "followup_review_weeks", " weeks") + clinLine("Post-op visits", "post_op_count") + clinLine("Visits weeks apart", "post_op_weeks_apart", " weeks"));
           if (s7) out += "FOLLOW-UP\n" + s7 + "\n";
           var s8 = clinLine("Patient guidance", "patient_guidance") + clinLine("Surgeon notes", "surgeon_notes") + clinLine("Clinical notes", "clinical_notes_text");
           if (s8) out += "GUIDANCE & NOTES\n" + s8 + "\n";
@@ -532,19 +556,65 @@
           function fallback() { try { var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); } catch (e) { if (fbEl) fbEl.textContent = "Copy failed"; } }
           if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done).catch(fallback); } else { fallback(); }
         }
+        function wkCirclesHtml(k, values, unit) {
+          return '<div class="wkrow" data-wk="' + k + '">' + values.map(function (w) {
+            return '<span class="wkc" data-v="' + w + '">' + w + '<i>' + unit + '</i></span>';
+          }).join("") + '<span class="wkc wkc-clear" data-v="">&ndash;</span></div>';
+        }
         function buildOrderFields() {
           qs("o-fields").innerHTML = ORDER_GROUPS.map(function (g, gi) {
             var fh = g.fields.map(function (f) {
               var cls = "field" + (f.full || f.type === "textarea" ? " full" : "");
               if (f.type === "checkbox") return '<div class="' + cls + '"><label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:18px"><input type="checkbox" id="o-' + f.k + '" style="width:auto"> ' + f.label + '</label></div>';
+              if (f.type === "wk") return '<div class="' + cls + '"><label>' + f.label + '</label>' + wkCirclesHtml(f.k, WKS, "wk") + '</div>';
+              if (f.type === "days") return '<div class="' + cls + '"><label>' + f.label + '</label>' + wkCirclesHtml(f.k, DAYS, "d") + '</div>';
+              if (f.type === "wkmulti") return '<div class="' + cls + '"><label>' + f.label + '</label><div class="wkrow" data-wkmulti="' + f.k + '">' + WKS.map(function (w) { return '<span class="wkc" data-v="' + w + '">' + w + '<i>wk</i></span>'; }).join("") + '</div></div>';
+              if (f.type === "lsel") return '<div class="' + cls + '"><label>' + f.label + '</label><select id="o-' + f.k + '">' + f.lopts.map(function (o) { return '<option value="' + o[0] + '">' + (o[1] || "\u2014") + '</option>'; }).join("") + '</select></div>';
+              if (f.type === "mobility") {
+                return '<div class="field full"><label>Which aids, for how long, and in what order</label>' + MOB_AIDS.map(function (m) {
+                  return '<div class="mobrow" data-mob="' + m[0] + '"><span class="moblab">' + m[1] + '</span>' + wkCirclesHtml(m[0], WKS, "wk")
+                    + '<span class="mobseq"><span class="seqc" data-seq="with">from surgery</span><span class="seqc" data-seq="after">after previous</span></span></div>';
+                }).join("") + '</div>';
+              }
               var ctrl;
-              if (f.type === "select") ctrl = '<select id="o-' + f.k + '">' + f.opts.map(function (o) { return '<option value="' + o + '">' + (o ? o.replace(/_/g, " ") : "—") + '</option>'; }).join("") + '</select>';
+              if (f.type === "select") ctrl = '<select id="o-' + f.k + '">' + f.opts.map(function (o) { return '<option value="' + o + '">' + (o ? o.replace(/_/g, " ") : "\u2014") + '</option>'; }).join("") + '</select>';
               else if (f.type === "textarea") ctrl = '<textarea id="o-' + f.k + '" rows="2"></textarea>';
               else ctrl = '<input id="o-' + f.k + '" type="' + (f.type === "number" ? "number" : "text") + '">';
               return '<div class="' + cls + '"><label>' + f.label + '</label>' + ctrl + '</div>';
             }).join("");
             return '<details class="ord-group"' + (gi === 0 ? " open" : "") + '><summary>' + esc(g.title) + '</summary><div class="grid2">' + fh + '</div></details>';
           }).join("");
+          // circles: single-select rows
+          Array.prototype.forEach.call(qs("o-fields").querySelectorAll("[data-wk]"), function (row) {
+            row.addEventListener("click", function (e) {
+              var c = e.target.closest(".wkc"); if (!c) return;
+              Array.prototype.forEach.call(row.querySelectorAll(".wkc"), function (x) { x.classList.remove("on"); });
+              if (!c.classList.contains("wkc-clear")) c.classList.add("on");
+            });
+          });
+          // circles: multi-select rows
+          Array.prototype.forEach.call(qs("o-fields").querySelectorAll("[data-wkmulti]"), function (row) {
+            row.addEventListener("click", function (e) {
+              var c = e.target.closest(".wkc"); if (!c) return;
+              c.classList.toggle("on");
+            });
+          });
+          // mobility sequence chips
+          Array.prototype.forEach.call(qs("o-fields").querySelectorAll(".mobseq"), function (seq) {
+            seq.addEventListener("click", function (e) {
+              var c = e.target.closest(".seqc"); if (!c) return;
+              Array.prototype.forEach.call(seq.querySelectorAll(".seqc"), function (x) { x.classList.remove("on"); });
+              c.classList.add("on");
+            });
+          });
+        }
+        function setWk(k, v) {
+          var row = qs("o-fields") && qs("o-fields").querySelector('[data-wk="' + k + '"]'); if (!row) return;
+          Array.prototype.forEach.call(row.querySelectorAll(".wkc"), function (x) { x.classList.toggle("on", !x.classList.contains("wkc-clear") && String(x.getAttribute("data-v")) === String(v)); });
+        }
+        function getWk(k) {
+          var row = qs("o-fields") && qs("o-fields").querySelector('[data-wk="' + k + '"]'); if (!row) return null;
+          var on = row.querySelector(".wkc.on"); return on ? parseInt(on.getAttribute("data-v"), 10) : null;
         }
         function renderExtras() {
           var o = state.order || {};
@@ -581,11 +651,79 @@
         }
         function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
         function newSurgery() { var o = { id: null, procedure_codes: [], _new: true }; state.orders = state.orders || []; state.orders.unshift(o); state.order = o; state.orderId = null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
+        var orderEditing = false;
+        function orderHasData(o) {
+          var any = false;
+          ORDER_GROUPS.forEach(function (g) { g.fields.forEach(function (f) { if (f.k.indexOf("__") === 0) return; var v = o[f.k]; if (v !== null && v !== undefined && v !== "" && v !== false) any = true; }); });
+          return any || (o.order_ui && (o.order_ui.postop_review_weeks || []).length);
+        }
+        function orderSummaryHtml(o) {
+          var ui = o.order_ui || {};
+          function line(label, v) { return (v === null || v === undefined || v === "" ) ? "" : '<div class="osum-line"><span>' + esc(label) + '</span><b>' + esc(String(v)) + '</b></div>'; }
+          var out = "";
+          ORDER_GROUPS.forEach(function (g) {
+            var rows = "";
+            g.fields.forEach(function (f) {
+              if (f.k === "__mobility") {
+                MOB_AIDS.forEach(function (m) {
+                  var w = o[m[0]]; if (!w) return;
+                  var seq = (ui.mobility && ui.mobility[m[0]] && ui.mobility[m[0]].seq) === "after" ? " (after previous aid)" : " (from surgery)";
+                  rows += line(m[1], w + " wk" + (w > 1 ? "s" : "") + seq);
+                });
+                return;
+              }
+              if (f.k === "__postop_reviews") {
+                var wk = (ui.postop_review_weeks || []);
+                if (wk.length) rows += line("Post-op reviews", "week " + wk.join(", week "));
+                return;
+              }
+              var v = o[f.k];
+              if (v === null || v === undefined || v === "" || v === false) return;
+              if (f.type === "checkbox") v = "Yes";
+              else if (f.type === "lsel") v = optLabel(f.lopts, v);
+              else if (f.type === "select") v = String(v).replace(/_/g, " ");
+              else if (f.type === "wk") v = v + " wk" + (v > 1 ? "s" : "");
+              else if (f.type === "days") v = v + " day" + (v > 1 ? "s" : "");
+              rows += line(f.label.replace(/ ·.*$/, ""), v);
+            });
+            if (rows) out += '<div class="osum-group"><div class="osum-h">' + esc(g.title) + '</div>' + rows + '</div>';
+          });
+          return out || '<div class="empty">Nothing recorded yet \u2014 click Edit to fill in the order.</div>';
+        }
         function renderOrder() {
-          if (!qs("o-fields").getAttribute("data-built")) { buildOrderFields(); qs("o-fields").setAttribute("data-built", "1"); }
           var o = state.order || {};
+          var viewMode = !orderEditing && orderHasData(o);
+          var editBtn = qs("o-edit-toggle");
+          if (editBtn) editBtn.textContent = viewMode ? "\u270E Edit" : "\u2713 Done editing";
+          if (viewMode) {
+            qs("o-fields").removeAttribute("data-built");
+            qs("o-fields").innerHTML = '<div class="osum">' + orderSummaryHtml(o) + '</div>';
+          } else {
+            if (!qs("o-fields").getAttribute("data-built")) { buildOrderFields(); qs("o-fields").setAttribute("data-built", "1"); }
+            var ui = o.order_ui || {};
+            setVal("o-procedure_name", o.procedure_name);
+            ORDER_GROUPS.forEach(function (g) { g.fields.forEach(function (f) {
+              if (f.type === "wk" || f.type === "days") { setWk(f.k, o[f.k]); return; }
+              if (f.type === "wkmulti") {
+                var row = qs("o-fields").querySelector('[data-wkmulti="' + f.k + '"]'); if (!row) return;
+                var sel = (ui.postop_review_weeks || []).map(String);
+                Array.prototype.forEach.call(row.querySelectorAll(".wkc"), function (x) { x.classList.toggle("on", sel.indexOf(x.getAttribute("data-v")) >= 0); });
+                return;
+              }
+              if (f.type === "mobility") {
+                MOB_AIDS.forEach(function (m) {
+                  setWk(m[0], o[m[0]]);
+                  var mr = qs("o-fields").querySelector('[data-mob="' + m[0] + '"]'); if (!mr) return;
+                  var seq = (ui.mobility && ui.mobility[m[0]] && ui.mobility[m[0]].seq) || "with";
+                  Array.prototype.forEach.call(mr.querySelectorAll(".seqc"), function (x) { x.classList.toggle("on", x.getAttribute("data-seq") === seq); });
+                });
+                return;
+              }
+              var e = qs("o-" + f.k); if (!e) return;
+              if (f.type === "checkbox") e.checked = !!o[f.k]; else e.value = (o[f.k] == null ? "" : o[f.k]);
+            }); });
+          }
           setVal("o-procedure_name", o.procedure_name);
-          ORDER_GROUPS.forEach(function (g) { g.fields.forEach(function (f) { var e = qs("o-" + f.k); if (!e) return; if (f.type === "checkbox") e.checked = !!o[f.k]; else e.value = (o[f.k] == null ? "" : o[f.k]); }); });
           renderCodes();
           renderExtras();
         }
@@ -803,12 +941,46 @@
         }
         function collectOrderPatch() {
           var patch = { procedure_name: val("o-procedure_name") || null };
+          // In summary (view) mode the form inputs don't exist; only patch the procedure name.
+          if (!qs("o-fields").getAttribute("data-built")) return patch;
+          var ui = { mobility: {}, postop_review_weeks: [] };
           ORDER_GROUPS.forEach(function (g) { g.fields.forEach(function (f) {
+            if (f.type === "wk" || f.type === "days") { patch[f.k] = getWk(f.k); return; }
+            if (f.type === "wkmulti") {
+              var row = qs("o-fields").querySelector('[data-wkmulti="' + f.k + '"]');
+              if (row) ui.postop_review_weeks = Array.prototype.map.call(row.querySelectorAll(".wkc.on"), function (x) { return parseInt(x.getAttribute("data-v"), 10); }).sort(function (a, b) { return a - b; });
+              return;
+            }
+            if (f.type === "mobility") {
+              MOB_AIDS.forEach(function (m) {
+                var w = getWk(m[0]); patch[m[0]] = w;
+                var mr = qs("o-fields").querySelector('[data-mob="' + m[0] + '"]');
+                var on = mr && mr.querySelector(".seqc.on");
+                if (w) ui.mobility[m[0]] = { weeks: w, seq: on ? on.getAttribute("data-seq") : "with" };
+              });
+              return;
+            }
             var e = qs("o-" + f.k); if (!e) return;
             if (f.type === "checkbox") patch[f.k] = !!e.checked;
             else if (f.type === "number") { var n = parseInt(e.value, 10); patch[f.k] = isNaN(n) ? null : n; }
             else patch[f.k] = e.value || null;
           }); });
+          // ---- legacy compatibility (other apps read these) ----
+          patch.crutches_required = !!patch.crutches_weeks;
+          if (patch.ab_cover) patch.antibiotics_postop = optLabel(AB_OPTS, patch.ab_cover);
+          var mobBits = [];
+          MOB_AIDS.forEach(function (m) {
+            var mu = ui.mobility[m[0]]; if (!mu) return;
+            mobBits.push(m[1] + " " + mu.weeks + " wk" + (mu.weeks > 1 ? "s" : "") + (mu.seq === "after" ? " (after previous aid)" : ""));
+          });
+          if (mobBits.length) patch.mobility_aid = mobBits.join(", then ").replace(", then ", mobBits.length > 1 && /after/.test(mobBits[1] || "") ? ", then " : ", ");
+          var rv = ui.postop_review_weeks;
+          if (rv.length) {
+            patch.post_op_count = rv.length;
+            patch.followup_review_weeks = rv[rv.length - 1];
+            patch.first_postop_days = String(rv[0] * 7);
+          }
+          patch.order_ui = ui;
           return patch;
         }
         function save() {
@@ -822,8 +994,24 @@
           if (window.ClinicPatients && ClinicPatients.update) jobs.push(ClinicPatients.update(id, pPatch));
           else jobs.push(client.from("patients").update(pPatch).eq("id", id));
           var hasOrderContent = Object.keys(oPatch).some(function (k) { return oPatch[k] != null && oPatch[k] !== ""; });
-          if (state.orderId) jobs.push(client.from("surgeon_orders").update(oPatch).eq("id", state.orderId));
-          else if (hasOrderContent) jobs.push(client.from("surgeon_orders").insert(Object.assign({ patient_id: id, status: "draft", procedure_codes: (state.order && state.order.procedure_codes) || [] }, oPatch)).select("id"));
+          // order_ui needs its column (one-line SQL). If it's missing, retry
+          // the save without it so nothing else is lost, and say so.
+          function orderWrite(patch) {
+            var q = state.orderId
+              ? client.from("surgeon_orders").update(patch).eq("id", state.orderId)
+              : client.from("surgeon_orders").insert(Object.assign({ patient_id: id, status: "draft", procedure_codes: (state.order && state.order.procedure_codes) || [] }, patch)).select("id");
+            return q.then(function (r) {
+              if (r && r.error && /order_ui/.test(r.error.message || "") && patch.order_ui !== undefined) {
+                var p2 = Object.assign({}, patch); delete p2.order_ui;
+                toast("Heads-up: run the order_ui SQL to save week ticks");
+                return state.orderId
+                  ? client.from("surgeon_orders").update(p2).eq("id", state.orderId)
+                  : client.from("surgeon_orders").insert(Object.assign({ patient_id: id, status: "draft", procedure_codes: (state.order && state.order.procedure_codes) || [] }, p2)).select("id");
+              }
+              return r;
+            });
+          }
+          if (state.orderId || hasOrderContent) jobs.push(orderWrite(oPatch));
           Promise.all(jobs).then(function (res) {
             var failed = res.filter(function (r) { return r && r.error; });
             if (failed.length) {
@@ -839,6 +1027,7 @@
             qs("pf-save").disabled = false; status(""); toast("Saved ✓");
             Object.assign(state.patient, pPatch); state.order = Object.assign(state.order || {}, oPatch);
             if (state.order && state.orderId) { state.order.id = state.orderId; delete state.order._new; }
+            orderEditing = false; renderOrder();
             renderHeader(); renderOverview(); renderSurgeryPicker();
           }).catch(function (e) {
             qs("pf-save").disabled = false; var _em = (e && e.message) ? e.message : "error"; status("Save failed: " + _em); toast("Save failed: " + _em);
@@ -848,6 +1037,7 @@
         qs("pf-save").addEventListener("click", save);
         (function () { var b = qs("pf-note-post"); if (b) b.addEventListener("click", postNote); })();
         (function () { var b = qs("o-copy-notes"); if (b) b.addEventListener("click", function () { copyToClipboard(buildClinicalNote(), qs("o-copy-status")); }); })();
+        (function () { var b = qs("o-edit-toggle"); if (b) b.addEventListener("click", function () { orderEditing = !orderEditing; renderOrder(); }); })();
         // ---- Surgeon workflow tabs: render the Pre-op plan + Audit forms
         // INLINE inside their tabs (no pop-up), lazily on first open. ----
         var _ppMounted = false, _opMounted = false;
@@ -908,10 +1098,11 @@
         }
         function renderResults(rows) {
           if (!rows.length) { qs("pf-results").innerHTML = '<div class="empty">No matching patients.</div>'; return; }
-          qs("pf-results").innerHTML = rows.map(function (p) {
-            var sub = []; if (p.dob) sub.push(isoToDmy(p.dob)); if (p.surgery_date) sub.push("surgery " + isoToDmy(p.surgery_date));
-            return '<div class="doc" style="cursor:pointer" data-pid="' + esc(p.id) + '"><span class="dname">' + esc(p.full_name || "(unnamed)") + '</span><span class="dmeta" style="margin-left:auto">' + esc(sub.join(" · ")) + '</span></div>';
-          }).join("");
+          qs("pf-results").innerHTML = '<div class="pick-head"><span>Patient</span><span>DOB</span><span>Next surgery</span><span>Venue</span></div>'
+            + rows.map(function (p) {
+              var venue = (typeof VENUE !== "undefined" && VENUE[(p.surgery_venue || "").toLowerCase()]) || (p.surgery_venue ? String(p.surgery_venue).toUpperCase() : "");
+              return '<div class="pick-row" data-pid="' + esc(p.id) + '"><span class="pk-name">' + esc(p.full_name || "(unnamed)") + '</span><span class="pk-dim">' + esc(p.dob ? isoToDmy(p.dob) : "—") + '</span><span class="pk-dim">' + esc(p.surgery_date ? isoToDmy(p.surgery_date) : "—") + '</span><span class="pk-dim">' + esc(venue || "—") + '</span></div>';
+            }).join("");
           Array.prototype.forEach.call(qs("pf-results").querySelectorAll("[data-pid]"), function (el) {
             el.addEventListener("click", function () { location.href = "?patient_id=" + encodeURIComponent(el.getAttribute("data-pid")); });
           });

@@ -14,7 +14,7 @@
     <script>
       (function () {
         var v = Date.now();
-        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-preop-plan.js", "clinic-surgery-audit.js"].forEach(function (f) {
+        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js"].forEach(function (f) {
           document.write('<script src="https://amy-studio.github.io/clinic-style/' + f + '?fresh=' + v + '"><\/script>');
         });
       })();
@@ -154,6 +154,9 @@
       .pick-row:hover { background: #eef2f8; }
       .pick-row .pk-name { font-weight: 600; color: var(--navy); }
       .pick-row .pk-dim { color: var(--muted); font-size: 12.5px; }
+      .code-hit { padding: 6px 9px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid #f1f4f8; }
+      .code-hit:hover { background: #eef2f8; }
+      .code-hit b { color: var(--navy); margin-right: 4px; }
 
       /* Fields — REAL css, normal weight everywhere */
       .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; }
@@ -727,17 +730,53 @@
           renderCodes();
           renderExtras();
         }
+        function codeSearchHits(q) {
+          var lib = window.ClinicProcedureCodes || [];
+          q = String(q || "").trim().toLowerCase();
+          if (!q) return lib.slice(0, 8);
+          return lib.filter(function (e) {
+            return e.code.toLowerCase().indexOf(q) >= 0 || (e.description || "").toLowerCase().indexOf(q) >= 0;
+          }).slice(0, 10);
+        }
+        function renderCodeHits(q) {
+          var el = qs("o-code-hits"); if (!el) return;
+          var hits = codeSearchHits(q);
+          el.innerHTML = hits.length
+            ? hits.map(function (h) { return '<div class="code-hit" data-code="' + esc(h.code) + '" data-desc="' + esc(h.description || "") + '"><b>' + esc(h.code) + '</b> ' + esc(h.description || "") + '</div>'; }).join("")
+            : '<div class="empty" style="padding:6px 9px">No match. Press Enter to add "' + esc(String(q).trim().toUpperCase()) + '" as typed.</div>';
+        }
+        function addCode(code, desc) {
+          if (!code) return;
+          state.order = state.order || { procedure_codes: [] };
+          state.order.procedure_codes = state.order.procedure_codes || [];
+          state.order.procedure_codes.push(desc ? { code: code, qty: 1, description: desc } : { code: code, qty: 1 });
+          renderCodes();
+        }
         function renderCodes() {
           var o = state.order || {};
           var codes = Array.isArray(o.procedure_codes) ? o.procedure_codes : [];
-          var html = codes.map(function (c) {
+          var html = codes.map(function (c, i) {
             var code = c && (c.code || c) || "";
-            var q = c && c.qty && c.qty > 1 ? " ×" + c.qty : "";
-            var d = c && c.description ? " · " + esc(String(c.description).split("–")[0].trim()).slice(0, 40) : "";
-            return '<span class="chip">' + esc(code) + q + d + '</span>';
+            var q = c && c.qty && c.qty > 1 ? " \u00d7" + c.qty : "";
+            var d = c && c.description ? " \u00b7 " + esc(String(c.description).split("\u2013")[0].trim()).slice(0, 40) : "";
+            return '<span class="chip">' + esc(code) + q + d + ' <span class="x code-x" data-ci="' + i + '" title="Remove">\u2715</span></span>';
           }).join("");
           html += '<span class="chip add" id="o-addcode">+ add code</span>';
+          html += '<div id="o-code-panel" style="display:none;flex-basis:100%;margin-top:6px">'
+            + '<input id="o-code-q" placeholder="Search the quoting codes \u2014 e.g. F694 or ankle" autocomplete="off" style="width:100%;font-family:inherit;font-size:13px;color:var(--ink);padding:8px 10px;border:1px solid var(--line);border-radius:8px">'
+            + '<div id="o-code-hits" style="margin-top:4px;border:1px solid var(--line);border-radius:8px;background:#fff;max-height:220px;overflow:auto"></div></div>';
           qs("o-codes").innerHTML = html;
+          var inp = qs("o-code-q");
+          if (inp) {
+            inp.addEventListener("input", function () { renderCodeHits(inp.value); });
+            inp.addEventListener("keydown", function (ev) {
+              if (ev.key !== "Enter") return;
+              ev.preventDefault();
+              var hits = codeSearchHits(inp.value);
+              if (hits.length) addCode(hits[0].code, hits[0].description);
+              else if (inp.value.trim()) addCode(inp.value.trim().toUpperCase(), null);
+            });
+          }
         }
         var CHECK_ITEMS = [
           { k: "surgeon_order_done", label: "Surgeon order complete" },
@@ -941,6 +980,7 @@
         }
         function collectOrderPatch() {
           var patch = { procedure_name: val("o-procedure_name") || null };
+          if (state.order && Array.isArray(state.order.procedure_codes)) patch.procedure_codes = state.order.procedure_codes;
           // In summary (view) mode the form inputs don't exist; only patch the procedure name.
           if (!qs("o-fields").getAttribute("data-built")) return patch;
           var ui = { mobility: {}, postop_review_weeks: [] };
@@ -1148,10 +1188,17 @@
         // delegated: add-code stub
         document.addEventListener("click", function (e) {
           if (e.target && e.target.id === "o-addcode") {
-            var c = prompt("Add an item code (e.g. F694):"); if (!c) return;
-            state.order = state.order || { procedure_codes: [] };
-            state.order.procedure_codes = state.order.procedure_codes || [];
-            state.order.procedure_codes.push({ code: c.trim().toUpperCase(), qty: 1 });
+            var p = qs("o-code-panel"); if (!p) return;
+            var open = p.style.display === "none";
+            p.style.display = open ? "" : "none";
+            if (open) { renderCodeHits(""); var i2 = qs("o-code-q"); if (i2) { i2.value = ""; i2.focus(); } }
+            return;
+          }
+          var hit = e.target.closest ? e.target.closest(".code-hit") : null;
+          if (hit) { addCode(hit.getAttribute("data-code"), hit.getAttribute("data-desc") || null); return; }
+          var xx = e.target.closest ? e.target.closest(".code-x") : null;
+          if (xx && state.order && Array.isArray(state.order.procedure_codes)) {
+            state.order.procedure_codes.splice(parseInt(xx.getAttribute("data-ci"), 10), 1);
             renderCodes();
           }
         });

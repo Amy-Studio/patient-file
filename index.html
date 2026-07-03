@@ -753,6 +753,7 @@
           renderCodes();
         }
         function renderCodes() {
+          if (window.ClinicCodes && window.ClinicCodes.load) window.ClinicCodes.load();
           var o = state.order || {};
           var codes = Array.isArray(o.procedure_codes) ? o.procedure_codes : [];
           var html = codes.map(function (c, i) {
@@ -762,6 +763,7 @@
             return '<span class="chip">' + esc(code) + q + d + ' <span class="x code-x" data-ci="' + i + '" title="Remove">\u2715</span></span>';
           }).join("");
           html += '<span class="chip add" id="o-addcode">+ add code</span>';
+          html += '<span class="chip add" id="o-managecodes" title="Add, edit, delete or search the shared code list" style="border-style:solid;opacity:.85">⚙ Manage list</span>';
           html += '<div id="o-code-panel" style="display:none;flex-basis:100%;margin-top:6px">'
             + '<input id="o-code-q" placeholder="Search the quoting codes \u2014 e.g. F694 or ankle" autocomplete="off" style="width:100%;font-family:inherit;font-size:13px;color:var(--ink);padding:8px 10px;border:1px solid var(--line);border-radius:8px">'
             + '<div id="o-code-hits" style="margin-top:4px;border:1px solid var(--line);border-radius:8px;background:#fff;max-height:220px;overflow:auto"></div></div>';
@@ -1187,6 +1189,11 @@
 
         // delegated: add-code stub
         document.addEventListener("click", function (e) {
+          if (e.target && e.target.id === "o-managecodes") {
+            if (window.ClinicCodes && window.ClinicCodes.openManager) window.ClinicCodes.openManager();
+            else status("Code list still loading, try again in a moment");
+            return;
+          }
           if (e.target && e.target.id === "o-addcode") {
             var p = qs("o-code-panel"); if (!p) return;
             var open = p.style.display === "none";

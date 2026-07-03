@@ -157,6 +157,22 @@
       .code-hit { padding: 6px 9px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid #f1f4f8; }
       .code-hit:hover { background: #eef2f8; }
       .code-hit b { color: var(--navy); margin-right: 4px; }
+      /* new-patient + archive controls */
+      .np-btn { border: 1px solid var(--line); background: #fff; color: var(--navy); border-radius: var(--radius); padding: 9px 15px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+      .np-btn:hover { background: #eef2f8; }
+      .np-btn.primary { background: var(--navy); border-color: var(--navy); color: #fff; }
+      .np-btn.primary:hover { background: #16314e; }
+      .np-btn.ghost { color: var(--muted); }
+      .np-btn.danger { color: #c0392b; border-color: #e6c4be; }
+      .np-btn.danger:hover { background: #fdf2f0; }
+      .np-dup { border: 1px solid #ecd9a8; background: #fdf8ec; border-radius: var(--radius); padding: 10px 12px; }
+      .np-dup .np-dup-title { font-size: 12.5px; font-weight: 700; color: #8a6d1a; margin-bottom: 7px; }
+      .np-dup-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; border-top: 1px solid #f2e8cd; }
+      .np-dup-row b { color: var(--navy); }
+      .np-dup-row .np-dim { color: var(--muted); font-size: 12px; }
+      .np-dup-row .np-open { margin-left: auto; }
+      .arch-row { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .arch-hint { font-size: 12px; color: var(--muted); }
 
       /* Fields — REAL css, normal weight everywhere */
       .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; }
@@ -208,14 +224,35 @@
           <div class="brand-title">Patient File</div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
-        <a class="back-link" href="https://clinic.stevenedwards.com.au">← Dashboard</a>
+        <a class="back-link" id="pf-back-search" href="?" style="display:none; margin-right:14px">← All patients</a>
+        <a class="back-link" href="https://clinic.stevenedwards.com.au">Dashboard</a>
       </div>
 
       <div id="pf-picker" style="display:none">
         <div class="pcard">
           <h2 style="margin-bottom:4px">Open a patient file</h2>
-          <div class="panel-sub" style="margin-bottom:12px">Search the register, then click a name to open their file.</div>
-          <input id="pf-search" placeholder="Search by name…" autocomplete="off" style="font-family:inherit; font-size:14px; font-weight:400; color:var(--ink); padding:10px 12px; width:100%; border:1px solid var(--line); border-radius:var(--radius); background:#fff;">
+          <div class="panel-sub" style="margin-bottom:12px">Search by name, phone or Medicare number — or add someone new.</div>
+          <div style="display:flex; gap:8px; align-items:stretch">
+            <input id="pf-search" placeholder="Search by name, phone or Medicare…" autocomplete="off" style="font-family:inherit; font-size:14px; font-weight:400; color:var(--ink); padding:10px 12px; flex:1; min-width:0; border:1px solid var(--line); border-radius:var(--radius); background:#fff;">
+            <button type="button" id="pf-new-btn" class="np-btn">+ New patient</button>
+          </div>
+          <div id="pf-newform" style="display:none; margin-top:14px; border:1px solid var(--line); border-radius:var(--radius); padding:14px; background:#fbfcfe">
+            <div style="font-size:14px; font-weight:700; color:#1f3a5f; margin-bottom:10px">New patient</div>
+            <div class="grid2">
+              <div class="field full"><label>Full name (required)</label><input id="np-full_name" autocomplete="off"></div>
+              <div class="field"><label>Date of birth</label><input id="np-dob" type="date"></div>
+              <div class="field"><label>Phone</label><input id="np-phone" autocomplete="off"></div>
+              <div class="field"><label>Email</label><input id="np-email" autocomplete="off"></div>
+              <div class="field"><label>Medicare number</label><input id="np-medicare_number" autocomplete="off"></div>
+              <div class="field"><label>Health fund</label><input id="np-health_fund" autocomplete="off"></div>
+            </div>
+            <div id="np-dups" style="display:none; margin-top:12px"></div>
+            <div style="display:flex; gap:8px; align-items:center; margin-top:12px">
+              <button type="button" id="np-save" class="np-btn primary">Create patient</button>
+              <button type="button" id="np-cancel" class="np-btn ghost">Cancel</button>
+              <span id="np-status" style="font-size:12.5px; color:#c0392b"></span>
+            </div>
+          </div>
           <div id="pf-results" style="margin-top:12px"></div>
         </div>
       </div>
@@ -283,6 +320,10 @@
               <div class="field"><label>Medicare expiry</label><input id="f-medicare_expiry"></div>
               <div class="field"><label>MRN</label><input id="f-mrn"></div>
               <div class="field"><label>Client ID</label><input id="f-client_id"></div>
+            </div>
+            <div class="arch-row">
+              <button type="button" class="np-btn danger" id="pf-archive">Archive this patient</button>
+              <span class="arch-hint">Wrong or duplicate record? Archiving hides it from every app. Nothing is deleted — restore any time from the Dashboard's Archived tab.</span>
             </div>
           </div>
 
@@ -1131,7 +1172,12 @@
             if (window.__pfPreview) { renderResults([{ id: "preview", full_name: "Josh Service", dob: "1990-02-08", surgery_date: "2026-07-02" }, { id: "p2", full_name: "Chloe Grant", dob: "1995-01-01", surgery_date: "2026-06-29" }].filter(function (r) { return !q || r.full_name.toLowerCase().indexOf(q.toLowerCase()) >= 0; })); return; }
             var client = sb(); if (!client) { qs("pf-results").innerHTML = '<div class="empty">Not signed in.</div>'; return; }
             var query = client.from("patients").select("id,full_name,dob,surgery_date,surgery_venue").is("archived_at", null).order("surgery_date", { ascending: true, nullsFirst: false }).limit(25);
-            if (q) query = query.ilike("full_name", "%" + q + "%");
+            if (q) {
+              var safe = q.replace(/[(),]/g, " ").trim();
+              var digits = safe.replace(/\D/g, "");
+              if (digits.length >= 5) query = query.or("phone.ilike.%" + digits + "%,medicare_number.ilike.%" + digits + "%,full_name.ilike.%" + safe + "%");
+              else query = query.ilike("full_name", "%" + safe + "%");
+            }
             query.then(function (r) { if (r && r.error) { qs("pf-results").innerHTML = '<div class="empty">⚠ Couldn\'t load patients: ' + esc(r.error.message || "error") + '. Reload the page, or log out and back in from the Dashboard.</div>'; console.error("[PF] picker error", r.error); return; } renderResults((r && r.data) || []); }).catch(function (e) { qs("pf-results").innerHTML = '<div class="empty">⚠ Search failed: ' + esc((e && e.message) || "error") + '</div>'; console.error("[PF] picker catch", e); });
           }
           inp.oninput = function () { clearTimeout(timer); timer = setTimeout(run, 200); };
@@ -1139,7 +1185,15 @@
           try { inp.focus(); } catch (_) {}
         }
         function renderResults(rows) {
-          if (!rows.length) { qs("pf-results").innerHTML = '<div class="empty">No matching patients.</div>'; return; }
+          if (!rows.length) {
+            var q = (qs("pf-search").value || "").trim();
+            var nameLike = q && !/^[\d\s()+-]+$/.test(q);
+            qs("pf-results").innerHTML = '<div class="empty" style="margin-bottom:10px">No matching patients.</div>'
+              + (q ? '<button type="button" class="np-btn" id="pf-create-from-search">+ Add ' + (nameLike ? '"' + esc(q) + '"' : "them") + ' as a new patient</button>' : "");
+            var cb = document.getElementById("pf-create-from-search");
+            if (cb) cb.addEventListener("click", function () { openNewForm(nameLike ? q : ""); });
+            return;
+          }
           qs("pf-results").innerHTML = '<div class="pick-head"><span>Patient</span><span>DOB</span><span>Next surgery</span><span>Venue</span></div>'
             + rows.map(function (p) {
               var venue = (typeof VENUE !== "undefined" && VENUE[(p.surgery_venue || "").toLowerCase()]) || (p.surgery_venue ? String(p.surgery_venue).toUpperCase() : "");
@@ -1149,10 +1203,102 @@
             el.addEventListener("click", function () { location.href = "?patient_id=" + encodeURIComponent(el.getAttribute("data-pid")); });
           });
         }
+
+        // ---- new patient (create from the picker, with the shared duplicate check) ----
+        var npArmed = false; // true after dups were shown; the next click really creates
+        function openNewForm(prefillName) {
+          var f = qs("pf-newform"); if (!f) return;
+          f.style.display = "";
+          npArmed = false;
+          qs("np-dups").style.display = "none"; qs("np-dups").innerHTML = "";
+          qs("np-status").textContent = "";
+          qs("np-save").textContent = "Create patient";
+          if (prefillName) qs("np-full_name").value = prefillName;
+          try { qs("np-full_name").focus(); } catch (_) {}
+          f.scrollIntoView({ block: "nearest" });
+        }
+        function npDraft() {
+          function v(id) { var el = qs(id); var t = el && el.value ? el.value.trim() : ""; return t || null; }
+          return { full_name: v("np-full_name"), dob: v("np-dob"), phone: v("np-phone"), email: v("np-email"), medicare_number: v("np-medicare_number"), health_fund: v("np-health_fund") };
+        }
+        function renderNpDups(dups) {
+          var el = qs("np-dups");
+          el.style.display = "";
+          el.innerHTML = '<div class="np-dup"><div class="np-dup-title">This might already be one of these patients. Open theirs instead of creating a double — or click again to save as new.</div>'
+            + dups.slice(0, 4).map(function (p) {
+              var bits = [];
+              if (p.dob) bits.push("DOB " + isoToDmy(p.dob));
+              if (p.medicare_number) bits.push("Medicare …" + String(p.medicare_number).replace(/\D/g, "").slice(-4));
+              if (p.phone) bits.push(p.phone);
+              return '<div class="np-dup-row"><b>' + esc(p.full_name || "(unnamed)") + '</b><span class="np-dim">' + esc(bits.join(" · ")) + '</span><button type="button" class="np-btn np-open" data-open="' + esc(p.id) + '">Open their file</button></div>';
+            }).join("") + '</div>';
+          Array.prototype.forEach.call(el.querySelectorAll("[data-open]"), function (b) {
+            b.addEventListener("click", function () { location.href = "?patient_id=" + encodeURIComponent(b.getAttribute("data-open")); });
+          });
+        }
+        function npCreate() {
+          var d = npDraft(), st = qs("np-status"), btn = qs("np-save");
+          if (!d.full_name) { st.textContent = "A name is needed first."; return; }
+          if (!window.ClinicPatients || !window.ClinicPatients.create) { st.textContent = "Still loading — try again in a moment."; return; }
+          btn.disabled = true;
+          var p = Promise.resolve();
+          if (!npArmed) {
+            btn.textContent = "Checking the register…";
+            p = Promise.resolve(window.ClinicPatients.findPotentialDuplicates ? window.ClinicPatients.findPotentialDuplicates(d) : []).catch(function () { return []; })
+              .then(function (dups) {
+                dups = dups || [];
+                if (dups.length) { renderNpDups(dups); npArmed = true; btn.textContent = "Save as new anyway"; btn.disabled = false; st.textContent = ""; return "stop"; }
+              });
+          }
+          p.then(function (r) {
+            if (r === "stop") return;
+            btn.textContent = "Creating…";
+            return window.ClinicPatients.create(d).then(function (row) {
+              location.href = "?patient_id=" + encodeURIComponent(row.id);
+            });
+          }).catch(function (e) {
+            st.textContent = "Couldn't create: " + ((e && e.message) || "error");
+            btn.textContent = npArmed ? "Save as new anyway" : "Create patient";
+            btn.disabled = false;
+          });
+        }
+        (function wireNewPatient() {
+          var b = qs("pf-new-btn"); if (!b) return;
+          b.addEventListener("click", function () {
+            var f = qs("pf-newform");
+            if (f.style.display === "none") openNewForm((qs("pf-search").value || "").trim().replace(/^[\d\s()+-]+$/, ""));
+            else f.style.display = "none";
+          });
+          qs("np-cancel").addEventListener("click", function () { qs("pf-newform").style.display = "none"; });
+          qs("np-save").addEventListener("click", npCreate);
+          // editing any field disarms "Save as new anyway" so the duplicate check re-runs
+          ["np-full_name", "np-dob", "np-phone", "np-email", "np-medicare_number", "np-health_fund"].forEach(function (id) {
+            qs(id).addEventListener("input", function () { if (npArmed) { npArmed = false; qs("np-save").textContent = "Create patient"; } });
+          });
+          qs("np-full_name").addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); npCreate(); } });
+        })();
+
+        // ---- archive (the suite's "delete": reversible, restore from the Dashboard's Archived tab) ----
+        (function wireArchive() {
+          var b = qs("pf-archive"); if (!b) return;
+          b.addEventListener("click", function () {
+            var pt = state.patient; if (!pt || !pt.id) { status("No patient loaded"); return; }
+            var name = pt.full_name || "this patient";
+            if (!confirm("Archive " + name + "?\n\nThey disappear from the lists in every clinic app. Nothing is deleted - restore them any time from the Dashboard's Archived tab.")) return;
+            var done = function () { location.href = "?"; };
+            var fail = function (e) { status("Archive failed"); alert("Couldn't archive: " + ((e && e.message) || "error")); };
+            try {
+              if (window.ClinicPatients && window.ClinicPatients.archive) window.ClinicPatients.archive(pt.id).then(done, fail);
+              else sb().from("patients").update({ archived_at: new Date().toISOString() }).eq("id", pt.id).then(function (r) { if (r.error) fail(r.error); else done(); });
+            } catch (e) { fail(e); }
+          });
+        })();
+
         function loadReal() {
           var client = sb(); if (!client) { status("Not signed in"); return; }
           var pid = new URLSearchParams(location.search).get("patient_id");
           if (!pid) { showPicker(); return; }
+          var _bl = qs("pf-back-search"); if (_bl) _bl.style.display = "";
           status("Loading…");
           // Watchdog: a dropped connection or an expired login can leave the
           // fetch hanging forever on "Loading…". After 12s, stop pretending
@@ -1210,7 +1356,13 @@
           }
         });
 
-        window.__pfBoot = function () { if (window.__pfPreview) loadStub(); else loadReal(); };
+        window.__pfBoot = function () {
+          if (window.__pfPreview) {
+            // preview mirrors real routing: picker when no patient_id, stub file otherwise
+            if (new URLSearchParams(location.search).get("patient_id")) { var _bl = qs("pf-back-search"); if (_bl) _bl.style.display = ""; loadStub(); }
+            else showPicker();
+          } else loadReal();
+        };
         if (window.__pfPreview && document.readyState !== "loading") window.__pfBoot();
       })();
     </script>

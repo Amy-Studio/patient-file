@@ -173,6 +173,9 @@
       .np-dup-row .np-open { margin-left: auto; }
       .arch-row { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       .arch-hint { font-size: 12px; color: var(--muted); }
+      .stag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+      .stag.done { background: #e7f4ee; color: #1e7b56; }
+      .stag.booked { background: #eaf1fb; color: #1f3a5f; }
 
       /* Fields — REAL css, normal weight everywhere */
       .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; }
@@ -450,15 +453,30 @@
         });
 
         // ---- render ----
+        // "completed" when the booked surgery date has passed, "booked" when
+        // it's today or later, null when there's no date. Derived, never stored
+        // — booking the next surgery flips it back automatically.
+        function surgTag(dateIso) {
+          if (!dateIso) return null;
+          var n = new Date();
+          var today = n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2, "0") + "-" + String(n.getDate()).padStart(2, "0");
+          return String(dateIso).slice(0, 10) < today ? "completed" : "booked";
+        }
+        function surgTagHtml(dateIso) {
+          var t = surgTag(dateIso);
+          if (t === "completed") return '<span class="stag done">✓ completed</span>';
+          if (t === "booked") return '<span class="stag booked">booked</span>';
+          return "";
+        }
         function renderHeader() {
           var p = state.patient || {};
           qs("pf-avatar").textContent = (initials(p.full_name) || "–").toUpperCase();
           qs("pf-name").textContent = p.full_name || "(unnamed)";
           var bits = [];
-          if (p.dob) bits.push("Born " + isoToDmy(p.dob) + " · age " + ageFrom(p.dob));
-          if (p.health_fund) bits.push(p.health_fund);
-          if (p.surgery_date) bits.push("surgery " + isoToDmy(p.surgery_date));
-          qs("pf-meta").textContent = bits.join(" · ");
+          if (p.dob) bits.push(esc("Born " + isoToDmy(p.dob) + " · age " + ageFrom(p.dob)));
+          if (p.health_fund) bits.push(esc(p.health_fund));
+          if (p.surgery_date) bits.push(esc("surgery " + isoToDmy(p.surgery_date)) + " " + surgTagHtml(p.surgery_date));
+          qs("pf-meta").innerHTML = bits.join(" · ");
         }
         function renderContact() {
           var p = state.patient || {};
@@ -1169,7 +1187,7 @@
           var inp = qs("pf-search"); var timer = null;
           function run() {
             var q = inp.value.trim();
-            if (window.__pfPreview) { renderResults([{ id: "preview", full_name: "Josh Service", dob: "1990-02-08", surgery_date: "2026-07-02" }, { id: "p2", full_name: "Chloe Grant", dob: "1995-01-01", surgery_date: "2026-06-29" }].filter(function (r) { return !q || r.full_name.toLowerCase().indexOf(q.toLowerCase()) >= 0; })); return; }
+            if (window.__pfPreview) { renderResults([{ id: "preview", full_name: "Josh Service", dob: "1990-02-08", surgery_date: "2026-07-02" }, { id: "p2", full_name: "Chloe Grant", dob: "1995-01-01", surgery_date: "2026-07-30", surgery_venue: "vsc" }].filter(function (r) { return !q || r.full_name.toLowerCase().indexOf(q.toLowerCase()) >= 0; })); return; }
             var client = sb(); if (!client) { qs("pf-results").innerHTML = '<div class="empty">Not signed in.</div>'; return; }
             var query = client.from("patients").select("id,full_name,dob,surgery_date,surgery_venue").is("archived_at", null).order("surgery_date", { ascending: true, nullsFirst: false }).limit(25);
             if (q) {
@@ -1194,10 +1212,11 @@
             if (cb) cb.addEventListener("click", function () { openNewForm(nameLike ? q : ""); });
             return;
           }
-          qs("pf-results").innerHTML = '<div class="pick-head"><span>Patient</span><span>DOB</span><span>Next surgery</span><span>Venue</span></div>'
+          qs("pf-results").innerHTML = '<div class="pick-head"><span>Patient</span><span>DOB</span><span>Surgery</span><span>Venue</span></div>'
             + rows.map(function (p) {
               var venue = (typeof VENUE !== "undefined" && VENUE[(p.surgery_venue || "").toLowerCase()]) || (p.surgery_venue ? String(p.surgery_venue).toUpperCase() : "");
-              return '<div class="pick-row" data-pid="' + esc(p.id) + '"><span class="pk-name">' + esc(p.full_name || "(unnamed)") + '</span><span class="pk-dim">' + esc(p.dob ? isoToDmy(p.dob) : "—") + '</span><span class="pk-dim">' + esc(p.surgery_date ? isoToDmy(p.surgery_date) : "—") + '</span><span class="pk-dim">' + esc(venue || "—") + '</span></div>';
+              var surg = p.surgery_date ? esc(isoToDmy(p.surgery_date)) + " " + surgTagHtml(p.surgery_date) : "—";
+              return '<div class="pick-row" data-pid="' + esc(p.id) + '"><span class="pk-name">' + esc(p.full_name || "(unnamed)") + '</span><span class="pk-dim">' + esc(p.dob ? isoToDmy(p.dob) : "—") + '</span><span class="pk-dim">' + surg + '</span><span class="pk-dim">' + esc(venue || "—") + '</span></div>';
             }).join("");
           Array.prototype.forEach.call(qs("pf-results").querySelectorAll("[data-pid]"), function (el) {
             el.addEventListener("click", function () { location.href = "?patient_id=" + encodeURIComponent(el.getAttribute("data-pid")); });

@@ -347,6 +347,7 @@
                   <option value="masada">Masada</option>
                   <option value="vsc">Vermont (VSC)</option>
                   <option value="clinic">Clinic</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
               <div class="field"><label>Anaesthetist</label><input id="f-surgery_anaesthetist"></div>
@@ -427,7 +428,7 @@
           pamphlet: "https://amy-studio.github.io/patient-info-builder/",
           list: "https://amy-studio.github.io/surgical-list-web/"
         };
-        var VENUE = { sjm: "Sir John Monash", masada: "Masada", vsc: "Vermont (VSC)", clinic: "Clinic" };
+        var VENUE = { sjm: "Sir John Monash", masada: "Masada", vsc: "Vermont (VSC)", clinic: "Clinic", other: "Other" };
         var state = { patient: null, order: null, docs: [], orderId: null };
 
         function sb() { return (window.ClinicAuth && ClinicAuth.getClient) ? ClinicAuth.getClient() : null; }
@@ -1033,7 +1034,11 @@
           patch.dob = val("f-dob") || null;
           patch.surgery_date = val("f-surgery_date") || null;
           patch.surgery_time = val("f-surgery_time") || null;
-          patch.surgery_venue = val("f-surgery_venue") || null;
+          // Never silently wipe a venue the select can't display (e.g. a value
+          // written by another app that isn't in the dropdown yet).
+          var _sv = val("f-surgery_venue");
+          var _stored = ((state.patient || {}).surgery_venue || "").toLowerCase();
+          patch.surgery_venue = _sv || (_stored && !(_stored in VENUE) ? state.patient.surgery_venue : null);
           var dur = parseInt(val("f-surgery_duration_min"), 10); patch.surgery_duration_min = isNaN(dur) ? null : dur;
           var lp = parseInt(val("f-list_position"), 10); patch.list_position = isNaN(lp) ? null : lp;
           patch.paid_in_full = (val("f-paid_in_full") === "full");

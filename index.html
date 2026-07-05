@@ -869,12 +869,26 @@
         function toggleCheck(key, on) {
           if (!state.patient) return;
           var cl = state.patient.checklist = state.patient.checklist || {};
+          var previous = cl[key];
           cl[key] = on ? new Date().toISOString() : null;
           renderOverview();
           if (window.__pfPreview) { toast("Preview — not saved"); return; }
-          var client = sb(); if (!client) return;
-          var p = (window.ClinicPatients && ClinicPatients.update) ? ClinicPatients.update(state.patient.id, { checklist: cl }) : client.from("patients").update({ checklist: cl }).eq("id", state.patient.id);
-          Promise.resolve(p).then(function () { status("Checklist saved"); setTimeout(function () { status(""); }, 1500); }).catch(function () { toast("Save failed"); });
+          var client = sb(); if (!client) { cl[key] = previous; renderOverview(); toast("Not signed in — tick not saved"); return; }
+          var revert = function () { cl[key] = previous; renderOverview(); toast("Save failed — tick undone"); };
+          if (window.ClinicChecklist && window.ClinicChecklist.setKey) {
+            // Shared safe write: merges just this key into the LIVE checklist
+            // (no wiping ticks made elsewhere) + the deposit-paid→confirmed rule.
+            window.ClinicChecklist.setKey(state.patient.id, key, on).then(function (merged) {
+              state.patient.checklist = merged; renderOverview();
+              status("Checklist saved"); setTimeout(function () { status(""); }, 1500);
+            }).catch(revert);
+          } else {
+            var p = (window.ClinicPatients && ClinicPatients.update) ? ClinicPatients.update(state.patient.id, { checklist: cl }) : client.from("patients").update({ checklist: cl }).eq("id", state.patient.id);
+            Promise.resolve(p).then(function (r) {
+              if (r && r.error) { revert(); return; }
+              status("Checklist saved"); setTimeout(function () { status(""); }, 1500);
+            }).catch(revert);
+          }
         }
         function docCategory(t) {
           t = (t || "").toLowerCase();
@@ -946,7 +960,9 @@
           }
           // Sync 5 (GAP I): show the live hire state including OVERDUE, derived
           // from the hires table this file already loads.
-          var todayIso = new Date().toISOString().slice(0, 10);
+          // Local (Melbourne) date, NOT toISOString (UTC = yesterday until ~10am AEST).
+          var _n = new Date();
+          var todayIso = _n.getFullYear() + "-" + String(_n.getMonth() + 1).padStart(2, "0") + "-" + String(_n.getDate()).padStart(2, "0");
           qs("pf-hire").innerHTML = hires.map(function (h) {
             var item = (h.hire_items && h.hire_items.name) || h.item_name || ("Item " + (h.hire_item_id || ""));
             var dates = []; if (h.start_date) dates.push("out " + isoToDmy(h.start_date)); if (h.due_date) dates.push("due " + isoToDmy(h.due_date)); if (h.return_date) dates.push("returned " + isoToDmy(h.return_date));

@@ -1203,6 +1203,9 @@
           if (_body) _body.style.display = "none";
           qs("pf-picker").style.display = "";
           var inp = qs("pf-search"); var timer = null;
+          // ?q= hand-off from the dashboard's Patient admin search box
+          var handoff = new URLSearchParams(location.search).get("q");
+          if (handoff && !inp.value) inp.value = handoff;
           function run() {
             var q = inp.value.trim();
             if (window.__pfPreview) { renderResults([{ id: "preview", full_name: "Josh Service", dob: "1990-02-08", surgery_date: "2026-07-02" }, { id: "p2", full_name: "Chloe Grant", dob: "1995-01-01", surgery_date: "2026-07-30", surgery_venue: "vsc" }].filter(function (r) { return !q || r.full_name.toLowerCase().indexOf(q.toLowerCase()) >= 0; })); return; }

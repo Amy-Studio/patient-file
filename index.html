@@ -1001,7 +1001,7 @@
           var client = sb(); var pid = state.patient && state.patient.id; if (!client || !pid) { toast("Not signed in"); return; }
           var who = (window.__pfUser && window.__pfUser.email) || "";
           client.from("patient_notes").insert({ patient_id: pid, body: body, created_by: who }).select("*").then(function (r) {
-            if (r.error) { toast("Couldn’t post — has the notes table been added?"); return; }
+            if (r.error) { toast("Couldn’t save the note — check your connection and try again. If it keeps happening, tell Amy."); return; }
             inp.value = ""; state.notes = state.notes || []; if (r.data && r.data[0]) state.notes.unshift(r.data[0]); renderNotes(); toast("Note posted");
           }).catch(function () { toast("Couldn’t post note"); });
         }

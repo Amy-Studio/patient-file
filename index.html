@@ -14,7 +14,7 @@
     <script>
       (function () {
         var v = Date.now();
-        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js"].forEach(function (f) {
+        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-pdf.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js"].forEach(function (f) {
           document.write('<script src="https://amy-studio.github.io/clinic-style/' + f + '?fresh=' + v + '"><\/script>');
         });
       })();
@@ -837,20 +837,10 @@
             });
           }
         }
-        var CHECK_ITEMS = [
-          { k: "surgeon_order_done", label: "Surgeon order complete" },
-          { k: "fee_estimate_sent", label: "Fee estimate sent" },
-          { k: "fee_estimate_received", label: "Fee estimate back" },
-          { k: "quote_sent", label: "Quote sent" },
-          { k: "quote_accepted", label: "IFC signed / returned" },
-          { k: "prescreening_form", label: "Pre-screening form" },
-          { k: "booking_confirmed", label: "Booking confirmed" },
-          { k: "postop_booked", label: "Post-op booked" },
-          { k: "deposit_paid", label: "Deposit paid" },
-          { k: "pamphlet_sent", label: "Pamphlet + email sent" },
-          { k: "hires_booked", label: "Hires booked" },
-          { k: "surgical_list_done", label: "Surgical list sent" }
-        ];
+        // One source: clinic-checklist.js CHECKLIST_ITEMS (loaded above), plus
+        // this app's own extra first step for the surgeon order.
+        var CHECK_ITEMS = [{ k: "surgeon_order_done", label: "Surgeon order complete" }]
+          .concat(((window.ClinicChecklist && window.ClinicChecklist.ITEMS) || []).map(function (c) { return { k: c.key, label: c.label }; }));
         function renderOverview() {
           var el = qs("pf-overview"); if (!el) return;
           var cl = (state.patient && state.patient.checklist) || {};

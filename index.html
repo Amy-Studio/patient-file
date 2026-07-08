@@ -1029,7 +1029,19 @@
           var q = id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&surgeon_order_id=" + encodeURIComponent(oid) : "")) : "";
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
-          qs("pf-make-list").href = APPS.list + (id ? ("?patient_id=" + encodeURIComponent(id)) : "");
+          // Booked patient → the surgical list app loads their whole operating
+          // day. No date yet → the Schedule booking flow for them instead
+          // (a date picked inside the list app wouldn't actually book them).
+          var hasDate = !!(state.patient && state.patient.surgery_date);
+          qs("pf-make-list").href = id
+            ? (hasDate
+              ? APPS.list + "?patient_id=" + encodeURIComponent(id)
+              : "https://amy-studio.github.io/clinic-style/clinic-schedule.html?book=" + encodeURIComponent(id))
+            : "#";
+          qs("pf-make-list").textContent = hasDate ? "Add to surgical list" : "Book a surgery date first";
+          qs("pf-make-list").title = hasDate
+            ? "Opens the surgical list app with this patient's whole operating day loaded"
+            : "No surgery date yet — opens the Schedule with them ready to book (with the capacity check)";
           qs("pf-make-fee-estimate").href = id ? ("https://amy-studio.github.io/clinic-style/fee-estimate-preview.html?patient_id=" + encodeURIComponent(id) + "&kind=quote_vsc_selffund") : "#";
           ["pf-make-quote", "pf-make-pamphlet", "pf-make-fee-estimate", "pf-make-list"].forEach(function (b) { qs(b).setAttribute("target", "_blank"); qs(b).setAttribute("rel", "noopener"); });
         }

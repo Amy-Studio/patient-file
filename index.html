@@ -14,7 +14,7 @@
     <script>
       (function () {
         var v = Date.now();
-        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-pdf.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js"].forEach(function (f) {
+        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-pdf.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js"].forEach(function (f) {
           document.write('<script src="https://amy-studio.github.io/clinic-style/' + f + '?fresh=' + v + '"><\/script>');
         });
       })();
@@ -392,6 +392,10 @@
             <h2>Documents</h2>
             <div class="panel-sub">Most recent of each kind. Click a document to preview it below.</div>
             <div id="pf-docs"></div>
+            <label id="pf-dropz" style="display:block;margin-top:12px;border:2px dashed #cdd6e4;border-radius:10px;padding:13px;text-align:center;font-size:12.5px;color:var(--muted);cursor:pointer;background:#fbfcfe">
+              Drop a file here (or click) — clinical notes are read and offered as updates; everything is filed to this patient.
+              <input type="file" id="pf-dropz-input" multiple style="display:none">
+            </label>
             <div id="pf-preview" style="display:none; margin-top:16px"></div>
           </div>
 
@@ -1362,6 +1366,104 @@
             pfQ(client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }), "notes").then(function (r) { if (r && !r.error) { state.notes = r.data || []; renderAll(); } else { console.warn("[PF] notes:", r && r.error && r.error.message); } });
           }).catch(function (e) { clearWatchdog(); status("Load failed"); qs("pf-meta").textContent = "Something went wrong loading this patient. Reload the page; if it keeps happening, log out and back in from the Dashboard."; console.error("[PF] load error", e); });
         }
+
+        // ---- Drop files onto THIS patient (ported from the retired
+        //      clinic-patient.html page). Clinical notes are AI-read and
+        //      offered as updates via the merge-review popup; every file is
+        //      uploaded to the patient's folder + listed in Documents. ----
+        function refreshDocs() {
+          var client = sb(); var p = state.patient;
+          if (!client || !p || !p.id) return;
+          client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false })
+            .then(function (r) { if (r && !r.error) { state.docs = r.data || []; renderDocs(); } });
+        }
+        async function pfProcessNote(file) {
+          var client = sb(); var P = state.patient; var pid = P && P.id;
+          if (!client || !P) return { handled: false };
+          if (!(window.ClinicSmartInbox && ClinicSmartInbox.extractFromFile && window.ClinicMergeReview)) return { handled: false };
+          status("Reading " + file.name + "…");
+          var ex; try { ex = await ClinicSmartInbox.extractFromFile(file); } catch (e) { return { handled: false }; }
+          if (!ex) return { handled: false };
+          var ce = ex.clinical_extract || {};
+          var oa = state.order || {};
+          var intOf = function (v) { var n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
+          var defs = [
+            ["Procedure", oa.procedure_name || P.surgery_procedure, ex.surgery_procedure, [["patients", "surgery_procedure"], ["order", "procedure_name"]]],
+            ["Estimated duration (min)", (oa.est_duration_min != null ? oa.est_duration_min : P.surgery_duration_min), intOf(ce.est_duration_min), [["patients", "surgery_duration_min"], ["order", "est_duration_min"]]],
+            ["Surgery date", P.surgery_date, ex.surgery_date, [["patients", "surgery_date"], ["order", "session_date"]]],
+            ["Venue", P.surgery_venue, ex.surgery_venue, [["patients", "surgery_venue"], ["order", "surgery_venue"]]],
+            ["Anaesthetist", oa.anaesthetist, ex.surgery_anaesthetist, [["order", "anaesthetist"]]],
+            ["Date of birth", P.dob, ex.dob, [["patients", "dob"]]],
+            ["Phone", P.phone, ex.phone, [["patients", "phone"]]],
+            ["Medicare no", P.medicare_number, ex.medicare_number, [["patients", "medicare_number"]]],
+            ["Health fund", P.health_fund, ex.health_fund, [["patients", "health_fund"]]],
+            ["Address", P.address, ex.address, [["patients", "address"]]],
+            ["Allergies", oa.allergies || (oa.allergies_nka ? "NKA" : ""), ce.allergies || (ce.allergies_nka ? "NKA" : ""), [["order", "allergies"]]],
+            ["GLP-1 / SGLT2 meds", oa.glp1_sglt2, ce.glp1_sglt2, [["order", "glp1_sglt2"]]],
+            ["Antibiotic cover", oa.ab_cover, ce.ab_cover, [["order", "ab_cover"]]],
+            ["Antithrombotic cover", oa.at_cover, ce.at_cover, [["order", "at_cover"]]],
+            ["Weight-bearing", oa.weight_bearing, ce.weight_bearing, [["order", "weight_bearing"]]],
+            ["Driving off (weeks)", oa.driving_weeks_off, intOf(ce.driving_weeks_off), [["order", "driving_weeks_off"]]]
+          ];
+          var rows = [], byKey = {};
+          defs.forEach(function (d) { var label = d[0], cur = d[1], inc = d[2], writes = d[3]; if (inc == null || inc === "") return; rows.push({ key: label, label: label, current: cur == null ? "" : cur, incoming: inc }); byKey[label] = { writes: writes }; });
+          var kindMap = { clinical_notes: "Clinical notes", quote: "Fee quote", pamphlet: "Pamphlet", referral: "Referral", scan_report: "Scan / report" };
+          var niceKind = kindMap[ex.document_kind] || "Document";
+          var result = await window.ClinicMergeReview.open({ title: "Update patient from dropped file", patientName: P.full_name || "this patient", subtitle: "from " + niceKind.toLowerCase(), rows: rows, docName: niceKind + (ex.notes_drafted_date ? " — " + ex.notes_drafted_date : "") });
+          if (!result) { status("Left as-is — nothing saved."); return { handled: true }; }
+          status("Saving…");
+          var pPatch = {}, oPatch = {};
+          (result.changes || []).forEach(function (ch) {
+            var w = (byKey[ch.label] || {}).writes || [];
+            w.forEach(function (t) { var table = t[0], col = t[1]; var v = ch.value; if (/(_min|_weeks|_days)$/.test(col)) { var n = parseInt(v, 10); if (Number.isFinite(n)) v = n; } (table === "patients" ? pPatch : oPatch)[col] = v; });
+          });
+          try {
+            if (Object.keys(pPatch).length) { if (window.ClinicPatients && ClinicPatients.update) await ClinicPatients.update(pid, pPatch); else await client.from("patients").update(pPatch).eq("id", pid); Object.assign(P, pPatch); }
+            if (Object.keys(oPatch).length) { if (state.orderId) await client.from("surgeon_orders").update(oPatch).eq("id", state.orderId); else { var ins = await client.from("surgeon_orders").insert(Object.assign({ patient_id: pid, status: "draft" }, oPatch)).select().single(); if (ins && ins.data) { state.order = ins.data; state.orderId = ins.data.id; } } if (state.order) Object.assign(state.order, oPatch); }
+            var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+            var safe = file.name.replace(/[^\w.\- ]/g, "_");
+            var path = "_patient-" + pid + "/" + ts + "__" + safe;
+            await client.storage.from("shared-docs").upload(path, file, { upsert: false });
+            await client.from("patient_documents").insert({ patient_id: pid, doc_type: (ex.document_kind || "other"), bucket: "shared-docs", path: path, label: (result.docName || file.name.replace(/\.[^.]+$/, "")), generated_at: new Date().toISOString() });
+            status("Saved ✓"); toast("File read + saved to " + (P.full_name || "patient"));
+            refreshDocs(); renderAll();
+          } catch (e) { status(""); toast("Couldn't save: " + (e.message || e)); }
+          return { handled: true };
+        }
+        async function pfUploadFiles(files) {
+          var client = sb(); var pid = state.patient && state.patient.id;
+          if (!client || !pid || !files || !files.length) return;
+          for (var i = 0; i < files.length; i++) {
+            var file = files[i];
+            try {
+              var r = await pfProcessNote(file);
+              if (r && r.handled) continue;
+              status("Filing " + file.name + "…");
+              var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+              var safe = file.name.replace(/[^\w.\- ]/g, "_");
+              var path = "_patient-" + pid + "/" + ts + "__" + safe;
+              var up = await client.storage.from("shared-docs").upload(path, file, { upsert: false });
+              if (up.error) { toast("Upload failed: " + up.error.message); continue; }
+              await client.from("patient_documents").insert({ patient_id: pid, doc_type: "other", bucket: "shared-docs", path: path, label: file.name.replace(/\.[^.]+$/, ""), generated_at: new Date().toISOString() });
+              status("Filed ✓");
+            } catch (e) { toast("Upload error: " + (e.message || e)); }
+          }
+          refreshDocs();
+        }
+        (function wireDropzone() {
+          var dz = document.getElementById("pf-dropz");
+          var inp = document.getElementById("pf-dropz-input");
+          if (!dz || !inp) return;
+          inp.addEventListener("change", function () { if (window.__pfPreview) { toast("Preview — not saved"); return; } pfUploadFiles(inp.files); inp.value = ""; });
+          dz.addEventListener("dragover", function (e) { e.preventDefault(); dz.style.background = "#eef5f7"; dz.style.borderColor = "#468a83"; });
+          dz.addEventListener("dragleave", function () { dz.style.background = "#fbfcfe"; dz.style.borderColor = "#cdd6e4"; });
+          dz.addEventListener("drop", function (e) {
+            e.preventDefault();
+            dz.style.background = "#fbfcfe"; dz.style.borderColor = "#cdd6e4";
+            if (window.__pfPreview) { toast("Preview — not saved"); return; }
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) pfUploadFiles(e.dataTransfer.files);
+          });
+        })();
 
         // delegated: add-code stub
         document.addEventListener("click", function (e) {

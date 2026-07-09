@@ -272,7 +272,7 @@
           <a id="pf-make-quote" href="#">Make quote</a>
           <a id="pf-make-pamphlet" href="#">Make pamphlet</a>
           <a id="pf-make-fee-estimate" href="#">VSC fee estimate</a>
-          <a id="pf-make-list" href="#">Add to surgical list</a>
+          <a id="pf-make-list" href="#">Open their day's surgical list</a>
         </div>
       </div>
 
@@ -1038,9 +1038,11 @@
               ? APPS.list + "?patient_id=" + encodeURIComponent(id)
               : "https://amy-studio.github.io/clinic-style/clinic-schedule.html?book=" + encodeURIComponent(id))
             : "#";
-          qs("pf-make-list").textContent = hasDate ? "Add to surgical list" : "Book a surgery date first";
+          // Honest label: booked patients are AUTOMATICALLY on their day —
+          // this is just a shortcut to that day's hospital list document.
+          qs("pf-make-list").textContent = hasDate ? "Open their day's surgical list" : "Book a surgery date first";
           qs("pf-make-list").title = hasDate
-            ? "Opens the surgical list app with this patient's whole operating day loaded"
+            ? "They're already on this day (booked = listed). This opens the day's list document to build or check the hospital PDF."
             : "No surgery date yet — opens the Schedule with them ready to book (with the capacity check)";
           qs("pf-make-fee-estimate").href = id ? ("https://amy-studio.github.io/clinic-style/fee-estimate-preview.html?patient_id=" + encodeURIComponent(id) + "&kind=quote_vsc_selffund") : "#";
           ["pf-make-quote", "pf-make-pamphlet", "pf-make-fee-estimate", "pf-make-list"].forEach(function (b) { qs(b).setAttribute("target", "_blank"); qs(b).setAttribute("rel", "noopener"); });

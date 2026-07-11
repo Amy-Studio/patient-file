@@ -1045,7 +1045,12 @@
             ? "They're already on this day (booked = listed). This opens the day's list document to build or check the hospital PDF."
             : "No surgery date yet — opens the Schedule with them ready to book (with the capacity check)";
           qs("pf-make-fee-estimate").href = id ? ("https://amy-studio.github.io/clinic-style/fee-estimate-preview.html?patient_id=" + encodeURIComponent(id) + "&kind=quote_vsc_selffund") : "#";
-          ["pf-make-quote", "pf-make-pamphlet", "pf-make-fee-estimate", "pf-make-list"].forEach(function (b) { qs(b).setAttribute("target", "_blank"); qs(b).setAttribute("rel", "noopener"); });
+          // Named windows instead of _blank: in the desktop (installed-app) view,
+          // _blank stacked identical popup windows and closing the wrong one
+          // killed the quote being prepared. A named target reuses ONE window
+          // per app and focuses it on repeat clicks.
+          var PF_TARGETS = { "pf-make-quote": "clinicQuoteBuilder", "pf-make-pamphlet": "clinicPIB", "pf-make-fee-estimate": "clinicFeeEstimate", "pf-make-list": "clinicSurgicalList" };
+          Object.keys(PF_TARGETS).forEach(function (b) { qs(b).setAttribute("target", PF_TARGETS[b]); qs(b).setAttribute("rel", "noopener"); });
         }
 
         // ---- save ----

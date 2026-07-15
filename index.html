@@ -1115,6 +1115,20 @@
           patch.order_ui = ui;
           return patch;
         }
+        // Shell save-prompt: the "one program" shell reads window.__shellUnsaved
+        // before letting you leave this tab. Typing in any field inside the open
+        // patient's card (.pcard) marks dirty; a successful Save or loading a
+        // patient clears it. Programmatic re-renders don't fire input events, so
+        // this only trips on real edits. Degrades to no-op when not embedded.
+        var pfDirty = false;
+        function pfMarkDirty(e) {
+          if (!e || !e.target || !e.target.closest) return;
+          if (e.target.closest("#pf-picker")) return;      // search/new-patient picker isn't the open file
+          if (e.target.closest(".pcard")) pfDirty = true;   // an edit inside the open patient's card
+        }
+        document.addEventListener("input", pfMarkDirty, true);
+        document.addEventListener("change", pfMarkDirty, true);
+        window.__shellUnsaved = function () { return pfDirty; };
         function save() {
           if (window.__pfPreview) { toast("Preview mode — not saved"); return; }
           var client = sb(); var id = state.patient && state.patient.id;
@@ -1156,7 +1170,7 @@
             }
             var ins = res[res.length - 1];
             if (!state.orderId && ins && ins.data && ins.data[0]) state.orderId = ins.data[0].id;
-            qs("pf-save").disabled = false; status(""); toast("Saved ✓");
+            qs("pf-save").disabled = false; status(""); toast("Saved ✓"); pfDirty = false;
             Object.assign(state.patient, pPatch); state.order = Object.assign(state.order || {}, oPatch);
             if (state.order && state.orderId) { state.order.id = state.orderId; delete state.order._new; }
             orderEditing = false; renderOrder();
@@ -1378,7 +1392,7 @@
             if (!p) { qs("pf-name").textContent = "Patient not found"; qs("pf-meta").textContent = "This patient id isn't in the register."; status(""); return; }
             // Show the patient straight away so the page is usable even if a
             // secondary table is slow; each section fills in as it arrives.
-            state.patient = p; qs("pf-save").disabled = false; status(""); renderAll();
+            state.patient = p; qs("pf-save").disabled = false; status(""); renderAll(); pfDirty = false;
             pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }), "surgeries").then(function (r) { if (r && !r.error) { state.orders = r.data || []; if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });
             pfQ(client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }), "documents").then(function (r) { if (r && !r.error) { state.docs = r.data || []; state.docsError = null; renderAll(); } else { state.docsError = (r && r.error && (r.error.__timeout ? "timed out" : r.error.message)) || "failed"; console.warn("[PF] documents:", state.docsError); renderAll(); } });
             pfQ(client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }), "hires").then(function (r) { if (r && !r.error) { state.hires = r.data || []; renderAll(); } else { console.warn("[PF] hires:", r && r.error && r.error.message); } });

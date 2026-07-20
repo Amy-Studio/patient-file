@@ -911,12 +911,29 @@
         }
         function renderDocs() {
           var all = (state.docs || []).filter(function (d) { return !d.archived_at; });
-          var latest = {};
+          // Newest per (doc_type + label): distinctly-labelled live rows of
+          // one doc_type — e.g. two quote options filed side-by-side as
+          // "Main quote — Hospital" / "Main quote — Clinic" — show together,
+          // while same-label older actives (legacy duplicates from before
+          // archive-on-save) stay hidden exactly as the old newest-per-type
+          // view hid them.
+          var byType = {}; var typeOrder = [];
           all.forEach(function (d) {
-            var k = d.doc_type || "other"; var t = String(d.generated_at || d.created_at || "");
-            if (!latest[k] || t > String(latest[k].generated_at || latest[k].created_at || "")) latest[k] = d;
+            var k = d.doc_type || "other";
+            if (!byType[k]) { byType[k] = {}; typeOrder.push(k); }
+            var lk = String(d.label || "").trim().toLowerCase();
+            var cur = byType[k][lk];
+            var t = String(d.generated_at || d.created_at || "");
+            if (!cur || t > String(cur.generated_at || cur.created_at || "")) byType[k][lk] = d;
           });
-          var docs = Object.keys(latest).map(function (k) { return latest[k]; });
+          var docs = [];
+          typeOrder.forEach(function (k) {
+            var rows = Object.keys(byType[k]).map(function (lk) { return byType[k][lk]; });
+            rows.sort(function (a, b) {
+              return String(b.generated_at || b.created_at || "").localeCompare(String(a.generated_at || a.created_at || ""));
+            });
+            docs = docs.concat(rows);
+          });
           state.docsView = docs;
           var b = qs("pf-doc-badge");
           if (docs.length) { b.textContent = docs.length; b.style.display = ""; } else { b.style.display = "none"; }

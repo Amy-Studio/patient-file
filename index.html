@@ -441,6 +441,8 @@
         function status(msg) { qs("pf-status").textContent = msg || ""; }
         function initials(name) { var p = String(name || "").trim().split(/\s+/); return ((p[0] || "")[0] || "") + ((p[p.length - 1] || "")[0] || ""); }
         function isoToDmy(iso) { if (!iso) return ""; var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (m[3] + "/" + m[2] + "/" + m[1]) : iso; }
+        // Post-op care ends = surgery date + 12 weeks (informational, for admin to note). Local date math, DMY to match isoToDmy.
+        function postopCareEnds(iso) { if (!iso) return ""; var m = String(iso).slice(0, 10).split("-"); if (m.length !== 3) return ""; var d = new Date(+m[0], +m[1] - 1, +m[2]); if (isNaN(d)) return ""; d.setDate(d.getDate() + 84); return ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear(); }
         function ageFrom(iso) { if (!iso) return ""; var d = new Date(iso); if (isNaN(d)) return ""; var t = new Date(); var a = t.getFullYear() - d.getFullYear(); var mo = t.getMonth() - d.getMonth(); if (mo < 0 || (mo === 0 && t.getDate() < d.getDate())) a--; return a; }
 
         // ---- nav ----
@@ -493,7 +495,7 @@
           if (isCurrent) {
             if (editEl) editEl.style.display = "";
             if (roEl) { roEl.style.display = "none"; roEl.innerHTML = ""; }
-            if (banEl) banEl.innerHTML = "";
+            if (banEl) banEl.innerHTML = p.surgery_date ? ('<div style="font-size:12px;color:var(--muted);background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;margin-bottom:10px"><b>Post-op care ends:</b> ' + esc(postopCareEnds(p.surgery_date)) + ' <span style="opacity:.75">(surgery + 12 weeks, for admin to note)</span></div>') : "";
             setVal("f-surgery_date", p.surgery_date ? String(p.surgery_date).slice(0, 10) : "");
             setVal("f-surgery_time", p.surgery_time ? String(p.surgery_time).slice(0, 5) : "");
             setVal("f-surgery_venue", (p.surgery_venue || "").toLowerCase());

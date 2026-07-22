@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <title>Patient File</title>
+    <title>Patient file</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
@@ -52,18 +52,46 @@
 
     <style>
       :root {
-        --navy: #1f3a5f;
-        --ink: #243447;
-        --muted: #6b7a90;
+        /* Suite design language (approved professional look) */
+        --navy: #234e7d;
+        --navy-deep: #1b3d63;
+        --navy-soft: #e9eff6;
+        --ink: #1f3a5f;
+        --ink-soft: #4a5a72;
+        --muted: #6e7787;
+        --faint: #aeb5c2;
+        --bg: #f4f6f9;
+        --surface: #ffffff;
+        --card: #ffffff;
         --line: #e6e9ef;
-        --card: rgba(255,255,255,.82);
-        --pink-bg: #f8ecef;
-        --teal-bg: #e3eeed;
-        --accent-soft: #eaf1fb;
-        --accent-ink: #1f3a5f;
+        --line-soft: #eef1f5;
+        --hover: #f6f8fb;
+        --pink: #d8a5b8;
+        --pink-deep: #b87f97;
+        --pink-bg: #f8eef2;
+        --teal: #6aafa8;
+        --teal-deep: #468a83;
+        --teal-bg: #e7f1ef;
+        --slate: #375a6b;
+        --slate-bg: #e9eff2;
+        --rose: #d4537e;
+        --rose-bg: #fbecf1;
+        --amber: #96660f;
+        --amber-bg: #fdf3dd;
+        --amber-line: #f0ddb0;
+        --red: #b7484a;
+        --red-bg: #fbeeee;
+        --red-line: #f1d6d6;
         --good: #2d8a5f;
-        --good-bg: #e7f4ec;
-        --radius: 10px;
+        --good-bg: #e8f4ee;
+        /* Legacy names still referenced by script-built markup */
+        --accent-soft: #e9eff6;
+        --accent-ink: #234e7d;
+        --surface-1: #f6f8fb;
+        --text-secondary: #6e7787;
+        --shadow-sm: 0 1px 2px rgba(31,58,95,.06);
+        --radius: 8px;
+        --r: 10px;
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; }
@@ -71,144 +99,199 @@
         font-family: "Montserrat", system-ui, -apple-system, sans-serif;
         font-weight: 400;
         color: var(--ink);
-        background: #eef5f7; /* gently blue, flat (Amy 2026-07-06) */
+        background: var(--bg);
         min-height: 100vh;
         -webkit-font-smoothing: antialiased;
-        font-size: 14px;
+        font-size: 13px;
+        line-height: 1.45;
       }
       h1, h2, h3 { font-weight: 600; color: var(--navy); margin: 0; }
-      .wrap { max-width: 1080px; margin: 0 auto; padding: 22px 20px 60px; }
+      ::selection { background: var(--navy-soft); }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 22px 24px 60px; }
 
       /* Top bar */
       .topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
-      .brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-      .brand-title { font-size: 18px; font-weight: 600; color: var(--navy); letter-spacing: .2px; }
-      .brand-sub { font-size: 12px; color: var(--muted); }
-      .back-link { font-size: 13px; color: var(--navy); text-decoration: none; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; }
+      .brand { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+      .brand-title { font-size: 15px; font-weight: 600; color: var(--navy); letter-spacing: -.01em; }
+      .brand-sub { font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+      .back-link {
+        font-size: 12px; font-weight: 600; color: var(--ink-soft); text-decoration: none;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 7px 12px; transition: background .12s, border-color .12s, color .12s;
+      }
+      .back-link:hover { border-color: #cfd6e0; color: var(--ink); background: var(--hover); }
 
       /* Patient header card */
-      .pcard { background: #fff; border: 1px solid #e8eaee; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(31,58,95,.05); }
+      .pcard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; box-shadow: var(--shadow-sm); }
+      .pcard h2 { font-size: 15px; }
+      .panel-sub { font-size: 12px; font-weight: 400; color: var(--muted); margin: 2px 0 14px; }
       .phead { display: flex; align-items: center; gap: 14px; }
-      .avatar { width: 46px; height: 46px; border-radius: 50%; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; flex-shrink: 0; }
-      .pname { font-size: 18px; font-weight: 600; color: var(--navy); }
-      .pmeta { font-size: 13px; font-weight: 400; color: var(--muted); }
-      .save-btn { font-size: 13px; font-weight: 500; color: #fff; background: var(--navy); border: none; border-radius: var(--radius); padding: 9px 16px; cursor: pointer; }
+      .avatar {
+        width: 44px; height: 44px; border-radius: 50%; background: var(--navy-soft); color: var(--navy);
+        display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; flex-shrink: 0;
+      }
+      .pname { font-size: 17px; font-weight: 700; color: var(--navy); letter-spacing: -.01em; }
+      .pmeta { font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+      .save-btn {
+        font-size: 12.5px; font-weight: 600; color: #fff; background: var(--navy); border: none;
+        border-radius: var(--radius); padding: 8px 16px; cursor: pointer; box-shadow: var(--shadow-sm);
+        font-family: inherit; transition: background .12s;
+      }
+      .save-btn:hover { background: var(--navy-deep); }
       .save-btn:disabled { opacity: .55; cursor: default; }
 
       /* Launch row */
-      .launch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-      .launch .lbl { font-size: 12px; color: var(--muted); margin-right: 2px; }
-      .launch a { font-size: 13px; font-weight: 500; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid #d8e4f4; border-radius: var(--radius); padding: 8px 13px; text-decoration: none; }
-      .launch a:hover { background: #dfeafb; }
+      .launch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+      .launch .lbl { font-size: 11.5px; font-weight: 500; color: var(--muted); margin-right: 2px; }
+      .launch a {
+        font-size: 12px; font-weight: 600; color: var(--ink-soft); background: var(--surface);
+        border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 12px; text-decoration: none;
+        transition: background .12s, border-color .12s, color .12s;
+      }
+      .launch a:hover { border-color: #cfd6e0; color: var(--ink); background: var(--hover); }
 
       /* Body: nav + panel */
-      .body { display: flex; gap: 18px; align-items: flex-start; margin-top: 16px; }
-      nav.side { width: 168px; flex-shrink: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
-      .navitem { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 400; color: var(--ink); padding: 8px 10px; border-radius: var(--radius); cursor: pointer; user-select: none; }
-      .navitem .ic { width: 16px; text-align: center; opacity: .8; }
-      .navitem .badge { margin-left: auto; font-size: 10px; font-weight: 500; color: var(--good); background: var(--good-bg); border-radius: 999px; padding: 1px 7px; }
-      .navitem:hover { background: #eef2f8; }
-      .navitem.active { background: var(--navy); color: #fff; font-weight: 500; }
-      .navitem.active .ic { opacity: 1; }
+      .body { display: flex; gap: 16px; align-items: flex-start; margin-top: 16px; }
+      nav.side { width: 184px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px; box-shadow: var(--shadow-sm); }
+      .navitem {
+        display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 500; color: var(--ink-soft);
+        padding: 8px 10px; border-radius: var(--radius); cursor: pointer; user-select: none;
+        transition: background .12s, color .12s;
+      }
+      .navitem .ic {
+        width: 15px; height: 15px; flex: none; color: var(--muted);
+        stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round;
+        transition: color .12s;
+      }
+      .navitem .badge { margin-left: auto; font-size: 10.5px; font-weight: 600; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 1px 7px; min-width: 20px; text-align: center; }
+      .navitem:hover { background: var(--hover); color: var(--ink); }
+      .navitem:hover .ic { color: var(--ink-soft); }
+      .navitem.active { background: var(--navy); color: #fff; font-weight: 600; }
+      .navitem.active .ic { color: rgba(255,255,255,.85); }
+      .navitem.active .badge { background: rgba(255,255,255,.18); color: #fff; }
 
-      .panel { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
-      .panel h2 { font-size: 16px; margin-bottom: 2px; }
-      .panel .panel-sub { font-size: 12px; font-weight: 400; color: var(--muted); margin: 2px 0 14px; }
+      .panel { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px 20px; box-shadow: var(--shadow-sm); }
+      .panel h2 { font-size: 14px; margin-bottom: 2px; }
       .section { display: none; }
       .section.active { display: block; }
-      .ord-group { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; background: var(--card); overflow: hidden; }
-      .ord-group > summary { cursor: pointer; list-style: none; padding: 11px 14px; font-weight: 600; font-size: 13px; color: var(--navy); display: flex; align-items: center; gap: 9px; }
+      .ord-group { border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 10px; background: var(--surface); overflow: hidden; }
+      .ord-group > summary { cursor: pointer; list-style: none; padding: 11px 14px; font-weight: 600; font-size: 12.5px; color: var(--navy); display: flex; align-items: center; gap: 9px; }
       .ord-group > summary::-webkit-details-marker { display: none; }
       .ord-group > summary::before { content: "\25B8"; color: var(--muted); font-size: 11px; transition: transform .15s ease; }
       .ord-group[open] > summary::before { transform: rotate(90deg); }
-      .ord-group[open] > summary { border-bottom: 1px solid var(--line); }
+      .ord-group[open] > summary { border-bottom: 1px solid var(--line-soft); }
       .ord-group .grid2 { padding: 10px 12px; }
       /* week/day tick circles */
       .wkrow { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-      .wkc { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: #fff; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--ink); cursor: pointer; user-select: none; line-height: 1; }
+      .wkc { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: inline-flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--ink); cursor: pointer; user-select: none; line-height: 1; }
       .wkc i { font-style: normal; font-size: 8px; font-weight: 500; color: var(--muted); margin-top: 1px; }
       .wkc:hover { border-color: #b9c8de; }
       .wkc.on { background: var(--navy); border-color: var(--navy); color: #fff; }
-      .wkc.on i { color: #cdd9ea; }
+      .wkc.on i { color: rgba(255,255,255,.75); }
       .wkc-clear { color: var(--muted); font-weight: 400; }
       /* mobility rows */
       .mobrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px dashed var(--line); }
       .mobrow:last-of-type { border-bottom: none; }
-      .moblab { width: 96px; font-size: 13px; font-weight: 600; color: var(--navy); flex: none; }
+      .moblab { width: 96px; font-size: 12.5px; font-weight: 600; color: var(--navy); flex: none; }
       .mobseq { display: inline-flex; gap: 4px; margin-left: auto; }
       .seqc { font-size: 11px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); cursor: pointer; user-select: none; }
-      .seqc.on { background: var(--teal-bg); border-color: #9cc3bd; color: #2c6b62; font-weight: 600; }
+      .seqc.on { background: var(--teal-bg); border-color: #b9d8d3; color: var(--teal-deep); font-weight: 600; }
       /* saved summary view */
-      .osum-group { border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 10px 14px; margin-bottom: 8px; }
-      .osum-h { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--navy); margin-bottom: 6px; }
-      .osum-line { display: grid; grid-template-columns: 200px 1fr; gap: 10px; font-size: 13px; padding: 2.5px 0; }
+      .osum-group { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 10px 14px; margin-bottom: 8px; }
+      .osum-h { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+      .osum-line { display: grid; grid-template-columns: 200px 1fr; gap: 10px; font-size: 12.5px; padding: 2.5px 0; }
       .osum-line span { color: var(--muted); }
       .osum-line b { font-weight: 500; color: var(--ink); }
       @media (max-width: 640px) { .osum-line { grid-template-columns: 1fr; gap: 0; } }
       /* patient picker table */
-      .pick-head { display: grid; grid-template-columns: 1.6fr .8fr .9fr .8fr; gap: 10px; padding: 8px 12px; font-size: 10.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
-      .pick-row { display: grid; grid-template-columns: 1.6fr .8fr .9fr .8fr; gap: 10px; padding: 10px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f1f4f8; align-items: center; }
-      .pick-row:hover { background: #eef2f8; }
-      .pick-row .pk-name { font-weight: 600; color: var(--navy); }
-      .pick-row .pk-dim { color: var(--muted); font-size: 12.5px; }
-      .code-hit { padding: 6px 9px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid #f1f4f8; }
-      .code-hit:hover { background: #eef2f8; }
-      .code-hit b { color: var(--navy); margin-right: 4px; }
+      .pick-head { display: grid; grid-template-columns: 1.6fr .8fr .9fr .8fr; gap: 10px; padding: 9px 12px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); background: #fafbfd; border-radius: var(--radius) var(--radius) 0 0; }
+      .pick-row { display: grid; grid-template-columns: 1.6fr .8fr .9fr .8fr; gap: 10px; padding: 10px 12px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid var(--line-soft); align-items: center; transition: background .1s; }
+      .pick-row:hover { background: var(--hover); }
+      .pick-row .pk-name { font-weight: 600; color: var(--ink); }
+      .pick-row .pk-dim { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+      .code-hit { padding: 6px 9px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+      .code-hit:hover { background: var(--hover); }
+      .code-hit b { color: var(--ink); font-weight: 600; margin-right: 4px; }
       /* new-patient + archive controls */
-      .np-btn { border: 1px solid var(--line); background: #fff; color: var(--navy); border-radius: var(--radius); padding: 9px 15px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-      .np-btn:hover { background: #eef2f8; }
-      .np-btn.primary { background: var(--navy); border-color: var(--navy); color: #fff; }
-      .np-btn.primary:hover { background: #16314e; }
+      .np-btn {
+        border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+        border-radius: var(--radius); padding: 8px 14px; font-family: inherit; font-size: 12.5px;
+        font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s, color .12s;
+      }
+      .np-btn:hover { border-color: #cfd6e0; color: var(--ink); background: var(--hover); }
+      .np-btn.primary { background: var(--navy); border-color: var(--navy); color: #fff; box-shadow: var(--shadow-sm); }
+      .np-btn.primary:hover { background: var(--navy-deep); border-color: var(--navy-deep); }
       .np-btn.ghost { color: var(--muted); }
-      .np-btn.danger { color: #c0392b; border-color: #e6c4be; }
-      .np-btn.danger:hover { background: #fdf2f0; }
-      .np-dup { border: 1px solid #ecd9a8; background: #fdf8ec; border-radius: var(--radius); padding: 10px 12px; }
-      .np-dup .np-dup-title { font-size: 12.5px; font-weight: 700; color: #8a6d1a; margin-bottom: 7px; }
-      .np-dup-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; border-top: 1px solid #f2e8cd; }
-      .np-dup-row b { color: var(--navy); }
-      .np-dup-row .np-dim { color: var(--muted); font-size: 12px; }
+      .np-btn.danger { color: var(--red); border-color: var(--red-line); }
+      .np-btn.danger:hover { background: var(--red-bg); border-color: var(--red-line); color: var(--red); }
+      .np-dup { border: 1px solid var(--amber-line); background: var(--amber-bg); border-radius: var(--radius); padding: 10px 12px; }
+      .np-dup .np-dup-title { font-size: 12px; font-weight: 600; color: var(--amber); margin-bottom: 7px; }
+      .np-dup-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12.5px; border-top: 1px solid var(--amber-line); }
+      .np-dup-row b { color: var(--ink); font-weight: 600; }
+      .np-dup-row .np-dim { color: var(--muted); font-size: 11.5px; }
       .np-dup-row .np-open { margin-left: auto; }
-      .arch-row { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-      .arch-hint { font-size: 12px; color: var(--muted); }
-      .stag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
-      .stag.done { background: #e7f4ee; color: #1e7b56; }
-      .stag.booked { background: #eaf1fb; color: #1f3a5f; }
+      .arch-row { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .arch-hint { font-size: 11.5px; color: var(--muted); }
+      .stag { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+      .stag.done { background: var(--good-bg); color: var(--good); }
+      .stag.booked { background: var(--navy-soft); color: var(--navy); }
 
-      /* Fields — REAL css, normal weight everywhere */
+      /* Fields */
       .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; }
       .field { display: flex; flex-direction: column; }
       .field label { font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 3px; }
       .field input, .field select, .field textarea {
-        font-family: inherit; font-size: 13px; font-weight: 400; color: var(--ink);
-        background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+        font-family: inherit; font-size: 12.5px; font-weight: 400; color: var(--ink);
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
         padding: 8px 10px; width: 100%;
       }
       .field textarea { resize: vertical; line-height: 1.45; min-height: 56px; }
-      .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #b9c8de; box-shadow: 0 0 0 3px rgba(31,58,95,.08); }
+      .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(35,78,125,.08); }
+      #pf-search {
+        font-family: inherit; font-size: 13px; font-weight: 400; color: var(--ink);
+        padding: 9px 12px; flex: 1; min-width: 0; border: 1px solid var(--line);
+        border-radius: var(--radius); background: var(--surface); outline: none;
+      }
+      #pf-search::placeholder { color: var(--faint); }
+      #pf-search:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(35,78,125,.08); }
       .full { grid-column: 1 / -1; }
       .field.full { grid-column: 1 / -1; }
 
-      .subhead { font-size: 12px; font-weight: 500; color: var(--navy); margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+      .subhead { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 
       /* Item code chips */
       .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-      .chip { font-size: 13px; font-weight: 400; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; display: inline-flex; align-items: center; gap: 6px; }
+      .chip { font-size: 12px; font-weight: 500; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; display: inline-flex; align-items: center; gap: 6px; }
       .chip .x { cursor: pointer; color: var(--muted); }
-      .chip.add { color: var(--accent-ink); border-style: dashed; border-color: #c7d6ea; cursor: pointer; background: transparent; }
+      .chip .x:hover { color: var(--red); }
+      .chip.add { color: var(--navy); border-style: dashed; border-color: #c9d3e0; cursor: pointer; background: transparent; }
+      .chip.add:hover { background: var(--navy-soft); border-color: var(--navy); }
 
       /* Documents */
-      .doc { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; background: #fff; }
-      .doc .dname { font-size: 13px; font-weight: 500; color: var(--ink); }
-      .doc .dmeta { font-size: 12px; font-weight: 400; color: var(--muted); }
-      .doc a { margin-left: auto; font-size: 13px; color: var(--accent-ink); text-decoration: none; }
-      .pill { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 1px 8px; }
+      .doc { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; background: var(--surface); transition: border-color .12s, box-shadow .12s; }
+      .doc:hover { border-color: #c9d3e0; box-shadow: var(--shadow-sm); }
+      .doc .dname { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+      .dmeta { font-size: 11px; font-weight: 400; color: var(--muted); }
+      .doc a { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--navy); text-decoration: none; }
+      .pill { font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 2px 8px; }
       .pill.ok { color: var(--good); background: var(--good-bg); }
-      .pill.no { color: var(--muted); background: #eef1f5; }
+      .pill.no { color: var(--ink-soft); background: var(--bg); border: 1px solid var(--line); }
 
-      .empty { font-size: 13px; font-weight: 400; color: var(--muted); padding: 8px 0; }
-      .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--navy); color: #fff; font-size: 13px; padding: 10px 16px; border-radius: var(--radius); opacity: 0; transition: opacity .2s; pointer-events: none; }
+      .empty { font-size: 12.5px; font-weight: 400; color: var(--muted); padding: 8px 0; }
+      .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--navy); color: #fff; font-size: 12.5px; padding: 10px 16px; border-radius: var(--radius); opacity: 0; transition: opacity .2s; pointer-events: none; box-shadow: var(--shadow-sm); }
       .toast.show { opacity: 1; }
       .status { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 10px; }
+
+      #surgery-banner b { font-weight: 600; }
+
+      /* Script-built inline styles still carry the old ink hex on a few
+         controls; repaint them to the suite navy without touching scripts. */
+      #pf-surgery-switcher [style*="background:#1f3a5f"] { background: var(--navy) !important; }
+      #pf-surgery-switcher [style*="border:1px solid #d8e4f4"] { border-color: var(--line) !important; }
+      #pf-overview input[type="checkbox"] { accent-color: var(--navy) !important; }
+      #pf-overview label { font-size: 12.5px !important; }
+      .note-save { background: var(--navy) !important; }
+
       @media (max-width: 760px) {
         .body { flex-direction: column; }
         nav.side { width: 100%; display: flex; flex-wrap: wrap; }
@@ -218,10 +301,21 @@
     </style>
   </head>
   <body>
+    <svg style="display:none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="i-checksq" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></symbol>
+      <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></symbol>
+    </svg>
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient File</div>
+          <div class="brand-title">Patient file</div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?" style="display:none; margin-right:14px">← All patients</a>
@@ -231,13 +325,13 @@
       <div id="pf-picker" style="display:none">
         <div class="pcard">
           <h2 style="margin-bottom:4px">Open a patient file</h2>
-          <div class="panel-sub" style="margin-bottom:12px">Search by name, phone or Medicare number — or add someone new.</div>
+          <div class="panel-sub" style="margin-bottom:12px">Search by name, phone or Medicare number, or add someone new.</div>
           <div style="display:flex; gap:8px; align-items:stretch">
-            <input id="pf-search" placeholder="Search by name, phone or Medicare…" autocomplete="off" style="font-family:inherit; font-size:14px; font-weight:400; color:var(--ink); padding:10px 12px; flex:1; min-width:0; border:1px solid var(--line); border-radius:var(--radius); background:#fff;">
+            <input id="pf-search" placeholder="Search by name, phone or Medicare…" autocomplete="off">
             <button type="button" id="pf-new-btn" class="np-btn">+ New patient</button>
           </div>
           <div id="pf-newform" style="display:none; margin-top:14px; border:1px solid var(--line); border-radius:var(--radius); padding:14px; background:#fbfcfe">
-            <div style="font-size:14px; font-weight:700; color:#1f3a5f; margin-bottom:10px">New patient</div>
+            <div style="font-size:13px; font-weight:600; color:var(--navy); margin-bottom:10px">New patient</div>
             <div class="grid2">
               <div class="field full"><label>Full name (required)</label><input id="np-full_name" autocomplete="off"></div>
               <div class="field"><label>Date of birth</label><input id="np-dob" type="date"></div>
@@ -250,7 +344,7 @@
             <div style="display:flex; gap:8px; align-items:center; margin-top:12px">
               <button type="button" id="np-save" class="np-btn primary">Create patient</button>
               <button type="button" id="np-cancel" class="np-btn ghost">Cancel</button>
-              <span id="np-status" style="font-size:12.5px; color:#c0392b"></span>
+              <span id="np-status" style="font-size:12.5px; color:var(--red)"></span>
             </div>
           </div>
           <div id="pf-results" style="margin-top:12px"></div>
@@ -280,29 +374,29 @@
 
       <div class="body">
         <nav class="side" id="pf-nav">
-          <div class="navitem active" data-sec="overview"><span class="ic">☑</span> Checklist</div>
-          <div class="navitem" data-sec="contact"><span class="ic">◔</span> Contact</div>
-          <div class="navitem" data-sec="surgery"><span class="ic">▦</span> Surgery</div>
-          <div class="navitem" data-sec="order"><span class="ic">✚</span> Surgeon order</div>
-          <div class="navitem" data-sec="preop"><span class="ic">🩺</span> Pre-op planning</div>
-          <div class="navitem" data-sec="operative"><span class="ic">📋</span> Operative</div>
-          <div class="navitem" data-sec="documents"><span class="ic">▤</span> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
-          <div class="navitem" data-sec="hire"><span class="ic">▣</span> Hire</div>
-          <div class="navitem" data-sec="notes"><span class="ic">✎</span> Notes</div>
+          <div class="navitem active" data-sec="overview"><svg class="ic"><use href="#i-checksq"/></svg> Checklist</div>
+          <div class="navitem" data-sec="contact"><svg class="ic"><use href="#i-user"/></svg> Contact</div>
+          <div class="navitem" data-sec="surgery"><svg class="ic"><use href="#i-calendar"/></svg> Surgery</div>
+          <div class="navitem" data-sec="order"><svg class="ic"><use href="#i-clipboard"/></svg> Surgeon order</div>
+          <div class="navitem" data-sec="preop"><svg class="ic"><use href="#i-clock"/></svg> Pre-op planning</div>
+          <div class="navitem" data-sec="operative"><svg class="ic"><use href="#i-activity"/></svg> Operative</div>
+          <div class="navitem" data-sec="documents"><svg class="ic"><use href="#i-file"/></svg> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
+          <div class="navitem" data-sec="hire"><svg class="ic"><use href="#i-box"/></svg> Hire</div>
+          <div class="navitem" data-sec="notes"><svg class="ic"><use href="#i-edit"/></svg> Notes</div>
         </nav>
 
         <div class="panel">
           <!-- Overview -->
           <div class="section active" id="sec-overview">
             <h2>Checklist</h2>
-            <div class="panel-sub">Tick off each step — saves to the shared checklist (same as the dashboard).</div>
+            <div class="panel-sub">Tick off each step. Saves to the shared checklist (same as the dashboard).</div>
             <div id="pf-overview"></div>
           </div>
 
           <!-- Contact -->
           <div class="section" id="sec-contact">
             <h2>Contact &amp; personal</h2>
-            <div class="panel-sub">Identity and contact details — shared across every app.</div>
+            <div class="panel-sub">Identity and contact details, shared across every app.</div>
             <div class="grid2">
               <div class="field"><label>Full name</label><input id="f-full_name"></div>
               <div class="field"><label>Date of birth</label><input id="f-dob" type="date"></div>
@@ -323,7 +417,7 @@
             </div>
             <div class="arch-row">
               <button type="button" class="np-btn danger" id="pf-archive">Archive this patient</button>
-              <span class="arch-hint">Wrong or duplicate record? Archiving hides it from every app. Nothing is deleted — restore any time from the Dashboard's Archived tab.</span>
+              <span class="arch-hint">Wrong or duplicate record? Archiving hides it from every app. Nothing is deleted; restore any time from the Dashboard's Archived tab.</span>
             </div>
           </div>
 
@@ -365,7 +459,7 @@
           <div class="section" id="sec-order">
             <h2>Surgeon order</h2>
             <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
-            <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" id="o-edit-toggle" style="font-size:13px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius);padding:8px 15px;cursor:pointer">✎ Edit</button><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Copy clinical notes</button> <span class="status" id="o-copy-status"></span></div>
+            <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" id="o-edit-toggle" style="font-size:13px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius);padding:8px 15px;cursor:pointer">✎ Edit</button><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid var(--line);border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Copy clinical notes</button> <span class="status" id="o-copy-status"></span></div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
             <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
@@ -376,14 +470,14 @@
           <!-- Pre-op planning -->
           <div class="section" id="sec-preop">
             <h2>Pre-op planning</h2>
-            <div class="panel-sub">Steve's pre-op plan for this patient — produces the theatre staff sheet and the patient's post-op instructions.</div>
+            <div class="panel-sub">Steve's pre-op plan for this patient. It produces the theatre staff sheet and the patient's post-op instructions.</div>
             <div id="pp-inline"></div>
           </div>
 
           <!-- Operative (surgery audit) -->
           <div class="section" id="sec-operative">
             <h2>Operative</h2>
-            <div class="panel-sub">After surgery — the surgical audit for the ACPS database.</div>
+            <div class="panel-sub">After surgery: the surgical audit for the ACPS database.</div>
             <div id="op-inline"></div>
           </div>
 
@@ -392,8 +486,8 @@
             <h2>Documents</h2>
             <div class="panel-sub">Most recent of each kind. Click a document to preview it below.</div>
             <div id="pf-docs"></div>
-            <label id="pf-dropz" style="display:block;margin-top:12px;border:2px dashed #cdd6e4;border-radius:10px;padding:13px;text-align:center;font-size:12.5px;color:var(--muted);cursor:pointer;background:#fbfcfe">
-              Drop a file here (or click) — clinical notes are read and offered as updates; everything is filed to this patient.
+            <label id="pf-dropz" style="display:block;margin-top:12px;border:2px dashed #cdd6e4;border-radius:8px;padding:13px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;background:#fbfcfe">
+              Drop a file here (or click). Clinical notes are read and offered as updates; everything is filed to this patient.
               <input type="file" id="pf-dropz-input" multiple style="display:none">
             </label>
             <div id="pf-preview" style="display:none; margin-top:16px"></div>
@@ -409,9 +503,9 @@
           <!-- Notes -->
           <div class="section" id="sec-notes">
             <h2>Notes</h2>
-            <div class="panel-sub">Team notes — anyone can post, edit or delete. New notes alert the other staff.</div>
+            <div class="panel-sub">Team notes. Anyone can post, edit or delete. New notes alert the other staff.</div>
             <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
-              <textarea id="pf-note-input" rows="3" placeholder="Write a note for the team…" style="font-family:inherit;font-size:13px;font-weight:400;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;width:100%;resize:vertical"></textarea>
+              <textarea id="pf-note-input" rows="3" placeholder="Write a note for the team…" style="font-family:inherit;font-size:12.5px;font-weight:400;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;width:100%;resize:vertical"></textarea>
               <div><button type="button" id="pf-note-post" class="save-btn" style="font-size:13px">Post note</button></div>
             </div>
             <div id="pf-notes-list"></div>

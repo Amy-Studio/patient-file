@@ -443,6 +443,8 @@
               </div>
               <div class="field"><label>Anaesthetist</label><input id="f-surgery_anaesthetist"></div>
               <div class="field"><label>Duration (min)</label><input id="f-surgery_duration_min" type="number"></div>
+              <div class="field"><label>BMI</label><input id="f-bmi" type="number" step="0.1" min="10" max="80" placeholder="e.g. 31.2"><div id="f-bmi-cat" style="font-size:12px;color:var(--text-secondary);margin-top:4px;min-height:15px"></div></div>
+              <div class="field"><label>Pre-screening completed</label><input id="f-prescreening_date" type="date"><div style="font-size:12px;color:var(--text-secondary);margin-top:4px">Date the screening form was filled in.</div></div>
               <div class="field"><label>List position</label><input id="f-list_position" type="number"></div>
               <div class="field"><label>Status</label>
                 <select id="f-surgery_status"><option value="">—</option><option>booked</option><option>confirmed</option><option>cancelled</option></select>
@@ -529,6 +531,23 @@
         function sb() { return (window.ClinicAuth && ClinicAuth.getClient) ? ClinicAuth.getClient() : null; }
         function qs(id) { return document.getElementById(id); }
         function val(id) { var e = qs(id); return e ? e.value : ""; }
+        // Formal WHO BMI classification. Same thresholds as the surgical list
+        // printer, computed here by rule so the two can never disagree.
+        function whoBmiCategory(v) {
+          var n = parseFloat(String(v == null ? "" : v).replace(/[^\d.]/g, ""));
+          if (!isFinite(n) || n <= 0) return "";
+          if (n < 18.5) return "Underweight";
+          if (n < 25) return "Healthy";
+          if (n < 30) return "Overweight";
+          if (n < 35) return "Obese class I";
+          if (n < 40) return "Obese class II";
+          return "Obese class III";
+        }
+        function renderBmiCategory() {
+          var e = qs("f-bmi-cat"); if (!e) return;
+          var raw = val("f-bmi"), cat = whoBmiCategory(raw);
+          e.textContent = raw && !cat ? "Not a usable BMI" : cat;
+        }
         function setVal(id, v) { var e = qs(id); if (e) e.value = (v == null ? "" : v); }
         function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
         function toast(msg) { var t = qs("pf-toast"); t.textContent = msg; t.classList.add("show"); setTimeout(function () { t.classList.remove("show"); }, 2200); }
@@ -594,6 +613,16 @@
             setVal("f-surgery_time", p.surgery_time ? String(p.surgery_time).slice(0, 5) : "");
             setVal("f-surgery_venue", (p.surgery_venue || "").toLowerCase());
             ["surgery_anaesthetist", "surgery_duration_min", "list_position", "surgery_status", "surgery_procedure"].forEach(function (k) { setVal("f-" + k, p[k]); });
+            // BMI + screening date only exist once the surgical-list v2 migration
+            // has run. select("*") omits the keys entirely until then, so hide the
+            // boxes rather than let anyone type into a field that cannot save.
+            var hasBmiCols = ("bmi" in p) || ("prescreening_date" in p);
+            ["f-bmi", "f-prescreening_date"].forEach(function (id) {
+              var f = qs(id) && qs(id).closest(".field"); if (f) f.style.display = hasBmiCols ? "" : "none";
+            });
+            setVal("f-bmi", p.bmi == null ? "" : p.bmi);
+            setVal("f-prescreening_date", p.prescreening_date ? String(p.prescreening_date).slice(0, 10) : "");
+            renderBmiCategory();
             setVal("f-paid_in_full", p.paid_in_full === true ? "full" : "");
             return;
           }
@@ -1180,6 +1209,11 @@
           patch.surgery_venue = _sv || (_stored && !(_stored in VENUE) ? state.patient.surgery_venue : null);
           var dur = parseInt(val("f-surgery_duration_min"), 10); patch.surgery_duration_min = isNaN(dur) ? null : dur;
           var lp = parseInt(val("f-list_position"), 10); patch.list_position = isNaN(lp) ? null : lp;
+          if (state.patient && ("bmi" in state.patient)) {
+            var bmiN = parseFloat(val("f-bmi"));
+            patch.bmi = (isFinite(bmiN) && bmiN > 0) ? bmiN : null;
+          }
+          if (state.patient && ("prescreening_date" in state.patient)) patch.prescreening_date = val("f-prescreening_date") || null;
           patch.paid_in_full = (val("f-paid_in_full") === "full");
           return patch;
         }
@@ -1240,6 +1274,7 @@
           if (e.target.closest(".pcard")) pfDirty = true;   // an edit inside the open patient's card
         }
         document.addEventListener("input", pfMarkDirty, true);
+        document.addEventListener("input", function (e) { if (e.target && e.target.id === "f-bmi") renderBmiCategory(); }, true);
         document.addEventListener("change", pfMarkDirty, true);
         window.__shellUnsaved = function () { return pfDirty; };
         function save() {
@@ -1315,7 +1350,7 @@
 
         // ---- load ----
         function loadStub() {
-          state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
+          state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, bmi: 31.2, prescreening_date: "2026-06-01", surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
           state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], side: "bilateral", admission_type: "day_procedure", anaesthesia_type: "GA", est_duration_min: 150, venue_type: "hospital", allergies: "NKA", allergies_nka: true, theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", glp1_sglt2: "none", antibiotics_postop: "Yes, for 5 days", ab_cover: "yes_5d", at_cover: "yes_15d", prosthesis_details: "No", theatre_equipment: "Yes - Power, Podiatry Tray", weight_bearing: "Non-weight bearing for 2 weeks", full_wb_at_weeks: 2, footwear: "Post-operative dressing, ankle brace", footwear_weeks: 6, sport_weeks: 6, swimming_weeks_off: 2, flying_weeks_off: 12, social_event_weeks: 4, shower_wet_at_days: 14, travel_notes: "Can fly after 12 weeks", work_desk_weeks: 2, work_active_weeks: 6, mobility_aid: "multiple", crutches_required: true, knee_scooter_weeks: 3, quote_items: ["F414ab — Ankle Brace"], supplements: ["Vitamin C 1000 mg daily"] };
           state.orderId = "o1";
           state.orders = [state.order, { id: "o0", session_date: "2025-11-18", procedure_name: "Left hallux valgus correction (earlier surgery)", procedure_codes: [{ code: "F782", qty: 1, description: "Primary metatarsal osteotomy" }], side: "left", admission_type: "day_procedure", weight_bearing: "Heel weight-bearing 2 weeks", sport_weeks: 8 }];

@@ -14,8 +14,15 @@
     <script>
       (function () {
         var v = Date.now();
-        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-pdf.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js"].forEach(function (f) {
-          document.write('<script src="https://amy-studio.github.io/clinic-style/' + f + '?fresh=' + v + '"><\/script>');
+        // Local QA only: on localhost with ?local=1 the helpers come from the
+        // sibling clinic-style checkout instead of the live site, so unreleased
+        // modules can be eyeballed. Needs BOTH the flag AND localhost, so it is
+        // inert in production (same gate as ?preview=1 below).
+        var isLocal = ["localhost", "127.0.0.1"].indexOf(location.hostname) !== -1;
+        var base = (isLocal && new URLSearchParams(location.search).get("local") === "1")
+          ? "../clinic-style/" : "https://amy-studio.github.io/clinic-style/";
+        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-pdf.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js"].forEach(function (f) {
+          document.write('<script src="' + base + f + '?fresh=' + v + '"><\/script>');
         });
       })();
     </script>
@@ -166,10 +173,38 @@
       .navitem .badge { margin-left: auto; font-size: 10.5px; font-weight: 600; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 1px 7px; min-width: 20px; text-align: center; }
       .navitem:hover { background: var(--hover); color: var(--ink); }
       .navitem:hover .ic { color: var(--ink-soft); }
+      /* Greying is EARNED, never assumed: .dim is only ever applied to a tab
+         whose question somebody has positively answered "not needed". A tab
+         nobody has filled in gets .todo instead, which stays full strength and
+         adds an amber marker, so unanswered work looks louder, not quieter. */
+      .navitem.dim { color: var(--faint); }
+      .navitem.dim .ic { color: var(--faint); }
+      .navitem.dim:hover { color: var(--ink); }
+      .navitem.dim:hover .ic { color: var(--ink-soft); }
+      .navitem.dim.active { color: #fff; }
+      .navitem.dim.active .ic { color: rgba(255,255,255,.85); }
+      .navitem .mark { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; flex: none; }
+      .navitem .mark.todo { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-bg); }
+      .navitem.active .mark.todo { box-shadow: 0 0 0 3px rgba(255,255,255,.22); }
+      .navitem .mark.na { background: var(--faint); }
       .navitem.active { background: var(--navy); color: #fff; font-weight: 600; }
       .navitem.active .ic { color: rgba(255,255,255,.85); }
       .navitem.active .badge { background: rgba(255,255,255,.18); color: #fff; }
 
+      /* Hire panel state cards. Three looks, never two: an unanswered question
+         is amber and full strength, an answered "no" is quiet grey. */
+      .hire-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
+      .hire-card .ht { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+      .hire-card .hd { font-size: 12.5px; line-height: 1.5; }
+      .hire-card.todo { background: var(--amber-bg); border-color: var(--amber-line); }
+      .hire-card.todo .ht { color: var(--amber); }
+      .hire-card.todo .hd { color: var(--ink-soft); }
+      .hire-card.na { background: var(--hover); border-color: var(--line); }
+      .hire-card.na .ht { color: var(--muted); }
+      .hire-card.na .hd { color: var(--muted); }
+      .hire-card.warn { background: var(--amber-bg); border-color: var(--amber-line); }
+      .hire-card.warn .hd { color: var(--amber); }
+      .hire-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
       .panel { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px 20px; box-shadow: var(--shadow-sm); }
       .panel h2 { font-size: 14px; margin-bottom: 2px; }
       .section { display: none; }
@@ -381,7 +416,7 @@
           <div class="navitem" data-sec="preop"><svg class="ic"><use href="#i-clock"/></svg> Pre-op planning</div>
           <div class="navitem" data-sec="operative"><svg class="ic"><use href="#i-activity"/></svg> Operative</div>
           <div class="navitem" data-sec="documents"><svg class="ic"><use href="#i-file"/></svg> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
-          <div class="navitem" data-sec="hire"><svg class="ic"><use href="#i-box"/></svg> Hire</div>
+          <div class="navitem" data-sec="hire" id="pf-nav-hire"><svg class="ic"><use href="#i-box"/></svg> Hire<span class="mark" id="pf-hire-mark" style="display:none"></span></div>
           <div class="navitem" data-sec="notes"><svg class="ic"><use href="#i-edit"/></svg> Notes</div>
         </nav>
 
@@ -498,7 +533,7 @@
           <!-- Hire -->
           <div class="section" id="sec-hire">
             <h2>Hire &amp; equipment</h2>
-            <div class="panel-sub">Equipment hired to this patient.</div>
+            <div class="panel-sub" id="pf-hire-sub">Equipment hired to this patient.</div>
             <div id="pf-hire"></div>
           </div>
 
@@ -777,6 +812,10 @@
           Array.prototype.forEach.call(qs("o-fields").querySelectorAll("[data-wk]"), function (row) {
             row.addEventListener("click", function (e) {
               var c = e.target.closest(".wkc"); if (!c) return;
+              // Remember that a human actually answered this row. Used below so
+              // clearing crutches records a real "no" while never touching the
+              // row leaves the stored answer alone.
+              row.setAttribute("data-touched", "1");
               Array.prototype.forEach.call(row.querySelectorAll(".wkc"), function (x) { x.classList.remove("on"); });
               if (!c.classList.contains("wkc-clear")) c.classList.add("on");
             });
@@ -967,16 +1006,49 @@
           }
         }
         // One source: clinic-checklist.js CHECKLIST_ITEMS (loaded above), plus
-        // this app's own extra first step for the surgeon order.
-        var CHECK_ITEMS = [{ k: "surgeon_order_done", label: "Surgeon order complete" }]
-          .concat(((window.ClinicChecklist && window.ClinicChecklist.ITEMS) || []).map(function (c) { return { k: c.key, label: c.label }; }));
+        // this app's own extra first step for the surgeon order. venue comes
+        // through with each step so this list can match the dashboard.
+        var CHECK_ITEMS = [{ k: "surgeon_order_done", label: "Surgeon order complete", venue: "all" }]
+          .concat(((window.ClinicChecklist && window.ClinicChecklist.ITEMS) || []).map(function (c) { return { k: c.key, label: c.label, venue: c.venue }; }));
+        // Which steps to show for THIS patient. All the rules live in
+        // clinic-checklist.js so this page, the dashboard and the checklist
+        // board can never disagree:
+        //   - hospital-only steps (fee estimate, pre-screen form, surgical
+        //     list) drop off a CLINIC patient
+        //   - venue not set yet keeps every step, because hiding a step
+        //     someone still has to do is worse than showing a spare one
+        //   - a step that no longer applies but is already ticked stays on
+        //     screen with a note, so nothing vanishes from the record
+        // Nothing is removed from the saved checklist: this is display only,
+        // and it reverses the moment the venue changes back.
+        function checkItemsFor(patient) {
+          var C = window.ClinicChecklist;
+          return CHECK_ITEMS.map(function (it) {
+            var sh = (C && C.shownFor)
+              ? C.shownFor({ key: it.k, venue: it.venue }, patient)
+              : { applies: true, show: true, note: "" };
+            return { k: it.k, label: it.label, applies: sh.applies, show: sh.show, note: sh.note };
+          }).filter(function (it) { return it.show; });
+        }
         function renderOverview() {
           var el = qs("pf-overview"); if (!el) return;
           var cl = (state.patient && state.patient.checklist) || {};
-          el.innerHTML = CHECK_ITEMS.map(function (it) {
+          var hs = hireState();
+          el.innerHTML = checkItemsFor(state.patient).map(function (it) {
             var v = cl[it.k]; var done = !!v;
             var when = (done && typeof v === "string" && /\d{4}-\d{2}-\d{2}/.test(v)) ? isoToDmy(v) : "";
-            return '<label style="display:flex;align-items:center;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px;color:var(--ink)"><input type="checkbox" data-ck="' + it.k + '" ' + (done ? "checked" : "") + ' style="width:18px;height:18px;accent-color:#1f3a5f;cursor:pointer;flex-shrink:0"><span style="flex:1">' + esc(it.label) + '</span>' + (when ? '<span class="dmeta">' + esc(when) + '</span>' : '') + '</label>';
+            // "Hires booked" answers to the same three states as the Hire tab.
+            // A recorded "no hire needed" dims it; nobody having decided leaves
+            // it live with an amber prompt, because that is still an open job.
+            var todo = "";
+            if (it.k === "hires_booked") {
+              if (hs.state === "not_needed") { it.applies = false; it.note = "No hire needed for this patient."; }
+              else if (hs.state === "undecided") { todo = '<div style="margin-top:3px;font-size:11px;line-height:1.4;color:var(--amber);font-weight:500">Hire needs not decided yet. Open the Hire tab to record it.</div>'; }
+            }
+            // Still ticked but no longer applies: keep it, dim it, say why.
+            // The box stays live so the tick can be undone by hand.
+            var note = (it.applies ? '' : '<div class="dmeta" style="margin-top:3px;font-size:11px;line-height:1.4">' + esc(it.note) + '</div>') + todo;
+            return '<label style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px;color:var(--ink)' + (it.applies ? '' : ';opacity:.62') + '"><input type="checkbox" data-ck="' + it.k + '" ' + (done ? "checked" : "") + ' style="width:18px;height:18px;accent-color:#1f3a5f;cursor:pointer;flex-shrink:0"><span style="flex:1">' + esc(it.label) + note + '</span>' + (when ? '<span class="dmeta">' + esc(when) + '</span>' : '') + '</label>';
           }).join("");
           Array.prototype.forEach.call(el.querySelectorAll("[data-ck]"), function (c) {
             c.addEventListener("change", function () { toggleCheck(c.getAttribute("data-ck"), c.checked); });
@@ -1079,33 +1151,158 @@
             el.addEventListener("click", function () { previewDoc(state.docsView[parseInt(el.getAttribute("data-doc-i"), 10)]); });
           });
         }
-        function renderHire() {
-          var hires = state.hires || [];
+        // ---- Hire & equipment -----------------------------------------------
+        // Three states, never two (see clinic-hire-state.js): "needed",
+        // "not_needed" (somebody recorded that decision) and "undecided"
+        // (nobody has answered yet). Only a recorded decision earns the quiet
+        // grey look. An unanswered question stays full strength and amber, so
+        // outstanding work is never hidden behind a tidy-looking panel.
+        var HIRE_STATUS_LABEL = { clinic_done: "Hire arranged through the clinic", clinic_pending: "Clinic hire pending", clinic_not_needed: "No hire needed", external: "Patient hiring elsewhere" };
+        function hireState() {
           var p = state.patient || {};
-          // Friendly labels for the surgery hire-checklist flag (patients.hire_status),
-          // shown only when there are no actual hire rows to display.
-          var HIRE_STATUS_LABEL = { clinic_done: "Hire arranged", clinic_pending: "Hire pending", clinic_not_needed: "No hire needed", external: "Hiring externally" };
-          if (!hires.length) {
-            qs("pf-hire").innerHTML = p.hire_status
-              ? '<div class="doc"><span class="dname">Hire status</span><span class="dmeta" style="margin-left:auto">' + esc(HIRE_STATUS_LABEL[p.hire_status] || p.hire_status) + '</span></div>'
-              : '<div class="empty">No equipment hired.</div>';
-            return;
+          if (window.ClinicHireState && window.ClinicHireState.for) {
+            return window.ClinicHireState.for(p, state.order || null, state.hires || null);
           }
-          // Sync 5 (GAP I): show the live hire state including OVERDUE, derived
-          // from the hires table this file already loads.
+          // Module not loaded: fall back to the honest answer rather than
+          // guessing. Never grey anything out on a guess.
+          var rows = state.hires || [];
+          return { state: rows.length ? "needed" : "undecided", aids: [], other: [], items: [], hires: rows, parts: [], hireStatus: p.hire_status || null, source: null, decidedBy: null, decidedAt: null, conflict: null };
+        }
+        // Does an already-hired row cover this ordered aid?
+        var HIRE_MATCH = { "Crutches": /crutch/i, "Knee Scooter": /scooter/i, "Wheelchair": /wheel ?chair/i };
+        function hireRowName(h) { return (h.hire_items && h.hire_items.name) || h.item_name || ("Item " + (h.hire_item_id || "")); }
+        function hireRowFor(aid, rows) {
+          var re = HIRE_MATCH[aid.type];
+          if (!re) { var w = String(aid.name || "").split(/\s+/)[0]; if (w.length < 3) return null; re = new RegExp(w.replace(/[^a-z]/gi, ""), "i"); }
+          for (var i = 0; i < rows.length; i++) { if (re.test(hireRowName(rows[i]))) return rows[i]; }
+          return null;
+        }
+        function renderHire() {
+          var el = qs("pf-hire"); if (!el) return;
+          var hs = hireState();
+          var rows = hs.hires || [];
+          var p = state.patient || {};
+          var sub = qs("pf-hire-sub");
           // Local (Melbourne) date, NOT toISOString (UTC = yesterday until ~10am AEST).
           var _n = new Date();
           var todayIso = _n.getFullYear() + "-" + String(_n.getMonth() + 1).padStart(2, "0") + "-" + String(_n.getDate()).padStart(2, "0");
-          qs("pf-hire").innerHTML = hires.map(function (h) {
-            var item = (h.hire_items && h.hire_items.name) || h.item_name || ("Item " + (h.hire_item_id || ""));
-            var dates = []; if (h.start_date) dates.push("out " + isoToDmy(h.start_date)); if (h.due_date) dates.push("due " + isoToDmy(h.due_date)); if (h.return_date) dates.push("returned " + isoToDmy(h.return_date));
-            if (h.amount_paid != null) dates.push("$" + h.amount_paid + " paid");
-            var returned = !!h.return_date || h.status === "returned";
-            var overdue = !returned && h.due_date && h.due_date < todayIso;
-            var st = returned ? "returned" : (overdue ? "overdue" : (h.status || "out"));
-            var cls = returned ? "ok" : "no";
-            return '<div class="doc"><div style="flex:1;min-width:0"><div class="dname">' + esc(item) + '</div><div class="dmeta">' + esc(dates.join(" · ")) + '</div></div><span class="pill ' + cls + '">' + esc(st) + '</span></div>';
-          }).join("");
+          var html = "";
+
+          if (hs.state === "undecided") {
+            if (sub) sub.textContent = "Nobody has recorded whether this patient needs equipment hired.";
+            html += '<div class="hire-card todo"><div class="ht">Hire needs not decided yet</div><div class="hd">'
+              + (hs.hasOrder
+                  ? 'The surgeon order does not say whether crutches, a knee scooter or a wheelchair are needed, and nothing has been hired.'
+                  : 'There is no surgeon order for this patient yet, and nothing has been hired.')
+              + ' Record the answer so it stops looking like an open job.</div></div>';
+          } else if (hs.state === "not_needed") {
+            if (sub) sub.textContent = "Recorded as not needing a hire.";
+            var who = [];
+            if (hs.decidedBy) who.push("by " + hs.decidedBy);
+            if (hs.decidedAt) who.push("on " + isoToDmy(hs.decidedAt));
+            var howLabel = hs.source === "order_chip" || hs.source === "order_crutches" ? "From the surgeon order" : "Marked";
+            html += '<div class="hire-card na"><div class="ht">No hire needed for this patient</div><div class="hd">'
+              + esc(howLabel + (who.length ? " " + who.join(" ") : "") + ".")
+              + '</div></div>';
+          } else {
+            if (sub) sub.textContent = "What this patient needs, and what has actually been hired.";
+          }
+
+          if (hs.conflict) {
+            html += '<div class="hire-card warn"><div class="hd">' + esc(hs.conflict) + '</div></div>';
+          }
+
+          // What the surgeon order asks for, reconciled against real hire rows.
+          if (hs.items.length) {
+            html += '<div class="subhead">Needed</div>';
+            html += hs.items.map(function (aid) {
+              var row = hireRowFor(aid, rows);
+              var meta = aid.weeks ? (aid.weeks + (aid.weeks === 1 ? " week" : " weeks")) : "duration not stated";
+              var cls = row ? "ok" : "no";
+              var st = row ? "hired" : "not booked";
+              return '<div class="doc"><div style="flex:1;min-width:0"><div class="dname">' + esc(aid.name) + '</div><div class="dmeta">' + esc(meta) + '</div></div><span class="pill ' + cls + '">' + st + '</span></div>';
+            }).join("");
+          }
+
+          // Actual equipment out (or returned), including OVERDUE.
+          if (rows.length) {
+            html += '<div class="subhead">Equipment</div>';
+            html += rows.map(function (h) {
+              var item = hireRowName(h);
+              var dates = []; if (h.start_date) dates.push("out " + isoToDmy(h.start_date)); if (h.due_date) dates.push("due " + isoToDmy(h.due_date)); if (h.return_date) dates.push("returned " + isoToDmy(h.return_date));
+              if (h.amount_paid != null) dates.push("$" + h.amount_paid + " paid");
+              var returned = !!h.return_date || h.status === "returned";
+              var overdue = !returned && h.due_date && h.due_date < todayIso;
+              var st = returned ? "returned" : (overdue ? "overdue" : (h.status || "out"));
+              var cls = returned ? "ok" : "no";
+              return '<div class="doc"><div style="flex:1;min-width:0"><div class="dname">' + esc(item) + '</div><div class="dmeta">' + esc(dates.join(" · ")) + '</div></div><span class="pill ' + cls + '">' + esc(st) + '</span></div>';
+            }).join("");
+          } else if (hs.state === "needed" && !hs.items.length) {
+            html += '<div class="doc"><span class="dname">Hire status</span><span class="dmeta" style="margin-left:auto">' + esc(HIRE_STATUS_LABEL[hs.hireStatus] || hs.hireStatus || "Recorded as needed") + '</span></div>';
+          }
+
+          // The decision has to be recordable from HERE. If the only way out of
+          // amber were a dashboard click, staff working in the file would see
+          // amber forever and learn to ignore it.
+          var acts = [];
+          if (hs.state !== "not_needed") acts.push('<button type="button" class="np-btn" data-hire-set="no">No hire needed</button>');
+          if (hs.state !== "needed") acts.push('<button type="button" class="np-btn" data-hire-set="yes">' + (hs.state === "not_needed" ? "This patient does need a hire" : "Hire is needed") + '</button>');
+          html += '<div class="hire-acts">' + acts.join("") + '</div>';
+
+          el.innerHTML = html;
+          Array.prototype.forEach.call(el.querySelectorAll("[data-hire-set]"), function (b) {
+            b.addEventListener("click", function () { setHireDecision(b.getAttribute("data-hire-set")); });
+          });
+          renderHireNav(hs);
+        }
+        // Nav marker: grey + a faint dot only when the decision is recorded,
+        // amber dot when nobody has answered, nothing at all when it is live work.
+        function renderHireNav(hs) {
+          var nav = qs("pf-nav-hire"), mark = qs("pf-hire-mark");
+          if (!nav || !mark) return;
+          hs = hs || hireState();
+          nav.classList.toggle("dim", hs.state === "not_needed");
+          if (hs.state === "undecided") { mark.style.display = ""; mark.className = "mark todo"; nav.title = "Hire needs not decided yet"; }
+          else if (hs.state === "not_needed") { mark.style.display = ""; mark.className = "mark na"; nav.title = "No hire needed for this patient"; }
+          else { mark.style.display = "none"; mark.className = "mark"; nav.title = "Hire needed"; }
+        }
+        // Record the hire decision from the patient file. Writes the canonical
+        // patients.hire_status AND mirrors it into the checklist keys the board
+        // and the dashboard read, so the three surfaces cannot disagree.
+        function setHireDecision(kind) {
+          var p = state.patient; if (!p) return;
+          var no = kind === "no";
+          var stamp = new Date().toISOString();
+          var who = (window.__pfUser && window.__pfUser.email) || "";
+          p.hire_status = no ? "clinic_not_needed" : "clinic_pending";
+          var cl = p.checklist = p.checklist || {};
+          if (no) { cl.hires_na = stamp; if (who) cl.hires_na_by = who; delete cl.hires_booked; }
+          else { delete cl.hires_na; delete cl.hires_na_by; }
+          renderHire(); renderOverview();
+          if (window.__pfPreview) { toast("Preview mode, not saved"); return; }
+          var client = sb(); if (!client) { toast("Not signed in, so the hire decision was not saved"); return; }
+          status("Saving…");
+          var chain = Promise.resolve();
+          if (window.ClinicChecklist && window.ClinicChecklist.setKey) {
+            chain = chain
+              .then(function () { return ClinicChecklist.setKey(p.id, "hires_na", no ? stamp : null); })
+              .then(function () { return ClinicChecklist.setKey(p.id, "hires_na_by", no && who ? who : null); })
+              .then(function () { return no ? ClinicChecklist.setKey(p.id, "hires_booked", null) : null; })
+              .then(function (merged) { if (merged) p.checklist = merged; });
+          }
+          chain.then(function () {
+            return (window.ClinicPatients && ClinicPatients.update)
+              ? ClinicPatients.update(p.id, { hire_status: p.hire_status })
+              : client.from("patients").update({ hire_status: p.hire_status }).eq("id", p.id);
+          }).then(function (r) {
+            if (r && r.error) throw r.error;
+            status("Hire decision saved"); setTimeout(function () { status(""); }, 1500);
+            renderHire(); renderOverview();
+          }).catch(function (e) {
+            console.error("[PF] hire decision", e);
+            toast("Could not save the hire decision. Reload and try again.");
+            status("");
+          });
         }
         function renderHistory() {
           var p = state.patient || {};
@@ -1245,7 +1442,15 @@
             else patch[f.k] = e.value || null;
           }); });
           // ---- legacy compatibility (other apps read these) ----
-          patch.crutches_required = !!patch.crutches_weeks;
+          // crutches_required is a THREE-value column: true = yes, false = the
+          // question was asked and answered no, null = nobody has been asked.
+          // This used to write !!weeks on every save, which turned every null
+          // into a fake "no" and wiped a true set by the notes extractor when
+          // no duration was stated. Only answer it when somebody answered it.
+          var _crutchRow = qs("o-fields").querySelector('[data-wk="crutches_weeks"]');
+          if (patch.crutches_weeks) patch.crutches_required = true;
+          else if (_crutchRow && _crutchRow.getAttribute("data-touched")) patch.crutches_required = false;
+          // else: leave the stored value alone.
           if (patch.ab_cover) patch.antibiotics_postop = optLabel(AB_OPTS, patch.ab_cover);
           var mobBits = [];
           MOB_AIDS.forEach(function (m) {
@@ -1363,7 +1568,21 @@
           ];
           state.hires = [{ hire_item_id: 1, hire_items: { name: "Knee scooter" }, start_date: "2026-07-02", due_date: "2026-08-13", amount_paid: 80, status: "out" }];
           state.notes = [{ id: "n1", body: "Patient called — prefers a morning slot. Confirmed mobile number.", created_by: "amy@clinic", created_at: "2026-06-27T23:10:00Z" }, { id: "n2", body: "IFC posted out 24 Jun.", created_by: "steph@clinic", created_at: "2026-06-24T01:00:00Z" }];
+          applyHireScenario();
           qs("pf-save").disabled = false; renderAll();
+        }
+        // Preview-only: ?hire=needed|no|undecided|noorder lets each hire state be
+        // eyeballed without touching real data. Ignored outside preview mode.
+        function applyHireScenario() {
+          var which = new URLSearchParams(location.search).get("hire");
+          if (!which) return;
+          var p = state.patient, o = state.order;
+          if (which === "needed") { state.hires = []; p.hire_status = null; o.crutches_required = true; o.crutches_weeks = 2; o.knee_scooter_weeks = 3; }
+          else if (which === "hired") { /* stub default: scooter already out */ }
+          else if (which === "no") { state.hires = []; p.hire_status = "clinic_not_needed"; p.checklist = { hires_na: "2026-07-12T03:00:00Z", hires_na_by: "amy@clinic" }; o.crutches_required = null; o.crutches_weeks = null; o.knee_scooter_weeks = null; o.mobility_aid = null; }
+          else if (which === "undecided") { state.hires = []; p.hire_status = null; p.checklist = {}; o.crutches_required = null; o.crutches_weeks = null; o.knee_scooter_weeks = null; o.mobility_aid = null; o.mobility_aids_quote = null; }
+          else if (which === "noorder") { state.hires = []; p.hire_status = null; p.checklist = {}; state.order = null; state.orders = []; state.orderId = null; }
+          else if (which === "conflict") { p.hire_status = "clinic_not_needed"; p.checklist = { hires_na: "2026-07-12T03:00:00Z", hires_na_by: "amy@clinic" }; }
         }
         function showPicker() {
           // Hide the patient-DETAIL card (the one holding #pf-name) + switcher +

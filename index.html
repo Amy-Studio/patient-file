@@ -1604,20 +1604,20 @@
             var q = inp.value.trim();
             if (window.__pfPreview) { renderResults([{ id: "preview", full_name: "Josh Service", dob: "1990-02-08", surgery_date: "2026-07-02" }, { id: "p2", full_name: "Chloe Grant", dob: "1995-01-01", surgery_date: "2026-07-30", surgery_venue: "vsc" }].filter(function (r) { return !q || r.full_name.toLowerCase().indexOf(q.toLowerCase()) >= 0; })); return; }
             var client = sb(); if (!client) { qs("pf-results").innerHTML = '<div class="empty">Not signed in.</div>'; return; }
-            var query = client.from("patients").select("id,full_name,dob,surgery_date,surgery_venue").is("archived_at", null).order("surgery_date", { ascending: true, nullsFirst: false }).limit(25);
+            var query = client.from("patients").select("id,full_name,dob,surgery_date,surgery_venue", { count: "exact" }).is("archived_at", null).order("created_at", { ascending: false, nullsFirst: false }).limit(25);
             if (q) {
               var safe = q.replace(/[(),]/g, " ").trim();
               var digits = safe.replace(/\D/g, "");
               if (digits.length >= 5) query = query.or("phone.ilike.%" + digits + "%,medicare_number.ilike.%" + digits + "%,full_name.ilike.%" + safe + "%");
               else query = query.ilike("full_name", "%" + safe + "%");
             }
-            query.then(function (r) { if (r && r.error) { qs("pf-results").innerHTML = '<div class="empty">⚠ Couldn\'t load patients: ' + esc(r.error.message || "error") + '. Reload the page, or log out and back in from the Dashboard.</div>'; console.error("[PF] picker error", r.error); return; } renderResults((r && r.data) || []); }).catch(function (e) { qs("pf-results").innerHTML = '<div class="empty">⚠ Search failed: ' + esc((e && e.message) || "error") + '</div>'; console.error("[PF] picker catch", e); });
+            query.then(function (r) { if (r && r.error) { qs("pf-results").innerHTML = '<div class="empty">⚠ Couldn\'t load patients: ' + esc(r.error.message || "error") + '. Reload the page, or log out and back in from the Dashboard.</div>'; console.error("[PF] picker error", r.error); return; } renderResults((r && r.data) || [], (r && typeof r.count === "number") ? r.count : null); }).catch(function (e) { qs("pf-results").innerHTML = '<div class="empty">⚠ Search failed: ' + esc((e && e.message) || "error") + '</div>'; console.error("[PF] picker catch", e); });
           }
           inp.oninput = function () { clearTimeout(timer); timer = setTimeout(run, 200); };
           run();
           try { inp.focus(); } catch (_) {}
         }
-        function renderResults(rows) {
+        function renderResults(rows, total) {
           if (!rows.length) {
             var q = (qs("pf-search").value || "").trim();
             var nameLike = q && !/^[\d\s()+-]+$/.test(q);
@@ -1627,7 +1627,15 @@
             if (cb) cb.addEventListener("click", function () { openNewForm(nameLike ? q : ""); });
             return;
           }
-          qs("pf-results").innerHTML = '<div class="pick-head"><span>Patient</span><span>DOB</span><span>Surgery</span><span>Venue</span></div>'
+          var _q = (qs("pf-search").value || "").trim();
+          var moreNote = (typeof total === "number" && total > rows.length)
+            ? '<div class="empty" style="margin:0 0 8px;font-size:12px">'
+              + (_q
+                  ? 'Showing ' + rows.length + ' of ' + total + ' matches. Narrow the search to see more.'
+                  : 'Showing the ' + rows.length + ' most recently added of ' + total + ' patients. Search by name, phone or Medicare to open anyone else.')
+              + '</div>'
+            : "";
+          qs("pf-results").innerHTML = moreNote + '<div class="pick-head"><span>Patient</span><span>DOB</span><span>Surgery</span><span>Venue</span></div>'
             + rows.map(function (p) {
               var venue = (typeof VENUE !== "undefined" && VENUE[(p.surgery_venue || "").toLowerCase()]) || (p.surgery_venue ? String(p.surgery_venue).toUpperCase() : "");
               var surg = p.surgery_date ? esc(isoToDmy(p.surgery_date)) + " " + surgTagHtml(p.surgery_date) : "—";

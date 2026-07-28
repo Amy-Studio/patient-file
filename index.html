@@ -1143,13 +1143,40 @@
               var d = docs[i];
               var name = d.label || (d.doc_type || "Document").replace(/_/g, " ");
               var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmy(d.generated_at || d.created_at)); if (d.created_by) meta.push("by " + d.created_by); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
-              return '<div class="doc" style="cursor:pointer" data-doc-i="' + i + '"><div style="flex:1;min-width:0"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink)">Preview</span></div>';
+              return '<div class="doc" data-doc-i="' + i + '"><div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
             }).join("");
             return '<div class="subhead">' + c + '</div>' + rows;
           }).join("");
-          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-i]"), function (el) {
-            el.addEventListener("click", function () { previewDoc(state.docsView[parseInt(el.getAttribute("data-doc-i"), 10)]); });
+          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-open]"), function (el) {
+            el.addEventListener("click", function () { previewDoc(state.docsView[parseInt(el.getAttribute("data-doc-open"), 10)]); });
           });
+          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-del]"), function (el) {
+            el.addEventListener("click", function (ev) { ev.stopPropagation(); removeDoc(parseInt(el.getAttribute("data-doc-del"), 10)); });
+          });
+        }
+        // Take a document off the patient's file. ARCHIVED, never destroyed:
+        // the row keeps its archived_at stamp and renderDocs already hides
+        // anything carrying one, so a wrong document can be removed and a
+        // mistake can still be undone from the database. The stored PDF is
+        // left alone deliberately, so nothing a patient was already sent
+        // disappears from the record.
+        function removeDoc(i) {
+          var d = (state.docsView || [])[i];
+          if (!d || !d.id) return;
+          var name = d.label || (d.doc_type || "Document").replace(/_/g, " ");
+          if (!confirm('Remove "' + name + '" from this patient\'s file?\n\nIt is archived rather than deleted, so it stops showing here but nothing is destroyed.')) return;
+          if (window.__pfPreview) { toast("Preview - not saved"); return; }
+          var client = sb(); if (!client) { toast("Not signed in."); return; }
+          status("Removing…");
+          client.from("patient_documents").update({ archived_at: new Date().toISOString() }).eq("id", d.id)
+            .then(function (r) {
+              if (r && r.error) { console.error("[PF] remove document", r.error); status(""); toast("Could not remove it: " + (r.error.message || "try again")); return; }
+              d.archived_at = new Date().toISOString();
+              state.docs = (state.docs || []).filter(function (x) { return x.id !== d.id; });
+              status(""); toast("Removed from the file");
+              renderDocs(); renderOverview();
+            })
+            .catch(function (e) { console.error("[PF] remove document", e); status(""); toast("Could not remove it. Reload and try again."); });
         }
         // ---- Hire & equipment -----------------------------------------------
         // Three states, never two (see clinic-hire-state.js): "needed",

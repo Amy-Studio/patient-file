@@ -398,6 +398,7 @@
         </div>
         <div class="launch">
           <span class="lbl">Create for this patient:</span>
+          <a id="pf-surgery-plan" href="#">Surgery plan</a>
           <a id="pf-make-quote" href="#">Make quote</a>
           <a id="pf-make-pamphlet" href="#">Make pamphlet</a>
           <a id="pf-make-fee-estimate" href="#">VSC fee estimate</a>
@@ -558,7 +559,8 @@
         var APPS = {
           quote: "https://amy-studio.github.io/QuoteV18/quote-v18.html",
           pamphlet: "https://amy-studio.github.io/patient-info-builder/",
-          list: "https://amy-studio.github.io/surgical-list-web/"
+          list: "https://amy-studio.github.io/surgical-list-web/",
+          plan: "https://amy-studio.github.io/clinic-style/surgeon-plan-draft.html"
         };
         var VENUE = { sjm: "Sir John Monash", masada: "Masada", vsc: "VSC Day Surgery", clinic: "Clinic", other: "Other" };
         var state = { patient: null, order: null, docs: [], orderId: null };
@@ -1393,6 +1395,15 @@
           var id = state.patient && state.patient.id;
           var oid = state.orderId;
           var q = id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&surgeon_order_id=" + encodeURIComponent(oid) : "")) : "";
+          // The plan screen takes ?patient=, and refuses to save without it,
+          // so the link is only live once we actually know who this is.
+          var planLink = qs("pf-surgery-plan");
+          if (planLink) {
+            planLink.href = id ? (APPS.plan + "?patient=" + encodeURIComponent(id)) : "#";
+            planLink.style.opacity = id ? "" : ".45";
+            planLink.title = id ? "One screen: the quote, booklet and surgical list all build from it"
+                                : "Open a patient first";
+          }
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
           // Booked patient → the surgical list app loads their whole operating

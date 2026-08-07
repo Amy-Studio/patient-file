@@ -398,7 +398,6 @@
         </div>
         <div class="launch">
           <span class="lbl">Create for this patient:</span>
-          <a id="pf-surgery-plan" href="#">Surgery plan</a>
           <a id="pf-make-quote" href="#">Make quote</a>
           <a id="pf-make-pamphlet" href="#">Make pamphlet</a>
           <a id="pf-make-fee-estimate" href="#">VSC fee estimate</a>
@@ -413,7 +412,7 @@
           <div class="navitem active" data-sec="overview"><svg class="ic"><use href="#i-checksq"/></svg> Checklist</div>
           <div class="navitem" data-sec="contact"><svg class="ic"><use href="#i-user"/></svg> Contact</div>
           <div class="navitem" data-sec="surgery"><svg class="ic"><use href="#i-calendar"/></svg> Surgery</div>
-          <div class="navitem" data-sec="order"><svg class="ic"><use href="#i-clipboard"/></svg> Surgeon order</div>
+          <div class="navitem" data-sec="order"><svg class="ic"><use href="#i-clipboard"/></svg> Surgery plan</div>
           <div class="navitem" data-sec="preop"><svg class="ic"><use href="#i-clock"/></svg> Pre-op planning</div>
           <div class="navitem" data-sec="operative"><svg class="ic"><use href="#i-activity"/></svg> Operative</div>
           <div class="navitem" data-sec="documents"><svg class="ic"><use href="#i-file"/></svg> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
@@ -495,14 +494,20 @@
 
           <!-- Surgeon order -->
           <div class="section" id="sec-order">
-            <h2>Surgeon order</h2>
-            <div class="panel-sub">The source the quote, pamphlet and surgical list all read.</div>
+            <h2>Surgery plan</h2>
+            <div class="panel-sub">One screen. The quote, the booklet and the surgical list all build from it.</div>
+            <div id="o-plan-wrap" style="margin:0 -18px">
+              <iframe id="o-plan" title="Surgery plan" style="width:100%;height:2400px;border:0;display:block"></iframe>
+            </div>
+            <details id="o-legacy" style="margin-top:18px">
+              <summary style="cursor:pointer;font-size:12.5px;color:#8a92a3">The old surgeon order fields</summary>
             <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" id="o-edit-toggle" style="font-size:13px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius);padding:8px 15px;cursor:pointer">✎ Edit</button><button type="button" id="o-copy-notes" style="font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border:1px solid var(--line);border-radius:var(--radius);padding:8px 14px;cursor:pointer">📋 Copy clinical notes</button> <span class="status" id="o-copy-status"></span></div>
             <div class="field full"><label>Procedure name</label><textarea id="o-procedure_name" rows="2"></textarea></div>
             <div class="subhead" style="border-top:none; padding-top:0; margin-top:14px">Item codes</div>
             <div class="chips" id="o-codes" style="margin-bottom:4px"></div>
             <div id="o-fields"></div>
             <div id="o-extras"></div>
+            </details>
           </div>
 
           <!-- Pre-op planning -->
@@ -1397,12 +1402,17 @@
           var q = id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&surgeon_order_id=" + encodeURIComponent(oid) : "")) : "";
           // The plan screen takes ?patient=, and refuses to save without it,
           // so the link is only live once we actually know who this is.
-          var planLink = qs("pf-surgery-plan");
-          if (planLink) {
-            planLink.href = id ? (APPS.plan + "?patient=" + encodeURIComponent(id)) : "#";
-            planLink.style.opacity = id ? "" : ".45";
-            planLink.title = id ? "One screen: the quote, booklet and surgical list all build from it"
-                                : "Open a patient first";
+          // The surgeon order IS the surgery plan, so the section shows the
+          // plan screen for this patient rather than a second copy of the
+          // same fields. The old fields stay underneath, collapsed, until
+          // every historic order has been moved across.
+          var planFrame = qs("o-plan");
+          if (planFrame && id) {
+            var want = APPS.plan + "?patient=" + encodeURIComponent(id);
+            if (planFrame.getAttribute("data-src") !== want) {
+              planFrame.setAttribute("data-src", want);
+              planFrame.src = want;
+            }
           }
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");

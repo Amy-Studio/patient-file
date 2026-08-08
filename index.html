@@ -915,7 +915,27 @@
                     ' <span data-orm="' + i + '" title="Created by mistake: delete it" ' +
                       'style="opacity:.6;margin-left:5px;font-weight:700">&times;</span>' : '') + '</span>';
           }).join("");
-          el.innerHTML = '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery, Surgeon order &amp; Documents</div>' +
+          // When there is genuinely a decision to make, say so plainly with
+          // named buttons. A small tick on a pill is not findable, and this is
+          // the decision everything downstream depends on.
+          var live = orders.filter(function (o) { return o.id && !o.archived_at; });
+          var undecided = live.length > 1 && !live.some(function (o) { return o.confirmed_at; });
+          var ask = !undecided ? "" :
+            '<div style="background:#fdf3dd;border:1px solid #f0ddb0;border-radius:10px;' +
+            'padding:11px 13px;margin-bottom:10px">' +
+            '<div style="font-size:13px;font-weight:700;color:#96660f;margin-bottom:3px">' +
+            'She has ' + live.length + ' plans. Which one is going ahead?</div>' +
+            '<div style="font-size:12px;color:#96660f;opacity:.85;margin-bottom:9px">' +
+            'Until this is answered the surgical list and the booking screen will both ask, ' +
+            'and nothing can be printed for her.</div>' +
+            live.map(function (o) {
+              var i = orders.indexOf(o);
+              return '<button type="button" data-ocf="' + i + '" style="font-size:12.5px;' +
+                'background:#fff;border:1px solid #e2c98f;color:#7a5309;border-radius:8px;' +
+                'padding:6px 12px;margin:0 7px 6px 0;cursor:pointer">' +
+                esc(o.procedure_name || "Unnamed plan") + '</button>';
+            }).join("") + '</div>';
+          el.innerHTML = ask + '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery, Surgeon order &amp; Documents</div>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:10px;padding:8px">' + (items || '<span style="font-size:13px;color:var(--muted)">No surgery yet</span>') + '<span data-newsurg="1" style="' + pill + 'color:var(--accent-ink);border:1px dashed #c7d6ea;margin-left:auto">+ new surgery</span></div>';
           // Removing a surgery CANCELS it, it does not delete it. The row is
           // clinical history, and a plan built by mistake still records what

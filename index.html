@@ -393,7 +393,6 @@
             <div class="pname" id="pf-name">Loading…</div>
             <div class="pmeta" id="pf-meta"></div>
           </div>
-          <button class="save-btn" id="pf-save" disabled>Save</button>
           <span class="status" id="pf-status"></span>
         </div>
         <div class="launch">
@@ -461,7 +460,15 @@
               <button type="button" class="np-btn danger" id="pf-archive">Archive this patient</button>
               <span class="arch-hint">Wrong or duplicate record? Archiving hides it from every app. Nothing is deleted; restore any time from the Dashboard's Archived tab.</span>
             </div>
-          </div>
+          
+            <!-- The save sits in the tab whose fields it saves. At the top of
+                 the page it saved things you could not see from there. -->
+            <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
+                        display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="save-btn" id="pf-save" disabled>Save her details</button>
+              <span class="status" id="pf-status-contact"></span>
+            </div>
+</div>
 
           <!-- Surgery -->
           <div class="section" id="sec-surgery">
@@ -497,7 +504,15 @@
               <div class="field full"><label>Procedure</label><textarea id="f-surgery_procedure" rows="2"></textarea></div>
             </div>
             </div>
-          </div>
+          
+            <!-- The save sits in the tab whose fields it saves. At the top of
+                 the page it saved things you could not see from there. -->
+            <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
+                        display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="save-btn" id="pf-save-surgery" disabled>Save surgery details</button>
+              <span class="status" id="pf-status-surgery"></span>
+            </div>
+</div>
 
           <!-- Surgeon order -->
           <div class="section" id="sec-order">
@@ -1471,6 +1486,22 @@
           Object.keys(PF_TARGETS).forEach(function (b) { qs(b).setAttribute("target", PF_TARGETS[b]); qs(b).setAttribute("rel", "noopener"); });
         }
 
+
+        // Both tabs save the same patient row, so the second button simply
+        // drives the first rather than duplicating the save logic.
+        (function () {
+          var b2 = document.getElementById("pf-save-surgery");
+          if (b2) b2.addEventListener("click", function () {
+            var b1 = document.getElementById("pf-save");
+            if (b1) b1.click();
+          });
+          var main = document.getElementById("pf-save");
+          if (main && window.MutationObserver) {
+            new MutationObserver(function () {
+              if (b2) b2.disabled = main.disabled;
+            }).observe(main, { attributes: true, attributeFilter: ["disabled"] });
+          }
+        })();
 
         // ---- what each document needs FROM THE PATIENT ----------------------
         // The plan says what is being done. These say who it is being done to.

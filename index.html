@@ -414,7 +414,19 @@
            are compared as soon as the file opens rather than when somebody
            remembers. It only ever SHOWS the comparison: blanks pre-ticked,
            conflicts unticked, nothing written until you apply. -->
-      <div id="pf-pracsuite" style="margin-top:14px"></div>
+      <!-- Always a visible box with a heading. An empty div was
+           indistinguishable from a broken one, which is exactly what
+           happened: the pull worked, and it still looked like nothing
+           was there. -->
+      <div style="margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden">
+        <div style="background:var(--card);padding:8px 13px;font-size:11px;letter-spacing:.04em;
+                    color:var(--accent-ink);border-bottom:1px solid var(--line)">
+          PRACSUITE &middot; her details, compared
+        </div>
+        <div id="pf-pracsuite" style="padding:12px 13px">
+          <span style="font-size:12.5px;color:var(--muted)">Waiting for her file to load…</span>
+        </div>
+      </div>
       <div id="pf-readiness" style="margin-top:12px"></div>
       <div id="pf-surgery-switcher" style="margin-top:14px"></div>
 

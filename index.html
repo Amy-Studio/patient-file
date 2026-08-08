@@ -1539,8 +1539,21 @@
           if (psHost && id && window.ClinicPracSuiteLink && !psHost.dataset.mounted) {
             psHost.dataset.mounted = "1";
             try {
+              if (!window.ClinicPDF || !window.ClinicPDF.authHeaders) {
+                // Silence here is what let every Medicare field stay blank.
+                psHost.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
+                  'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
+                  'Cannot reach PracSuite from this page, so her details were not compared. ' +
+                  'Reload; if it persists tell Claude the PracSuite panel did not load.</div>';
+                return;
+              }
               window.ClinicPracSuiteLink.mount(psHost, { patient: state.patient, autoFind: true });
-            } catch (e) { psHost.dataset.mounted = ""; }
+            } catch (e) {
+              psHost.dataset.mounted = "";
+              psHost.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
+                'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
+                'PracSuite comparison failed: ' + esc(e.message) + '</div>';
+            }
           }
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
@@ -2200,6 +2213,10 @@
         if (window.__pfPreview && document.readyState !== "loading") window.__pfBoot();
       })();
     </script>
-  <script src="https://amy-studio.github.io/clinic-style/clinic-pracsuite-link.js"></script>
+  <!-- clinic-pdf.js first: the PracSuite comparison reaches the backend through
+     ClinicPDF.authHeaders(), so without it the lookup threw the moment it ran
+     and every Medicare and health fund field stayed blank. -->
+<script src="https://amy-studio.github.io/clinic-style/clinic-pdf.js"></script>
+<script src="https://amy-studio.github.io/clinic-style/clinic-pracsuite-link.js"></script>
 </body>
 </html>

@@ -886,6 +886,19 @@
           Array.prototype.forEach.call(el.querySelectorAll("[data-oi]"), function (c) { c.addEventListener("click", function () { setSurgery(parseInt(c.getAttribute("data-oi"), 10)); }); });
           var ns = el.querySelector("[data-newsurg]"); if (ns) ns.addEventListener("click", newSurgery);
         }
+        // The plan saves inside a frame. Without this the patient file still
+        // holds the order id from before the save, so Make quote opens with no
+        // item numbers even though they were just recorded.
+        window.addEventListener("message", function (e) {
+          if (!e.data || e.data.type !== "surgery-plan-saved") return;
+          if (!state.patient || e.data.patientId !== state.patient.id) return;
+          if (e.data.orderId) state.orderId = e.data.orderId;
+          // Reload the patient so the order, its item numbers and the launch
+          // links are all rebuilt from what was just saved.
+          if (typeof loadReal === "function") { try { loadReal(); } catch (err) {} }
+          else if (typeof wireLaunch === "function") { try { wireLaunch(); } catch (err) {} }
+        });
+
         function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
         function newSurgery() { var o = { id: null, procedure_codes: [], _new: true }; state.orders = state.orders || []; state.orders.unshift(o); state.order = o; state.orderId = null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
         var orderEditing = false;

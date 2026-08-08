@@ -1480,14 +1480,16 @@
         var NEEDS = {
           "pf-make-quote": { name: "quote", fields: [
             ["medicare_number", "Medicare number"], ["medicare_irn", "Medicare IRN"],
-            ["health_fund", "health fund"], ["address", "address"],
+            ["health_fund", "health fund"], ["health_fund_membership", "health fund member number"],
+            ["address", "address"],
             ["email", "email"], ["dob", "date of birth"] ] },
           "pf-make-pamphlet": { name: "recovery guide", fields: [
             ["full_name", "name"], ["dob", "date of birth"], ["email", "email"] ] },
           "pf-make-list": { name: "surgical list", fields: [
             ["full_name", "name"], ["dob", "date of birth"],
             ["medicare_number", "Medicare number"], ["medicare_irn", "Medicare IRN"],
-            ["health_fund", "health fund"], ["nok_name", "next of kin"],
+            ["health_fund", "health fund"], ["health_fund_membership", "health fund member number"],
+            ["nok_name", "next of kin"],
             ["nok_phone", "next of kin phone"], ["phone", "phone"], ["address", "address"] ] },
           "pf-make-fee-estimate": { name: "fee estimate", fields: [
             ["medicare_number", "Medicare number"], ["health_fund", "health fund"],

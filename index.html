@@ -405,6 +405,12 @@
         </div>
       </div>
 
+      <!-- PracSuite is the source for Medicare, health fund, next of kin and
+           email. The quote, booklet and surgical list all need them, so they
+           are compared as soon as the file opens rather than when somebody
+           remembers. It only ever SHOWS the comparison: blanks pre-ticked,
+           conflicts unticked, nothing written until you apply. -->
+      <div id="pf-pracsuite" style="margin-top:14px"></div>
       <div id="pf-surgery-switcher" style="margin-top:14px"></div>
 
       <div class="body">
@@ -1429,6 +1435,13 @@
               planFrame.src = want;
             }
           }
+          var psHost = qs("pf-pracsuite");
+          if (psHost && id && window.ClinicPracSuiteLink && !psHost.dataset.mounted) {
+            psHost.dataset.mounted = "1";
+            try {
+              window.ClinicPracSuiteLink.mount(psHost, { patient: state.patient, autoFind: true });
+            } catch (e) { psHost.dataset.mounted = ""; }
+          }
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
           // Booked patient → the surgical list app loads their whole operating
@@ -1969,5 +1982,6 @@
         if (window.__pfPreview && document.readyState !== "loading") window.__pfBoot();
       })();
     </script>
-  </body>
+  <script src="https://amy-studio.github.io/clinic-style/clinic-pracsuite-link.js"></script>
+</body>
 </html>

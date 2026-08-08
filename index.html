@@ -395,13 +395,18 @@
           </div>
           <span class="status" id="pf-status"></span>
         </div>
+        <!-- The quote and the recovery guide are built FROM a surgery plan, so
+             their buttons live on the plan itself, where you can see which plan
+             they are reading. Up here they said nothing about what they were
+             linked to. What is left is the two that do not depend on a plan. -->
         <div class="launch">
           <span class="lbl">Create for this patient:</span>
-          <a id="pf-make-quote" href="#">Make quote</a>
-          <a id="pf-make-pamphlet" href="#">Make pamphlet</a>
           <a id="pf-make-fee-estimate" href="#">VSC fee estimate</a>
           <a id="pf-make-list" href="#">Open their day's surgical list</a>
+          <a href="#" id="pf-goto-plan" style="opacity:.8">Quote or recovery guide &rarr; open Surgery plan</a>
         </div>
+        <!-- kept hidden: wireLaunch and the readiness guards still address these -->
+        <span style="display:none"><a id="pf-make-quote" href="#"></a><a id="pf-make-pamphlet" href="#"></a></span>
       </div>
 
       <!-- PracSuite is the source for Medicare, health fund, next of kin and
@@ -1501,6 +1506,16 @@
               if (b2) b2.disabled = main.disabled;
             }).observe(main, { attributes: true, attributeFilter: ["disabled"] });
           }
+        })();
+
+        // Send them to the plan, which is where the quote and guide are built.
+        (function () {
+          var g = document.getElementById("pf-goto-plan");
+          if (g) g.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            var nav = document.querySelector('.navitem[data-sec="order"]');
+            if (nav) nav.click();
+          });
         })();
 
         // ---- what each document needs FROM THE PATIENT ----------------------

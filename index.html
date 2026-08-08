@@ -2080,8 +2080,12 @@
 
         function loadReal() {
           var client = sb(); if (!client) { status("Not signed in"); return; }
+          // Remember who was open. Reloading the page to pick up a change
+          // should not also cost you the patient you were looking at.
           var pid = new URLSearchParams(location.search).get("patient_id");
+          if (!pid) { try { pid = sessionStorage.getItem("pfLastPatient") || ""; } catch (e) {} }
           if (!pid) { showPicker(); return; }
+          try { sessionStorage.setItem("pfLastPatient", pid); } catch (e) {}
           var _bl = qs("pf-back-search"); if (_bl) _bl.style.display = "";
           status("Loading…");
           // Watchdog: a dropped connection or an expired login can leave the

@@ -411,6 +411,7 @@
            remembers. It only ever SHOWS the comparison: blanks pre-ticked,
            conflicts unticked, nothing written until you apply. -->
       <div id="pf-pracsuite" style="margin-top:14px"></div>
+      <div id="pf-readiness" style="margin-top:12px"></div>
       <div id="pf-surgery-switcher" style="margin-top:14px"></div>
 
       <div class="body">
@@ -1465,7 +1466,76 @@
           // killed the quote being prepared. A named target reuses ONE window
           // per app and focuses it on repeat clicks.
           var PF_TARGETS = { "pf-make-quote": "clinicQuoteBuilder", "pf-make-pamphlet": "clinicPIB", "pf-make-fee-estimate": "clinicFeeEstimate", "pf-make-list": "clinicSurgicalList" };
+          Object.keys(NEEDS).forEach(function (k) { guardLaunch(qs(k), k); });
+          renderReadiness();
           Object.keys(PF_TARGETS).forEach(function (b) { qs(b).setAttribute("target", PF_TARGETS[b]); qs(b).setAttribute("rel", "noopener"); });
+        }
+
+
+        // ---- what each document needs FROM THE PATIENT ----------------------
+        // The plan says what is being done. These say who it is being done to.
+        // A quote with no Medicare number, or a surgical list with no next of
+        // kin, is not a document with a small gap: it is one that has to be
+        // done again. So it is checked before it is built, not after.
+        var NEEDS = {
+          "pf-make-quote": { name: "quote", fields: [
+            ["medicare_number", "Medicare number"], ["medicare_irn", "Medicare IRN"],
+            ["health_fund", "health fund"], ["address", "address"],
+            ["email", "email"], ["dob", "date of birth"] ] },
+          "pf-make-pamphlet": { name: "recovery guide", fields: [
+            ["full_name", "name"], ["dob", "date of birth"], ["email", "email"] ] },
+          "pf-make-list": { name: "surgical list", fields: [
+            ["full_name", "name"], ["dob", "date of birth"],
+            ["medicare_number", "Medicare number"], ["medicare_irn", "Medicare IRN"],
+            ["health_fund", "health fund"], ["nok_name", "next of kin"],
+            ["nok_phone", "next of kin phone"], ["phone", "phone"], ["address", "address"] ] },
+          "pf-make-fee-estimate": { name: "fee estimate", fields: [
+            ["medicare_number", "Medicare number"], ["health_fund", "health fund"],
+            ["email", "email"] ] }
+        };
+        function missingFor(key) {
+          var pt = state.patient || {}, out = [];
+          (NEEDS[key] ? NEEDS[key].fields : []).forEach(function (f) {
+            var v = pt[f[0]];
+            if (v == null || String(v).trim() === "") out.push(f[1]);
+          });
+          return out;
+        }
+        // Everything absent, across every document, said once. Fixing it here
+        // beats discovering it three times in three half-built documents.
+        function renderReadiness() {
+          var host = qs("pf-readiness");
+          if (!host) return;
+          if (!state.patient) { host.innerHTML = ""; return; }
+          var all = {};
+          Object.keys(NEEDS).forEach(function (k) {
+            missingFor(k).forEach(function (m) { (all[m] = all[m] || []).push(NEEDS[k].name); });
+          });
+          var names = Object.keys(all);
+          if (!names.length) {
+            host.innerHTML = '<div style="background:#e8f4ee;border:1px solid #cfe6da;color:#2d8a5f;' +
+              'border-radius:8px;padding:9px 13px;font-size:12.5px">Her details are complete. ' +
+              'Every document can be built.</div>';
+            return;
+          }
+          host.innerHTML = '<div style="background:#fdf3dd;border:1px solid #f0ddb0;color:#96660f;' +
+            'border-radius:8px;padding:10px 13px;font-size:12.5px;line-height:1.6">' +
+            '<b>Missing, and needed before these are built:</b><br>' +
+            names.map(function (n) {
+              return n + ' <span style="opacity:.75">(' + all[n].join(", ") + ')</span>';
+            }).join("<br>") +
+            '<br><span style="opacity:.8">The PracSuite comparison above may already have these.</span></div>';
+        }
+        // Warn before it opens, not after it is built wrong.
+        function guardLaunch(a, key) {
+          if (!a || a.dataset.guarded) return;
+          a.dataset.guarded = "1";
+          a.addEventListener("click", function (ev) {
+            var miss = missingFor(key);
+            if (!miss.length) return;
+            if (!confirm("This " + NEEDS[key].name + " will be missing:\n\n  " +
+                         miss.join("\n  ") + "\n\nBuild it anyway?")) ev.preventDefault();
+          });
         }
 
         // ---- save ----

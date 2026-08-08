@@ -1535,8 +1535,30 @@
               planFrame.src = want;
             }
           }
+          // The comparison module is a separate file. If the patient loads
+          // before it arrives, the old code simply skipped it and never tried
+          // again, so the panel was invisible with nothing to say why.
           var psHost = qs("pf-pracsuite");
-          if (psHost && id && window.ClinicPracSuiteLink && !psHost.dataset.mounted) {
+          if (psHost && id && !psHost.dataset.mounted) {
+            if (!window.ClinicPracSuiteLink || !window.ClinicPDF) {
+              psHost.innerHTML = '<div style="background:var(--card);border:1px solid var(--line);' +
+                'border-radius:8px;padding:9px 13px;font-size:12.5px;color:var(--muted)">' +
+                'Loading her PracSuite details…</div>';
+              var tries = 0;
+              var iv = setInterval(function () {
+                tries++;
+                if (window.ClinicPracSuiteLink && window.ClinicPDF) {
+                  clearInterval(iv); psHost.dataset.mounted = ""; wireLaunch();
+                } else if (tries > 40) {          // ~10 seconds
+                  clearInterval(iv);
+                  psHost.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
+                    'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
+                    'The PracSuite panel did not load. Reload the page; if it keeps happening, ' +
+                    'tell Claude the PracSuite script never arrived.</div>';
+                }
+              }, 250);
+              return;
+            }
             psHost.dataset.mounted = "1";
             try {
               if (!window.ClinicPDF || !window.ClinicPDF.authHeaders) {
@@ -1555,6 +1577,7 @@
                 'PracSuite comparison failed: ' + esc(e.message) + '</div>';
             }
           }
+          if (psHost && id && !psHost.dataset.mounted) { /* handled above */ }
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
           // Booked patient → the surgical list app loads their whole operating

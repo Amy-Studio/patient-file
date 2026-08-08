@@ -1480,24 +1480,45 @@
         var NEEDS = {
           "pf-make-quote": { name: "quote", fields: [
             ["medicare_number", "Medicare number"], ["medicare_irn", "Medicare IRN"],
+            ["medicare_expiry", "Medicare expiry"],
             ["health_fund", "health fund"], ["health_fund_membership", "health fund member number"],
-            ["address", "address"],
-            ["email", "email"], ["dob", "date of birth"] ] },
+            ["address", "address"], ["email", "email"], ["dob", "date of birth"] ] },
+          // No email: the guide is printed and handed over, so a patient
+          // without one still gets their booklet.
           "pf-make-pamphlet": { name: "recovery guide", fields: [
-            ["full_name", "name"], ["dob", "date of birth"], ["email", "email"] ] },
+            ["full_name", "name"], ["dob", "date of birth"] ] },
           "pf-make-list": { name: "surgical list", fields: [
             ["full_name", "name"], ["dob", "date of birth"],
             ["medicare_number", "Medicare number"], ["medicare_irn", "Medicare IRN"],
+            ["medicare_expiry", "Medicare expiry"],
             ["health_fund", "health fund"], ["health_fund_membership", "health fund member number"],
-            ["nok_name", "next of kin"],
-            ["nok_phone", "next of kin phone"], ["phone", "phone"], ["address", "address"] ] },
+            ["nok_name", "next of kin"], ["nok_phone", "next of kin phone"],
+            ["phone", "phone"], ["address", "address"] ] },
+          // Same as the surgical list. Next of kin only for a child, where
+          // it is the consenting adult rather than an emergency contact.
           "pf-make-fee-estimate": { name: "fee estimate", fields: [
-            ["medicare_number", "Medicare number"], ["health_fund", "health fund"],
-            ["email", "email"] ] }
+            ["full_name", "name"], ["dob", "date of birth"],
+            ["medicare_number", "Medicare number"], ["medicare_irn", "Medicare IRN"],
+            ["medicare_expiry", "Medicare expiry"],
+            ["health_fund", "health fund"], ["health_fund_membership", "health fund member number"],
+            ["nok_name", "next of kin", "childOnly"], ["nok_phone", "next of kin phone", "childOnly"],
+            ["phone", "phone"], ["address", "address"] ] }
         };
+        // Under 18 on their date of birth. Unknown age is treated as an adult,
+        // so a missing birthday cannot invent a next-of-kin requirement.
+        function isChild(pt) {
+          if (!pt || !pt.dob) return false;
+          var d = new Date(pt.dob);
+          if (isNaN(d)) return false;
+          var now = new Date(), age = now.getFullYear() - d.getFullYear();
+          var m = now.getMonth() - d.getMonth();
+          if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+          return age < 18;
+        }
         function missingFor(key) {
           var pt = state.patient || {}, out = [];
           (NEEDS[key] ? NEEDS[key].fields : []).forEach(function (f) {
+            if (f[2] === "childOnly" && !isChild(pt)) return;
             var v = pt[f[0]];
             if (v == null || String(v).trim() === "") out.push(f[1]);
           });

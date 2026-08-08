@@ -499,10 +499,17 @@
             <div id="o-plan-wrap" style="margin:0 -18px">
               <iframe id="o-plan" title="Surgery plan" style="width:100%;height:2400px;border:0;display:block"></iframe>
             </div>
-            <!-- The old surgeon order fields were removed 2026-08-08: the surgery plan
-                 above replaces them, and having both meant two places to record one
-                 operation. Nothing was deleted from the database, so historic values
-                 are still there and still read by the quote, booklet and list. -->
+            <!-- The old surgeon order fields are hidden, not deleted, as of 2026-08-08:
+                 the surgery plan above replaces them, and showing both meant two places
+                 to record one operation. They stay in the page because the existing
+                 order-loading code still writes into them, and removing them outright
+                 made it throw on a null element. Nothing is deleted from the database. -->
+            <div id="o-legacy-hidden" style="display:none" aria-hidden="true">
+              <textarea id="o-procedure_name" rows="2"></textarea>
+              <div class="chips" id="o-codes"></div>
+              <div id="o-fields"></div>
+              <div id="o-extras"></div>
+            </div>
           </div>
 
           <!-- Pre-op planning -->

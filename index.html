@@ -906,10 +906,33 @@
               ? isoToDmy(state.patient.surgery_date)
               : (o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : ""));
             var active = state.order === o;
-            return '<span data-oi="' + i + '" style="' + pill + (active ? on : off) + '">' + esc(name) + (d ? ' <span style="opacity:.7">· ' + esc(d) + '</span>' : '') + (i === 0 ? ' <span style="opacity:.7">· current</span>' : '') + '</span>';
+            return '<span data-oi="' + i + '" style="' + pill + (active ? on : off) + '">' + esc(name) + (d ? ' <span style="opacity:.7">· ' + esc(d) + '</span>' : '') + (i === 0 ? ' <span style="opacity:.7">· current</span>' : '') +
+            (o.id ? ' <span data-orm="' + i + '" title="Remove this surgery" ' +
+              'style="opacity:.6;margin-left:7px;font-weight:700">&times;</span>' : '') + '</span>';
           }).join("");
           el.innerHTML = '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery, Surgeon order &amp; Documents</div>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:10px;padding:8px">' + (items || '<span style="font-size:13px;color:var(--muted)">No surgery yet</span>') + '<span data-newsurg="1" style="' + pill + 'color:var(--accent-ink);border:1px dashed #c7d6ea;margin-left:auto">+ new surgery</span></div>';
+          // Removing a surgery CANCELS it, it does not delete it. The row is
+          // clinical history, and a plan built by mistake still records what
+          // somebody intended at the time. Cancelled orders are excluded by the
+          // surgical list, so a mistake stops printing without being erased.
+          Array.prototype.forEach.call(el.querySelectorAll("[data-orm]"), function (x) {
+            x.addEventListener("click", async function (ev) {
+              ev.stopPropagation();
+              var o = (state.orders || [])[parseInt(x.dataset.orm, 10)];
+              if (!o || !o.id) return;
+              var label = o.procedure_name || "this surgery";
+              if (!confirm("Remove " + label + "?\n\nIt stops appearing on the surgical " +
+                           "list and in the documents. It is not deleted, so it can be " +
+                           "found again if it turns out to be the real one.")) return;
+              var c = sb();
+              if (!c) { toast("Not signed in"); return; }
+              var r = await c.from("surgeon_orders").update({ status: "cancelled" }).eq("id", o.id);
+              if (r.error) { toast("Couldn't remove: " + r.error.message); return; }
+              toast("Removed");
+              if (typeof loadReal === "function") loadReal();
+            });
+          });
           Array.prototype.forEach.call(el.querySelectorAll("[data-oi]"), function (c) { c.addEventListener("click", function () { setSurgery(parseInt(c.getAttribute("data-oi"), 10)); }); });
           var ns = el.querySelector("[data-newsurg]"); if (ns) ns.addEventListener("click", newSurgery);
         }
@@ -1983,7 +2006,7 @@
             // Show the patient straight away so the page is usable even if a
             // secondary table is slow; each section fills in as it arrives.
             state.patient = p; qs("pf-save").disabled = false; status(""); renderAll(); pfDirty = false;
-            pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }), "surgeries").then(function (r) { if (r && !r.error) { state.orders = r.data || []; if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });
+            pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).neq("status", "cancelled").order("created_at", { ascending: false }), "surgeries").then(function (r) { if (r && !r.error) { state.orders = r.data || []; if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });
             pfQ(client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }), "documents").then(function (r) { if (r && !r.error) { state.docs = r.data || []; state.docsError = null; renderAll(); } else { state.docsError = (r && r.error && (r.error.__timeout ? "timed out" : r.error.message)) || "failed"; console.warn("[PF] documents:", state.docsError); renderAll(); } });
             pfQ(client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }), "hires").then(function (r) { if (r && !r.error) { state.hires = r.data || []; renderAll(); } else { console.warn("[PF] hires:", r && r.error && r.error.message); } });
             pfQ(client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }), "notes").then(function (r) { if (r && !r.error) { state.notes = r.data || []; renderAll(); } else { console.warn("[PF] notes:", r && r.error && r.error.message); } });

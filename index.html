@@ -420,6 +420,7 @@
           <div class="navitem" data-sec="operative"><svg class="ic"><use href="#i-activity"/></svg> Operative</div>
           <div class="navitem" data-sec="documents"><svg class="ic"><use href="#i-file"/></svg> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
           <div class="navitem" data-sec="hire" id="pf-nav-hire"><svg class="ic"><use href="#i-box"/></svg> Hire<span class="mark" id="pf-hire-mark" style="display:none"></span></div>
+          <div class="navitem" data-sec="surgeryrecord"><svg class="ic"><use href="#i-clipboard"/></svg> Surgery record</div>
           <div class="navitem" data-sec="pracsuite"><svg class="ic"><use href="#i-user"/></svg> PracSuite</div>
           <div class="navitem" data-sec="notes"><svg class="ic"><use href="#i-edit"/></svg> Notes</div>
         </nav>
@@ -547,6 +548,15 @@
           </div>
 
           <!-- Documents -->
+          <div class="section" id="sec-surgeryrecord">
+            <h2>Surgery record</h2>
+            <div class="panel-sub">Everything kept together for the surgery selected above:
+              her case as it appears on the list, the plan, and every document filed.
+              If a surgery is cancelled none of this is lost, and a future one can be
+              started from it.</div>
+            <div id="sr-body"><span style="font-size:12.5px;color:var(--muted)">Loading…</span></div>
+          </div>
+
           <div class="section" id="sec-pracsuite">
             <h2>PracSuite</h2>
             <div class="panel-sub">Compare her against PracSuite and bring across anything
@@ -1031,7 +1041,7 @@
           else if (typeof wireLaunch === "function") { try { wireLaunch(); } catch (err) {} }
         });
 
-        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
+        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); try { renderSurgeryRecord(); } catch (e) {}; renderSurgery(); renderOrder(); }
         function newSurgery() { var o = { id: null, procedure_codes: [], _new: true }; state.orders = state.orders || []; state.orders.unshift(o); state.order = o; state.orderId = null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
         var orderEditing = false;
         function orderHasData(o) {
@@ -1629,6 +1639,7 @@
           var PF_TARGETS = { "pf-make-quote": "clinicQuoteBuilder", "pf-make-pamphlet": "clinicPIB", "pf-make-fee-estimate": "clinicFeeEstimate", "pf-make-list": "clinicSurgicalList" };
           Object.keys(NEEDS).forEach(function (k) { guardLaunch(qs(k), k); });
           renderReadiness();
+          try { renderSurgeryRecord(); } catch (e) {}
           Object.keys(PF_TARGETS).forEach(function (b) { qs(b).setAttribute("target", PF_TARGETS[b]); qs(b).setAttribute("rel", "noopener"); });
         }
 
@@ -1658,6 +1669,96 @@
             if (nav) nav.click();
           });
         })();
+
+        // ---- Surgery record -------------------------------------------------
+        // One surgery, everything about it in one place: her case as the list
+        // prints it, the plan behind it, and every document filed for it. A
+        // cancelled surgery therefore costs nothing, and a future one can start
+        // from what was already decided rather than from a blank screen.
+        function srCase(o, pt) {
+          const rows = [
+            ["Procedure", o.procedure_name],
+            ["Date", pt && pt.surgery_date ? isoToDmy(pt.surgery_date) : ""],
+            ["Venue", o.surgery_venue || (pt && pt.surgery_venue) || ""],
+            ["Admission", o.admission_type],
+            ["Time in theatre", o.est_duration_min ? o.est_duration_min + " minutes" : ""],
+            ["Item numbers", (o.procedure_codes || []).map(function (c) { return c && c.code; })
+                              .filter(Boolean).join(", ")],
+            ["Implants", o.prosthesis_details],
+            ["Equipment", o.theatre_equipment],
+            ["Alerts", o.theatre_alerts],
+            ["Allergies", o.allergies_nka ? "No known allergies"
+                          : (Array.isArray(o.allergies) ? o.allergies.join(", ") : o.allergies)],
+            ["GLP-1 / SGLT2", o.glp1_sglt2 === true ? "Yes" : o.glp1_sglt2 === false ? "No" : ""],
+            ["Antibiotic cover", o.ab_cover],
+            ["Antithrombotic", o.at_cover]
+          ].filter(function (r) { return r[1] != null && String(r[1]).trim() !== ""; });
+          if (!rows.length) return '<p class="panel-sub">Nothing recorded for this surgery yet.</p>';
+          return '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+            rows.map(function (r) {
+              return '<tr><td style="padding:6px 10px 6px 0;color:var(--muted);width:38%;vertical-align:top">' +
+                esc(r[0]) + '</td><td style="padding:6px 0">' + esc(String(r[1])) + '</td></tr>';
+            }).join("") + '</table>';
+        }
+
+        async function renderSurgeryRecord() {
+          const host = qs("sr-body");
+          if (!host) return;
+          const o = state.order, pt = state.patient;
+          if (!pt) { host.innerHTML = ""; return; }
+          if (!o) { host.innerHTML = '<p class="panel-sub">No surgery selected.</p>'; return; }
+
+          let docs = [];
+          try {
+            const c = sb();
+            if (c) {
+              const r = await c.from("patient_documents")
+                .select("id,doc_type,label,generated_at")
+                .eq("patient_id", pt.id)
+                .order("generated_at", { ascending: false });
+              if (!r.error) docs = r.data || [];
+            }
+          } catch (e) { /* the case details are still worth showing */ }
+
+          host.innerHTML =
+            '<h3 style="font-size:13.5px;margin:0 0 6px">Her case</h3>' + srCase(o, pt) +
+            '<h3 style="font-size:13.5px;margin:20px 0 6px">Documents filed</h3>' +
+            (docs.length
+              ? '<ul style="margin:0;padding-left:18px">' + docs.map(function (d) {
+                  return '<li style="font-size:13px;margin:3px 0">' + esc(d.label || d.doc_type) +
+                    '<span style="color:var(--muted)"> &middot; ' +
+                    (d.generated_at ? isoToDmy(String(d.generated_at).slice(0, 10)) : "") + '</span></li>';
+                }).join("") + '</ul>'
+              : '<p class="panel-sub">Nothing filed yet.</p>') +
+            '<div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--line)">' +
+            '<button type="button" class="save-btn" id="sr-dup">Start a new surgery from this one</button>' +
+            '<span class="status" style="margin-left:10px">Copies the plan so a repeat or a ' +
+            'rebooking does not start from nothing. Dates are left blank.</span></div>';
+
+          const dup = qs("sr-dup");
+          if (dup) dup.onclick = async function () {
+            if (!confirm("Start a new surgery for her, copying this plan?\n\n" +
+                         "The procedure, items, implants and recovery plan are copied. " +
+                         "Dates and anything already approved are not.")) return;
+            const c = sb();
+            if (!c) { toast("Not signed in"); return; }
+            const copy = {};
+            ["procedure_name","procedure_codes","venue_type","surgery_venue","admission_type",
+             "est_duration_min","theatre_equipment","theatre_alerts","prosthesis_details",
+             "prosthesis_set","allergies","allergies_nka","glp1_sglt2","ab_cover","at_cover",
+             "antibiotics_postop","antithrombotic_drugs","recovery_plan","home_equipment",
+             "supplements","footwear","weight_bearing","mobility_aid","mobility_aid_order",
+             "risk_stratification"].forEach(function (k) {
+              if (o[k] != null) copy[k] = o[k];
+            });
+            copy.patient_id = pt.id;
+            copy.status = "draft";
+            const ins = await c.from("surgeon_orders").insert(copy).select("id").single();
+            if (ins.error) { toast("Could not copy: " + ins.error.message); return; }
+            toast("Copied. It is a draft, with no date.");
+            if (typeof loadReal === "function") loadReal();
+          };
+        }
 
         // ---- what each document needs FROM THE PATIENT ----------------------
         // The plan says what is being done. These say who it is being done to.

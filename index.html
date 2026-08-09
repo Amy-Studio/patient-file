@@ -26,7 +26,7 @@
          // loader, so it gets the same cache-busting stamp as everything
          // else. Added as a plain tag at the foot of the page it never
          // arrived in time and the panel gave up waiting for it.
-         "clinic-pracsuite-link.js"].forEach(function (f) {
+         "clinic-pracsuite-link.js", "clinic-pracsuite-files.js"].forEach(function (f) {
           document.write('<script src="' + base + f + '?fresh=' + v + '"><\/script>');
         });
       })();

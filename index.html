@@ -1305,8 +1305,11 @@
           qs("pf-docs").innerHTML = order.filter(function (c) { return groups[c]; }).map(function (c) {
             var rows = groups[c].map(function (i) {
               var d = docs[i];
-              var name = d.label || (d.doc_type || "Document").replace(/_/g, " ");
+              // The name shown here IS the name it carries on her PracSuite
+              // record, so there is never a second hidden one.
+              var name = pracSuiteDocName(d);
               var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmy(d.generated_at || d.created_at)); if (d.created_by) meta.push("by " + d.created_by); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
+              if (d.pracsuite_filed_at) meta.push("On PracSuite " + isoToDmy(d.pracsuite_filed_at));
               // Already on their PracSuite record, so it does not need sending
               // again. Two options' booklets and quotes are separate rows with
               // their own labels, so each is ticked and sent on its own.
@@ -1315,7 +1318,7 @@
                 ? '<span title="Already on her PracSuite record" style="font-size:12px;color:var(--good-ink,#2d7a55);margin-right:10px;flex-shrink:0">✓ PracSuite</span>'
                 : '<label style="margin-right:10px;flex-shrink:0;cursor:pointer" title="Tick to send this to her PracSuite record"><input type="checkbox" class="pf-doc-tick" data-doc-tick="' + i + '"></label>';
               return '<div class="doc" data-doc-i="' + i + '">' + tickCell +
-                '<div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
+                '<div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span data-doc-rename="' + i + '" title="Rename it. This is the name it carries on her PracSuite record." style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Rename</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
             }).join("");
             return '<div class="subhead">' + c + '</div>' + rows;
           }).join("");
@@ -1325,6 +1328,9 @@
           });
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-tick]"), function (el) {
             el.addEventListener("change", updatePracSuiteSendCount);
+          });
+          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-rename]"), function (el) {
+            el.addEventListener("click", function (ev) { ev.stopPropagation(); renameDoc(parseInt(el.getAttribute("data-doc-rename"), 10)); });
           });
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-del]"), function (el) {
             el.addEventListener("click", function (ev) { ev.stopPropagation(); removeDoc(parseInt(el.getAttribute("data-doc-del"), 10)); });
@@ -1377,8 +1383,84 @@
           }
           updatePracSuiteSendCount();
         }
+        /* What the file is CALLED on her PracSuite record.
+         *
+         * Not the label we use in here. "Main quote" and "Paper version -
+         * Pre-Surgery Screening Form" are our own shorthand, written for the
+         * person building the quote. On a patient's permanent record it has to
+         * read like a record: anyone opening her file in five years, including
+         * another practice, should know what the document is without knowing
+         * how we make them.
+         *
+         * Anything not listed keeps its label, which is right for the free-text
+         * documents dropped in through the inbox: they were named by a person
+         * already.
+         */
+        var PS_DOC_NAME = {
+          quote_main:                "Surgical Fee Quote",
+          quote_invoice_notes:       "Invoice Notes (practice use)",
+          quote_invoice_notes_docx:  "Invoice Notes (practice use, Word)",
+          quote_sjm:                 "Sir John Monash Fee Estimate Request",
+          quote_masada:              "Masada Fee Estimate Request",
+          quote_vsc:                 "VSC Fee Estimate Request",
+          quote_payment_authority:   "Surgery Payment Authority",
+          quote_screening:           "Pre-Surgery Screening Form",
+          pamphlet_full:             "Surgical Recovery Guide",
+          pamphlet_personalised:     "Personalised Recovery Summary",
+          cheat_sheet:               "Reception Summary (practice use)"
+        };
+        // Two options for one patient file side by side as "… (Clinic)" and
+        // "… (Hospital)". The option rides the label as a trailing em dash
+        // suffix, which is where it is read back from.
+        function pracSuiteDocName(d) {
+          // A name typed by a person wins over anything worked out here.
+          var own = String(d.display_name || "").trim();
+          if (own) return own;
+          var label = String(d.label || "").trim();
+          var opt = "";
+          // The option marker is an em dash, written by the Quote Builder and
+          // PIB as " — <Option>". A plain hyphen is NOT it: "Staff - if needed
+          // - Invoice notes" is one label, not a document with an option.
+          var m = /\s+[—–]\s+([^—–]+)$/.exec(label);
+          if (m && PS_DOC_NAME[d.doc_type]) opt = m[1].trim();
+          var base = PS_DOC_NAME[d.doc_type] || label || String(d.doc_type || "Document").replace(/_/g, " ");
+          return base + (opt ? " (" + opt + ")" : "");
+        }
+        /* Renaming a document.
+         *
+         * One name, not two. What the row says here is what the file is called
+         * on her PracSuite record, so there is never a hidden second name to
+         * find out about after it has gone somewhere it cannot be taken back
+         * from. Renaming after sending changes it here only; PracSuite keeps
+         * the name it was given, and the row says so.
+         */
+        async function renameDoc(i) {
+          var d = state.docsView[i];
+          if (!d) return;
+          var now = pracSuiteDocName(d);
+          var next = window.prompt(
+            d.pracsuite_filed_at
+              ? "Rename this document here.\n\nIt has already gone to PracSuite, and PracSuite keeps the name it was sent with."
+              : "What should this document be called?\n\nThis is the name it will carry on her PracSuite record.",
+            now);
+          if (next == null) return;
+          next = next.trim();
+          if (!next || next === now) return;
+          var client = sb();
+          if (!client) return;
+          var r = await client.from("patient_documents").update({ display_name: next }).eq("id", d.id);
+          if (r && r.error) {
+            window.alert("Could not rename it: " + r.error.message +
+              (/display_name/.test(r.error.message || "")
+                ? "\n\nThe rename column has not been added to the database yet. Run db-setup-pracsuite-filed.sql."
+                : ""));
+            return;
+          }
+          d.display_name = next;
+          renderDocs();
+        }
         function pracSuiteFileName(d) {
-          var base = String(d.label || d.doc_type || "Document").replace(/[\/\\:*?"<>|]/g, "-").trim();
+          var base = pracSuiteDocName(d).replace(/[\/\\:*?"<>|]/g, "-").trim();
           var when = String(d.generated_at || d.created_at || "").slice(0, 10) ||
                      new Date().toISOString().slice(0, 10);
           // The extension has to match the bytes. PracSuite is told the name
@@ -1402,9 +1484,12 @@
             say('<b style="color:#a3402d">The PracSuite connection did not load.</b> Reload the page and try again.');
             return;
           }
-          if (!window.confirm("Send " + docs.length + " document" + (docs.length === 1 ? "" : "s") +
-              " to " + (state.patient.full_name || "this patient") + "'s PracSuite record?\n\n" +
-              "PracSuite has no way to remove a file once it is there.")) return;
+          // Show the names they will actually carry on her record, not our
+          // shorthand, because that is the thing that cannot be changed after.
+          if (!window.confirm(
+              "Send to " + (state.patient.full_name || "this patient") + "'s PracSuite record:\n\n" +
+              docs.map(function (d) { return "  " + pracSuiteFileName(d); }).join("\n") +
+              "\n\nPracSuite has no way to remove a file once it is there.")) return;
           btn.disabled = true;
           var client = sb();
           var done = [], failed = [];

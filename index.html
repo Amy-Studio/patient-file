@@ -1511,7 +1511,15 @@
             try {
               var dl = await client.storage.from(d.bucket).download(d.path);
               if (dl.error || !dl.data) throw new Error(dl.error ? dl.error.message : "the file could not be read");
+              // A refusal for going too fast is worth waiting out rather than
+              // reporting as a failure and leaving her to work out which
+              // documents to tick again.
               var res = await window.ClinicPracSuiteFiles.upload(cid, dl.data, pracSuiteFileName(d));
+              if (!res.ok && /too soon|too many|slow down|429/i.test(String(res.reason || ""))) {
+                say("Waiting for PracSuite, then carrying on with " + (i + 1) + " of " + docs.length + "…");
+                await new Promise(function (f) { setTimeout(f, 8000); });
+                res = await window.ClinicPracSuiteFiles.upload(cid, dl.data, pracSuiteFileName(d));
+              }
               if (!res.ok) throw new Error(res.reason || "PracSuite refused it");
               done.push(d);
               // Remember it went, so it cannot be sent twice by accident. The

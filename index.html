@@ -1565,7 +1565,8 @@
           // every historic order has been moved across.
           var planFrame = qs("o-plan");
           if (planFrame && id) {
-            var want = APPS.plan + "?patient=" + encodeURIComponent(id);
+            var want = APPS.plan + "?patient=" + encodeURIComponent(id) +
+                       "&v=" + Math.floor(Date.now() / 60000);
             if (planFrame.getAttribute("data-src") !== want) {
               planFrame.setAttribute("data-src", want);
               planFrame.src = want;

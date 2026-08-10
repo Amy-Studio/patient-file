@@ -2005,22 +2005,40 @@
           try {
             const c = sb();
             if (c) {
+              // Live rows only. Without this the list showed every superseded
+              // version as well, so remaking a quote made the whole set appear
+              // twice and it read as though everything had been filed twice.
               const r = await c.from("patient_documents")
-                .select("id,doc_type,label,generated_at")
+                .select("id,doc_type,label,display_name,generated_at,pracsuite_filed_at")
                 .eq("patient_id", pt.id)
+                .is("archived_at", null)
                 .order("generated_at", { ascending: false });
               if (!r.error) docs = r.data || [];
+              else {
+                // display_name / pracsuite_filed_at may not exist yet.
+                const r2 = await c.from("patient_documents")
+                  .select("id,doc_type,label,generated_at")
+                  .eq("patient_id", pt.id)
+                  .is("archived_at", null)
+                  .order("generated_at", { ascending: false });
+                if (!r2.error) docs = r2.data || [];
+              }
             }
           } catch (e) { /* the case details are still worth showing */ }
 
           host.innerHTML =
             '<h3 style="font-size:13.5px;margin:0 0 6px">Her case</h3>' + srCase(o, pt) +
-            '<h3 style="font-size:13.5px;margin:20px 0 6px">Documents filed</h3>' +
+            // "On her file", not "for this surgery": documents are held against
+            // the patient, not against one operation, so a patient with two
+            // surgeries sees both sets here. Saying so beats implying otherwise.
+            '<h3 style="font-size:13.5px;margin:20px 0 6px">Documents on her file</h3>' +
             (docs.length
               ? '<ul style="margin:0;padding-left:18px">' + docs.map(function (d) {
-                  return '<li style="font-size:13px;margin:3px 0">' + esc(d.label || d.doc_type) +
+                  // The same names the Documents tab shows and PracSuite gets.
+                  return '<li style="font-size:13px;margin:3px 0">' + esc(pracSuiteDocName(d)) +
                     '<span style="color:var(--muted)"> &middot; ' +
-                    (d.generated_at ? isoToDmy(String(d.generated_at).slice(0, 10)) : "") + '</span></li>';
+                    (d.generated_at ? isoToDmy(String(d.generated_at).slice(0, 10)) : "") +
+                    (d.pracsuite_filed_at ? " &middot; on PracSuite" : "") + '</span></li>';
                 }).join("") + '</ul>'
               : '<p class="panel-sub">Nothing filed yet.</p>') +
             '<div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--line)">' +

@@ -1642,7 +1642,47 @@
           renderReadiness();
           try { renderSurgeryRecord(); } catch (e) {}
           Object.keys(PF_TARGETS).forEach(function (b) { qs(b).setAttribute("target", PF_TARGETS[b]); qs(b).setAttribute("rel", "noopener"); });
+          markSuiteLinks();
         }
+
+        /* Inside the suite these open as a tab, not a browser window.
+         *
+         * A named window is the right answer when the file is opened on its
+         * own. Inside the suite it is the wrong one: pressing Quote threw her
+         * out of the program into a bare browser tab with no sidebar and no
+         * patient file to come back to. The href stays exactly as it was, so
+         * nothing changes when this page is opened by itself.
+         */
+        var SUITE_OF = [
+          [APPS.quote, "quotes"], [APPS.pamphlet, "pib"], [APPS.list, "surgical"],
+          ["https://amy-studio.github.io/clinic-style/clinic-schedule.html", "schedule"]
+        ];
+        function markSuiteLinks() {
+          Object.keys(PF_LAUNCH).forEach(function (id) {
+            var a = qs(id); if (!a) return;
+            var href = a.getAttribute("href") || "";
+            a.removeAttribute("data-suite");
+            for (var i = 0; i < SUITE_OF.length; i++) {
+              if (href.indexOf(SUITE_OF[i][0]) !== 0) continue;
+              a.setAttribute("data-suite", SUITE_OF[i][1]);
+              a.setAttribute("data-q", href.split("?")[1] || "");
+              return;
+            }
+          });
+        }
+        var PF_LAUNCH = { "pf-make-quote": 1, "pf-make-pamphlet": 1, "pf-make-list": 1 };
+        document.addEventListener("click", function (e) {
+          var a = e.target && e.target.closest && e.target.closest("a[data-suite]");
+          if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button > 0) return;
+          try {
+            if (window.top && window.top !== window) {
+              window.top.postMessage({ type: "clinic-open-app",
+                                       key: a.getAttribute("data-suite"),
+                                       query: a.getAttribute("data-q") || "" }, "*");
+              e.preventDefault();
+            }
+          } catch (err) { /* opened on its own: the link works as it reads */ }
+        });
 
 
         // Both tabs save the same patient row, so the second button simply

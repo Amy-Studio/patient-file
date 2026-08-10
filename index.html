@@ -358,7 +358,7 @@
           <div class="brand-title">Patient file</div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
-        <a class="back-link" id="pf-back-search" href="?" style="display:none; margin-right:14px">← All patients</a>
+        <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
         <a class="back-link" href="https://clinic.stevenedwards.com.au">Dashboard</a>
       </div>
 
@@ -2529,7 +2529,22 @@
           var client = sb(); if (!client) { status("Not signed in"); return; }
           // Remember who was open. Reloading the page to pick up a change
           // should not also cost you the patient you were looking at.
-          var pid = new URLSearchParams(location.search).get("patient_id");
+          var _qs = new URLSearchParams(location.search);
+          var pid = _qs.get("patient_id");
+          /* "All patients" means ALL patients.
+           *
+           * The last patient is remembered so that reloading the page to pick
+           * up a change does not also cost you the patient you were reading.
+           * But "All patients" went to a url with no patient id, which is
+           * exactly what that memory fills in, so pressing it put you straight
+           * back on the same patient. It could not be got rid of.
+           *
+           * Asking for the list now forgets who was open, so the next reload
+           * does not drag them back either. */
+          if (_qs.get("all") === "1") {
+            try { sessionStorage.removeItem("pfLastPatient"); } catch (e) {}
+            showPicker(); return;
+          }
           if (!pid) { try { pid = sessionStorage.getItem("pfLastPatient") || ""; } catch (e) {} }
           if (!pid) { showPicker(); return; }
           try { sessionStorage.setItem("pfLastPatient", pid); } catch (e) {}

@@ -1684,6 +1684,45 @@
           } catch (err) { /* opened on its own: the link works as it reads */ }
         });
 
+        /* The surgery plan asking to open an app, from inside its own frame.
+         *
+         * The plan sits in a frame on this page, so from the plan's point of
+         * view it is always framed and it always asks rather than following
+         * its link. When THIS page is inside the suite the ask needs passing
+         * up. When this page is a browser tab of its own, which is how every
+         * card on the dashboard opens it, there is no suite above us to ask,
+         * and without this the plan's Quote and Recovery guide buttons did
+         * nothing at all: no tab, no error, nothing.
+         */
+        var SUITE_URL = {
+          quotes: APPS.quote, pib: APPS.pamphlet, surgical: APPS.list,
+          schedule: "https://amy-studio.github.io/clinic-style/clinic-schedule.html"
+        };
+        var SUITE_WIN = {
+          quotes: "clinicQuoteBuilder", pib: "clinicPIB",
+          surgical: "clinicSurgicalList", schedule: "clinicSchedule"
+        };
+        window.addEventListener("message", function (e) {
+          var d = e && e.data;
+          if (!d || d.type !== "clinic-open-app" || !d.key) return;
+          var base = SUITE_URL[d.key];
+          if (!base) return;
+          var q = d.query == null ? "" : String(d.query);
+          // Ids and flags only. A message can come from anywhere, so this
+          // only ever opens one of our own apps, never a url it was handed.
+          if (!/^[A-Za-z0-9_=&%.\-]*$/.test(q)) return;
+          if (window.top && window.top !== window) {
+            // A suite above us: it owns the tabs, so let it do the opening.
+            try { window.top.postMessage(d, "*"); return; } catch (err) {}
+          }
+          // We are the top. A named window, same as our own buttons use, so
+          // repeat presses land in one window per app instead of a stack.
+          try {
+            window.open(base + (q ? (base.indexOf("?") >= 0 ? "&" : "?") + q : ""),
+                        SUITE_WIN[d.key] || "_blank", "noopener");
+          } catch (err) {}
+        });
+
 
         // Both tabs save the same patient row, so the second button simply
         // drives the first rather than duplicating the save logic.

@@ -1307,17 +1307,145 @@
               var d = docs[i];
               var name = d.label || (d.doc_type || "Document").replace(/_/g, " ");
               var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmy(d.generated_at || d.created_at)); if (d.created_by) meta.push("by " + d.created_by); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
-              return '<div class="doc" data-doc-i="' + i + '"><div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
+              // Already on their PracSuite record, so it does not need sending
+              // again. Two options' booklets and quotes are separate rows with
+              // their own labels, so each is ticked and sent on its own.
+              var filed = !!d.pracsuite_filed_at;
+              var tickCell = filed
+                ? '<span title="Already on her PracSuite record" style="font-size:12px;color:var(--good-ink,#2d7a55);margin-right:10px;flex-shrink:0">✓ PracSuite</span>'
+                : '<label style="margin-right:10px;flex-shrink:0;cursor:pointer" title="Tick to send this to her PracSuite record"><input type="checkbox" class="pf-doc-tick" data-doc-tick="' + i + '"></label>';
+              return '<div class="doc" data-doc-i="' + i + '">' + tickCell +
+                '<div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
             }).join("");
             return '<div class="subhead">' + c + '</div>' + rows;
           }).join("");
+          renderPracSuiteSendBar();
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-open]"), function (el) {
             el.addEventListener("click", function () { previewDoc(state.docsView[parseInt(el.getAttribute("data-doc-open"), 10)]); });
+          });
+          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-tick]"), function (el) {
+            el.addEventListener("change", updatePracSuiteSendCount);
           });
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-del]"), function (el) {
             el.addEventListener("click", function (ev) { ev.stopPropagation(); removeDoc(parseInt(el.getAttribute("data-doc-del"), 10)); });
           });
         }
+        /* Sending documents to her PracSuite record, when SHE says so.
+         *
+         * They used to go across on their own the moment they were made. The
+         * PracSuite connection has no delete of any kind, for files, notes or
+         * tags, so a wrong document sent by mistake stays on that patient's
+         * record and nothing here can take it back. Now nothing leaves until
+         * it is ticked and sent.
+         *
+         * Every failure is said out loud, per document. The old automatic send
+         * only wrote its failures to the browser console, so a patient with no
+         * PracSuite link, or a connection that was refusing, looked exactly
+         * like a success and the documents were quietly never there.
+         */
+        function pracSuiteTickedDocs() {
+          var out = [];
+          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-tick]"), function (el) {
+            if (el.checked) out.push(state.docsView[parseInt(el.getAttribute("data-doc-tick"), 10)]);
+          });
+          return out.filter(Boolean);
+        }
+        function updatePracSuiteSendCount() {
+          var n = pracSuiteTickedDocs().length;
+          var b = qs("pf-ps-send");
+          if (!b) return;
+          b.disabled = !n;
+          b.textContent = n ? ("Send " + n + " to PracSuite") : "Send to PracSuite";
+          b.style.opacity = n ? "1" : ".55";
+        }
+        function renderPracSuiteSendBar() {
+          var host = qs("pf-docs");
+          if (!host || !host.parentNode) return;
+          var bar = qs("pf-ps-bar");
+          if (!bar) {
+            bar = document.createElement("div");
+            bar.id = "pf-ps-bar";
+            bar.style.cssText = "display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:0 0 12px;" +
+              "padding:10px 13px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius)";
+            bar.innerHTML =
+              '<button type="button" id="pf-ps-send" class="btn" style="opacity:.55">Send to PracSuite</button>' +
+              '<span id="pf-ps-note" style="font-size:12.5px;color:var(--muted)">' +
+              'Tick what you want on her PracSuite record. Nothing goes across until you press Send, ' +
+              'and PracSuite has no way to take a file back.</span>';
+            host.parentNode.insertBefore(bar, host);
+            qs("pf-ps-send").addEventListener("click", sendTickedToPracSuite);
+          }
+          updatePracSuiteSendCount();
+        }
+        function pracSuiteFileName(d) {
+          var base = String(d.label || d.doc_type || "Document").replace(/[\/\\:*?"<>|]/g, "-").trim();
+          var when = String(d.generated_at || d.created_at || "").slice(0, 10) ||
+                     new Date().toISOString().slice(0, 10);
+          // The extension has to match the bytes. PracSuite is told the name
+          // before the file arrives, so a .docx announced as a .pdf files as
+          // something nobody can open.
+          var m = /\.([a-z0-9]{2,5})$/i.exec(String(d.path || ""));
+          return base + " " + when + "." + (m ? m[1].toLowerCase() : "pdf");
+        }
+        async function sendTickedToPracSuite() {
+          var docs = pracSuiteTickedDocs();
+          if (!docs.length) return;
+          var note = qs("pf-ps-note"), btn = qs("pf-ps-send");
+          var say = function (t) { if (note) note.innerHTML = t; };
+          var cid = state.patient && state.patient.client_id;
+          if (!cid) {
+            say('<b style="color:#a3402d">This patient is not linked to PracSuite yet</b>, so there is ' +
+                'nowhere to send these. Link her on the PracSuite tab first, then come back.');
+            return;
+          }
+          if (!window.ClinicPracSuiteFiles) {
+            say('<b style="color:#a3402d">The PracSuite connection did not load.</b> Reload the page and try again.');
+            return;
+          }
+          if (!window.confirm("Send " + docs.length + " document" + (docs.length === 1 ? "" : "s") +
+              " to " + (state.patient.full_name || "this patient") + "'s PracSuite record?\n\n" +
+              "PracSuite has no way to remove a file once it is there.")) return;
+          btn.disabled = true;
+          var client = sb();
+          var done = [], failed = [];
+          for (var i = 0; i < docs.length; i++) {
+            var d = docs[i];
+            say("Sending " + (i + 1) + " of " + docs.length + "…");
+            try {
+              var dl = await client.storage.from(d.bucket).download(d.path);
+              if (dl.error || !dl.data) throw new Error(dl.error ? dl.error.message : "the file could not be read");
+              var res = await window.ClinicPracSuiteFiles.upload(cid, dl.data, pracSuiteFileName(d));
+              if (!res.ok) throw new Error(res.reason || "PracSuite refused it");
+              done.push(d);
+              // Remember it went, so it cannot be sent twice by accident. The
+              // column may not exist yet; the send still counts if it does not.
+              try { await client.from("patient_documents")
+                      .update({ pracsuite_filed_at: new Date().toISOString() }).eq("id", d.id); } catch (e) {}
+              d.pracsuite_filed_at = new Date().toISOString();
+            } catch (e) {
+              failed.push({ d: d, why: (e && e.message) || "unknown" });
+            }
+          }
+          // The quote tag means it is on their PracSuite record, so it goes
+          // now rather than when a PDF happened to be rendered.
+          if (done.some(function (x) { return /^quote/.test(String(x.doc_type || "")); }) &&
+              window.ClinicPracSuiteTags) {
+            try { await window.ClinicPracSuiteTags.tag(cid, "quote.uploaded"); } catch (e) {}
+          }
+          var parts = [];
+          if (done.length) parts.push('<b style="color:#2d7a55">' + done.length + ' sent.</b>');
+          if (failed.length) {
+            parts.push('<b style="color:#a3402d">' + failed.length + ' did not go:</b> ' +
+              failed.map(function (f) {
+                return esc(f.d.label || f.d.doc_type) + " (" + esc(f.why) + ")";
+              }).join("; "));
+          }
+          say(parts.join(" "));
+          btn.disabled = false;
+          renderDocs();
+          if (note) note.innerHTML = parts.join(" ");
+        }
+
         // Take a document off the patient's file. ARCHIVED, never destroyed:
         // the row keeps its archived_at stamp and renderDocs already hides
         // anything carrying one, so a wrong document can be removed and a

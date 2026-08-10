@@ -21,7 +21,7 @@
         var isLocal = ["localhost", "127.0.0.1"].indexOf(location.hostname) !== -1;
         var base = (isLocal && new URLSearchParams(location.search).get("local") === "1")
           ? "../clinic-style/" : "https://amy-studio.github.io/clinic-style/";
-        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-pdf.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
+        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
          // The PracSuite comparison. Loaded here, through the page's own
          // loader, so it gets the same cache-busting stamp as everything
          // else. Added as a plain tag at the foot of the page it never

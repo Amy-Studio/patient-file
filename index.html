@@ -1396,18 +1396,27 @@
          * documents dropped in through the inbox: they were named by a person
          * already.
          */
+        /* Keyed on the label the apps themselves wrote, NOT on the document
+         * type. A document dropped in through the inbox can carry any type we
+         * have, and it arrives with a name a person chose. Reading the type
+         * alone turned "PracSuite export 2026-08-10" into "Sir John Monash Fee
+         * Estimate Request" on screen, which is not what that document is.
+         * A name a person gave a document is never overwritten by one of ours.
+         */
         var PS_DOC_NAME = {
-          quote_main:                "Surgical Fee Quote",
-          quote_invoice_notes:       "Invoice Notes (practice use)",
-          quote_invoice_notes_docx:  "Invoice Notes (practice use, Word)",
-          quote_sjm:                 "Sir John Monash Fee Estimate Request",
-          quote_masada:              "Masada Fee Estimate Request",
-          quote_vsc:                 "VSC Fee Estimate Request",
-          quote_payment_authority:   "Surgery Payment Authority",
-          quote_screening:           "Pre-Surgery Screening Form",
-          pamphlet_full:             "Surgical Recovery Guide",
-          pamphlet_personalised:     "Personalised Recovery Summary",
-          cheat_sheet:               "Reception Summary (practice use)"
+          "main quote":                                        "Surgical Fee Quote",
+          "untitled draft":                                    "Surgical Fee Quote",
+          "staff - if needed - invoice notes":                 "Invoice Notes (practice use)",
+          "staff - if needed - invoice notes (word - for copying)": "Invoice Notes (practice use, Word)",
+          "sjm fee estimate request":                          "Sir John Monash Fee Estimate Request",
+          "staff - if needed - masada fee estimate request":   "Masada Fee Estimate Request",
+          "staff - if needed - vsc fee estimate request":      "VSC Fee Estimate Request",
+          "paper version - surgery payment authority":         "Surgery Payment Authority",
+          "paper version - procedure payment authority":       "Procedure Payment Authority",
+          "paper version - pre-surgery screening form":        "Pre-Surgery Screening Form",
+          "full pamphlet":                                     "Surgical Recovery Guide",
+          "personalised summary":                              "Personalised Recovery Summary",
+          "reception cheat sheet":                             "Reception Summary (practice use)"
         };
         // Two options for one patient file side by side as "… (Clinic)" and
         // "… (Hospital)". The option rides the label as a trailing em dash
@@ -1417,14 +1426,17 @@
           var own = String(d.display_name || "").trim();
           if (own) return own;
           var label = String(d.label || "").trim();
-          var opt = "";
           // The option marker is an em dash, written by the Quote Builder and
           // PIB as " — <Option>". A plain hyphen is NOT it: "Staff - if needed
           // - Invoice notes" is one label, not a document with an option.
-          var m = /\s+[—–]\s+([^—–]+)$/.exec(label);
-          if (m && PS_DOC_NAME[d.doc_type]) opt = m[1].trim();
-          var base = PS_DOC_NAME[d.doc_type] || label || String(d.doc_type || "Document").replace(/_/g, " ");
-          return base + (opt ? " (" + opt + ")" : "");
+          var opt = "", base = label;
+          var m = /^(.*?)\s+[—–]\s+([^—–]+)$/.exec(label);
+          if (m) { base = m[1].trim(); opt = m[2].trim(); }
+          var nice = PS_DOC_NAME[base.toLowerCase()];
+          // Not one of ours: it is somebody's own name for their own document,
+          // and it is left exactly as they wrote it, em dash and all.
+          if (!nice) return label || String(d.doc_type || "Document").replace(/_/g, " ");
+          return nice + (opt ? " (" + opt + ")" : "");
         }
         /* Renaming a document.
          *

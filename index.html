@@ -1842,11 +1842,12 @@
         function guardLaunch(a, key) {
           if (!a || a.dataset.guarded) return;
           a.dataset.guarded = "1";
-          a.addEventListener("click", function (ev) {
+          a.addEventListener("click", function () {
             var miss = missingFor(key);
             if (!miss.length) return;
-            if (!confirm("This " + NEEDS[key].name + " will be missing:\n\n  " +
-                         miss.join("\n  ") + "\n\nBuild it anyway?")) ev.preventDefault();
+            // Say it, do not stop her. She can see what is missing and decide.
+            var st = qs("pf-status-contact") || qs("pf-status");
+            if (st) st.textContent = "Building without: " + miss.join(", ");
           });
         }
 

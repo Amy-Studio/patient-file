@@ -21,7 +21,7 @@
         var isLocal = ["localhost", "127.0.0.1"].indexOf(location.hostname) !== -1;
         var base = (isLocal && new URLSearchParams(location.search).get("local") === "1")
           ? "../clinic-style/" : "https://amy-studio.github.io/clinic-style/";
-        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
+        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-surgery-docs.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
          // The PracSuite comparison. Loaded here, through the page's own
          // loader, so it gets the same cache-busting stamp as everything
          // else. Added as a plain tag at the foot of the page it never
@@ -1247,6 +1247,12 @@
           if (t.indexOf("pamphlet") >= 0 || t === "pib") return "Pamphlets (PIB)";
           if (t.indexOf("cheat") >= 0 || t.indexOf("reception") >= 0) return "Reception sheets";
           if (t.indexOf("fee") >= 0 || t.indexOf("estimate") >= 0) return "Fee estimates";
+          // The pre-op pack's own documents, kept together so the set that one
+          // press of "Approve and build pack" produces is found in one place
+          // instead of scattered through "Other". Cura's consent belongs with
+          // the rest of its pack, so this sits ABOVE the plain consent line,
+          // which would otherwise claim it.
+          if (t.indexOf("theatre_instructions") >= 0 || t.indexOf("postop_instructions") >= 0 || t.indexOf("referral") >= 0 || t.indexOf("cura") >= 0) return "Surgery pack";
           if (t.indexOf("consent") >= 0) return "Consent";
           if (t.indexOf("quote") >= 0) return "Quotes";
           return "Other";
@@ -1301,7 +1307,7 @@
           if (!docs.length) { qs("pf-docs").innerHTML = state.docsError ? ('<div class="empty">⚠ Couldn\'t load documents (' + esc(state.docsError) + '). Reload the page; if it keeps happening, log out and back in.</div>') : '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>'; return; }
           var groups = {};
           docs.forEach(function (d, i) { var c = docCategory(d.doc_type); (groups[c] = groups[c] || []).push(i); });
-          var order = ["Quotes", "Pamphlets (PIB)", "Fee estimates", "Reception sheets", "Consent", "Other"];
+          var order = ["Quotes", "Pamphlets (PIB)", "Fee estimates", "Reception sheets", "Consent", "Surgery pack", "Other"];
           qs("pf-docs").innerHTML = order.filter(function (c) { return groups[c]; }).map(function (c) {
             var rows = groups[c].map(function (i) {
               var d = docs[i];
@@ -2680,6 +2686,11 @@
             if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) pfUploadFiles(e.dataTransfer.files);
           });
         })();
+        // Other modules (the pre-op pack) file into patient_documents too, and
+        // until now only the drop path re-read the table, so their documents
+        // stayed invisible until a reload. Six documents that don't show up
+        // look exactly like six that were never made.
+        window.addEventListener("clinic:documents:changed", function () { if (state.patient && state.patient.id) refreshDocs(); });
 
         // delegated: add-code stub
         document.addEventListener("click", function (e) {

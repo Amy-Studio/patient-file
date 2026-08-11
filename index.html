@@ -400,13 +400,23 @@
           </div>
           <span class="status" id="pf-status"></span>
         </div>
+        <!-- When she was last checked against PracSuite. It sits under her
+             name because that is where you look, and because a patient nobody
+             has checked since April has to LOOK unchecked. Hidden until there
+             is something true to put in it. -->
+        <span id="pf-ps-stamp" style="display:none;margin-top:9px;font-size:11.5px;color:var(--muted);line-height:1.5"></span>
       </div>
 
       <!-- PracSuite is the source for Medicare, health fund, next of kin and
            email. The quote, booklet and surgical list all need them, so they
            are compared as soon as the file opens rather than when somebody
            remembers. It only ever SHOWS the comparison: blanks pre-ticked,
-           conflicts unticked, nothing written until you apply. -->
+           conflicts unticked, nothing written until you apply.
+
+           This line is what that check has to say. It is empty and invisible
+           when there is nothing to say, because a banner that is always there
+           stops being read. -->
+      <div id="pf-psbanner" style="margin-top:12px"></div>
       <div id="pf-readiness" style="margin-top:12px"></div>
       <div id="pf-surgery-switcher" style="margin-top:14px"></div>
 
@@ -1741,7 +1751,9 @@
           if (p.created_at) h.push('<div class="doc"><span class="dname">Created</span><span class="dmeta" style="margin-left:auto">' + isoToDmy(p.created_at) + (p.created_by ? " · " + esc(p.created_by) : "") + '</span></div>');
           qs("pf-history").innerHTML = h.length ? h.join("") : '<div class="empty">No history yet.</div>';
         }
-        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); }
+        // runPsCheck runs itself once per patient opened, so it is safe here:
+        // renderAll is called again every time a slower table arrives.
+        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); runPsCheck(); }
         function renderNotes() {
           var el = qs("pf-notes-list"); if (!el) return;
           var notes = (state.notes || []).filter(function (n) { return !n.deleted_at; });
@@ -1811,49 +1823,12 @@
               planFrame.src = want;
             }
           }
-          // The comparison module is a separate file. If the patient loads
-          // before it arrives, the old code simply skipped it and never tried
-          // again, so the panel was invisible with nothing to say why.
-          var psHost = qs("pf-pracsuite");
-          if (psHost && id && !psHost.dataset.mounted) {
-            if (!window.ClinicPracSuiteLink || !window.ClinicPDF) {
-              psHost.innerHTML = '<div style="background:var(--card);border:1px solid var(--line);' +
-                'border-radius:8px;padding:9px 13px;font-size:12.5px;color:var(--muted)">' +
-                'Loading her PracSuite details…</div>';
-              var tries = 0;
-              var iv = setInterval(function () {
-                tries++;
-                if (window.ClinicPracSuiteLink && window.ClinicPDF) {
-                  clearInterval(iv); psHost.dataset.mounted = ""; wireLaunch();
-                } else if (tries > 40) {          // ~10 seconds
-                  clearInterval(iv);
-                  psHost.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
-                    'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
-                    'The PracSuite panel did not load. Reload the page; if it keeps happening, ' +
-                    'tell Claude the PracSuite script never arrived.</div>';
-                }
-              }, 250);
-              return;
-            }
-            psHost.dataset.mounted = "1";
-            try {
-              if (!window.ClinicPDF || !window.ClinicPDF.authHeaders) {
-                // Silence here is what let every Medicare field stay blank.
-                psHost.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
-                  'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
-                  'Cannot reach PracSuite from this page, so her details were not compared. ' +
-                  'Reload; if it persists tell Claude the PracSuite panel did not load.</div>';
-                return;
-              }
-              window.ClinicPracSuiteLink.mount(psHost, { patient: state.patient, autoFind: true });
-            } catch (e) {
-              psHost.dataset.mounted = "";
-              psHost.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
-                'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
-                'PracSuite comparison failed: ' + esc(e.message) + '</div>';
-            }
-          }
-          if (psHost && id && !psHost.dataset.mounted) { /* handled above */ }
+          // The PracSuite panel used to be mounted from here, on every patient
+          // that loaded. Mounting it asks PracSuite for the patient, her
+          // appointments and her contacts, so three requests went out for every
+          // patient anybody so much as glanced at. It now mounts when the
+          // PracSuite tab is opened (mountPracSuitePanel), and the quiet check
+          // on open (runPsCheck) is the one thing that runs by itself.
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
           // Booked patient → the surgical list app loads their whole operating
@@ -2347,6 +2322,316 @@
         function mountOperative() { if (_opMounted) return; if (mountSurgeonForm("op-inline", "ClinicSurgeryAudit")) _opMounted = true; }
         (function () { var n = document.querySelector('.navitem[data-sec="preop"]'); if (n) n.addEventListener("click", mountPreop); })();
         (function () { var n = document.querySelector('.navitem[data-sec="operative"]'); if (n) n.addEventListener("click", mountOperative); })();
+
+        /* ---- PracSuite: checked on opening a patient ----------------------
+         *
+         * Amy, 12 August 2026: "i think everytime we open the patient it should
+         * check for differences and then show any for us to accept. and also
+         * have the date it was last checked or synced".
+         *
+         * So this CHECKS. It never writes a patient field: every difference it
+         * finds is still accepted one at a time by a person in the PracSuite
+         * tab. The only thing written from here is the stamp saying when the
+         * check ran and how many fields differed, and that is written to its
+         * own two columns and nowhere near her details.
+         *
+         * The comparison itself lives in clinic-pracsuite-link.js and there is
+         * only one of it, so the count on this banner and the rows in the panel
+         * can never disagree about the same patient.
+         */
+        var _psRes = null;          // the last answer, for the banner
+        var _psCheckedFor = null;   // patient id the check has already run for
+        var _psDismissedFor = null; // patient id whose banner she has closed
+        var _psPanelFor = null;     // patient id the panel is currently showing
+        var _psChecking = false;
+        var _psFail = "";           // a check that could not run, in plain words
+        var _psStampNote = "";      // why the date is not being remembered
+        var _psStampCols = true;    // the two columns exist until Supabase says otherwise
+
+        // Everything the check needs before it can ask anything.
+        function psReady() {
+          return !!(window.ClinicPracSuiteLink && window.ClinicPracSuiteLink.check &&
+                    window.ClinicPDF && window.ClinicPDF.authHeaders);
+        }
+        function psLinkId(p) { return String((p && p.client_id) == null ? "" : p.client_id).trim(); }
+
+        // A check that actually compared her, which is the only kind that earns
+        // a stamp. The module calls that answer "ok" when everything matched
+        // and "differs" when it did not; both of them looked at her. Anything
+        // else ("failed", "skipped", "unlinked", "unchecked") compared nothing,
+        // and a count of nothing must never be written down as a clean result.
+        function psComplete(res) {
+          return !!(res && (res.status === "ok" || res.status === "differs") &&
+                    res.differs != null && res.checkedAt);
+        }
+
+        // A mirror of the stamp in this browser, so the date survives a reload
+        // before Amy has run db-setup-pracsuite-check.sql. It is a mirror and
+        // never the truth: the columns are what another machine can read.
+        var PS_STAMP_KEY = "pfPsCheck:";
+        function psLocalStamp(pid) {
+          try { var raw = localStorage.getItem(PS_STAMP_KEY + pid); return raw ? JSON.parse(raw) : null; }
+          catch (e) { return null; }
+        }
+        function psStoredStamp(p) {
+          if (!p || !p.id) return null;
+          // The column first: a check somebody else did on another machine
+          // still counts as checked. The local mirror only fills in when the
+          // column is missing or empty, which is what makes this work before
+          // the migration is run.
+          if (p.pracsuite_checked_at) {
+            return { at: p.pracsuite_checked_at,
+                     differs: (p.pracsuite_diff_count == null ? null : p.pracsuite_diff_count) };
+          }
+          return psLocalStamp(p.id);
+        }
+
+        /* The stamp, written by itself and by nothing else.
+         *
+         * Only these two columns are ever sent, and only after a check that
+         * actually completed. A check that failed leaves the old stamp alone,
+         * so it goes on ageing instead of quietly becoming "checked and clean".
+         */
+        function psWriteStamp(pid, at, differs) {
+          if (!pid || !at) return;
+          try { localStorage.setItem(PS_STAMP_KEY + pid, JSON.stringify({ at: at, differs: differs })); } catch (e) {}
+          if (window.__pfPreview) return;
+          if (!_psStampCols) return;          // already told it has nowhere to go
+          var client = sb(); if (!client) return;
+          var patch = { pracsuite_checked_at: at, pracsuite_diff_count: differs };
+          client.from("patients").update(patch).eq("id", pid).then(function (r) {
+            if (r && r.error) {
+              var msg = (r.error.message || "").toString();
+              // Feature detection after the fact: Postgres names the column it
+              // does not know. Stop trying for this page, and say so on screen,
+              // because a date that is silently not saved is a date that reads
+              // as older than it is next time.
+              if (/pracsuite_checked_at|pracsuite_diff_count|column/i.test(msg)) {
+                _psStampCols = false;
+                _psStampNote = "The date is only being remembered in this browser: run " +
+                               "db-setup-pracsuite-check.sql in Supabase to save it properly.";
+              } else {
+                _psStampNote = "The last-checked date could not be saved (" + msg + ").";
+              }
+              renderPsStamp();
+              return;
+            }
+            if (state.patient && state.patient.id === pid) {
+              state.patient.pracsuite_checked_at = at;
+              state.patient.pracsuite_diff_count = differs;
+            }
+          }, function (e) {
+            _psStampNote = "The last-checked date could not be saved (" +
+                           ((e && e.message) || "no reason given") + ").";
+            renderPsStamp();
+          });
+        }
+
+        /* The check itself: once per patient opened, and only for a patient we
+         * have already linked to a PracSuite record.
+         *
+         * An unlinked patient triggers nothing at all. The only way to reach an
+         * unlinked record is a search by name, and a name search that runs on
+         * its own can land on a namesake and quietly compare a stranger.
+         *
+         * check() honours the stored stamp, so a patient checked within the
+         * hour is not asked about again. That interval is in the module, as
+         * CHECK_INTERVAL_MS, and there is one of it.
+         */
+        function runPsCheck() {
+          var p = state.patient;
+          if (!p || !p.id) return;
+          if (_psCheckedFor === p.id) return;
+          _psCheckedFor = p.id;
+          _psRes = null; _psFail = ""; _psDismissedFor = null; _psChecking = false;
+          if (!psLinkId(p)) { renderPsBanner(); renderPsStamp(); return; }
+
+          var pid = p.id, tries = 0;
+          _psChecking = true;
+          renderPsStamp();
+          (function attempt() {
+            if (!state.patient || state.patient.id !== pid) { _psChecking = false; return; }
+            if (!psReady()) {
+              // The module is a separate file and may still be on its way.
+              if (tries++ < 40) { setTimeout(attempt, 250); return; }   // about ten seconds
+              _psChecking = false;
+              _psFail = "PracSuite was not checked: the comparison script did not load. " +
+                        "Reload the page. If it keeps happening, tell Claude the PracSuite " +
+                        "script never arrived. Nothing has been compared, so this is not the " +
+                        "same as finding nothing wrong.";
+              renderPsBanner(); renderPsStamp();
+              return;
+            }
+            var stored = psStoredStamp(state.patient);
+            Promise.resolve(window.ClinicPracSuiteLink.check(state.patient, { lastCheckedAt: stored && stored.at }))
+              .then(function (res) {
+                _psChecking = false;
+                if (!state.patient || state.patient.id !== pid) return;  // she has moved on
+                _psRes = res;
+                // Only a completed comparison earns a stamp. "skipped" is the
+                // stamp we already had, and "failed" compared nothing.
+                if (psComplete(res)) psWriteStamp(pid, res.checkedAt, res.differs);
+                renderPsBanner(); renderPsStamp();
+              }, function (e) {
+                _psChecking = false;
+                if (!state.patient || state.patient.id !== pid) return;
+                _psFail = "PracSuite could not be checked: " + ((e && e.message) || String(e)) +
+                          ". Nothing has been compared, so this is not the same as finding " +
+                          "nothing wrong.";
+                renderPsBanner(); renderPsStamp();
+              });
+          })();
+        }
+
+        // Take her to the panel, where each difference is accepted one at a
+        // time. The nav handler switches the section; the listener below mounts.
+        function psShowTab() {
+          var n = document.querySelector('.navitem[data-sec="pracsuite"]');
+          if (n) n.click(); else mountPracSuitePanel();
+        }
+
+        var PS_TONE = { info: ["#eef3fa", "#d6e2f0", "#2f5680"],
+                        warn: ["#fdf3dd", "#f0ddb0", "#96660f"],
+                        bad:  ["#fbeeee", "#f1d6d6", "#b7484a"] };
+
+        function renderPsBanner() {
+          var host = qs("pf-psbanner"); if (!host) return;
+          var p = state.patient;
+          if (!p || !p.id || _psDismissedFor === p.id) { host.innerHTML = ""; return; }
+          var L = window.ClinicPracSuiteLink;
+          var tone = "", text = "";
+
+          if (_psFail) { tone = "bad"; text = _psFail; }
+          else if (_psRes && _psRes.status === "skipped") {
+            // Checked recently by somebody else, so there is no live comparison
+            // on this page, only the count the last completed one wrote down.
+            // Saying nothing here would let a patient with three known
+            // differences read as a clean file for an hour.
+            var st = psStoredStamp(p);
+            var n = st && st.differs;
+            if (n) {
+              tone = "info";
+              text = "PracSuite differed on " + n + (n === 1 ? " detail" : " details") +
+                     " when it was last checked" +
+                     ((L && L.ago && L.ago(st.at)) ? " (" + L.ago(st.at) + ")" : "") +
+                     ". Open the PracSuite tab to take them one at a time.";
+            }
+          } else if (_psRes && L && L.describe) {
+            var d = L.describe(_psRes);
+            tone = d.tone; text = d.text;
+          }
+
+          if (!text || tone === "none" || !PS_TONE[tone]) { host.innerHTML = ""; return; }
+          var c = PS_TONE[tone];
+          host.innerHTML =
+            '<div style="background:' + c[0] + ';border:1px solid ' + c[1] + ';color:' + c[2] + ';' +
+              'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55;' +
+              'display:flex;gap:10px;align-items:flex-start">' +
+              '<span style="flex:1;min-width:0">' + esc(text) + '</span>' +
+              '<button type="button" id="pf-psbanner-go" style="flex:none;border:1px solid ' + c[2] + ';' +
+                'background:transparent;color:' + c[2] + ';border-radius:6px;padding:3px 10px;' +
+                'font:inherit;font-size:12px;font-weight:600;cursor:pointer">Show me</button>' +
+              '<button type="button" id="pf-psbanner-x" title="Hide this until the file is opened again" ' +
+                'style="flex:none;border:0;background:transparent;color:' + c[2] + ';opacity:.7;' +
+                'font:inherit;font-size:15px;line-height:1;cursor:pointer;padding:2px 2px">&times;</button>' +
+            '</div>';
+          qs("pf-psbanner-go").addEventListener("click", psShowTab);
+          qs("pf-psbanner-x").addEventListener("click", function () {
+            _psDismissedFor = p.id; renderPsBanner();
+          });
+        }
+
+        // The date, in words, under her name. Never a guess: "never checked"
+        // and "checked in April" have to look different from each other and
+        // from a check that is still running.
+        function psStampText() {
+          var p = state.patient;
+          if (!p || !p.id) return "";
+          if (!psLinkId(p)) return "Not linked to a PracSuite record, so nothing is checked.";
+          var L = window.ClinicPracSuiteLink;
+          var stored = psStoredStamp(p);
+          var at = (_psRes && _psRes.checkedAt) || (stored && stored.at) || "";
+          var when = (at && L && L.ago) ? L.ago(at) : "";
+          if (!when) return _psChecking ? "Checking her against PracSuite…"
+                                        : "PracSuite has never been checked for this patient.";
+          return "PracSuite checked " + when + "." + (_psChecking ? " Checking again now…" : "");
+        }
+        function renderPsStamp() {
+          var el = qs("pf-ps-stamp"); if (!el) return;
+          var t = psStampText();
+          if (t && _psStampNote) t += " " + _psStampNote;
+          el.textContent = t;
+          el.style.display = t ? "block" : "none";
+        }
+
+        /* The panel, mounted when she opens the PracSuite tab and not before.
+         *
+         * Mounting it reads the patient, her appointments and her contacts, so
+         * doing it on load sent three requests to PracSuite for every patient
+         * anybody glanced at. Opening the tab is the point at which somebody
+         * intends to act on the comparison.
+         */
+        function mountPracSuitePanel() {
+          var host = qs("pf-pracsuite"); if (!host) return;
+          var p = state.patient;
+          if (!p || !p.id) { host.innerHTML = '<span style="font-size:12.5px;color:var(--muted)">Open a patient first.</span>'; return; }
+          if (_psPanelFor === p.id) return;      // already showing this patient
+          var pid = p.id;
+          if (!psReady()) {
+            host.innerHTML = '<div style="background:var(--card);border:1px solid var(--line);' +
+              'border-radius:8px;padding:9px 13px;font-size:12.5px;color:var(--muted)">' +
+              'Loading her PracSuite details…</div>';
+            var tries = 0;
+            var iv = setInterval(function () {
+              tries++;
+              if (!state.patient || state.patient.id !== pid) { clearInterval(iv); return; }
+              if (psReady()) { clearInterval(iv); mountPracSuitePanel(); }
+              else if (tries > 40) {             // about ten seconds
+                clearInterval(iv);
+                host.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
+                  'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
+                  'The PracSuite panel did not load, so her details were not compared. ' +
+                  'Reload the page; if it keeps happening, tell Claude the PracSuite ' +
+                  'script never arrived.</div>';
+              }
+            }, 250);
+            return;
+          }
+          _psPanelFor = pid;
+          try {
+            var stored = psStoredStamp(p);
+            window.ClinicPracSuiteLink.mount(host, {
+              patient: p,
+              // Only a linked patient is looked up on her own. An unlinked one
+              // gets the search boxes and waits to be told which record is hers.
+              autoFind: !!psLinkId(p),
+              lastCheckedAt: stored && stored.at,
+              onDone: function (row) {
+                // Something was accepted, so our side has changed. Redo the
+                // comparison against the record already fetched, which costs
+                // PracSuite nothing, and let the count follow the edit.
+                if (row) state.patient = Object.assign(state.patient || {}, row);
+                try {
+                  var again = window.ClinicPracSuiteLink.recompare(state.patient);
+                  if (psComplete(again)) {
+                    _psRes = again;
+                    psWriteStamp(pid, again.checkedAt, again.differs);
+                  }
+                } catch (e) {
+                  _psStampNote = "The count could not be worked out again after that change (" +
+                                 ((e && e.message) || "no reason given") + ").";
+                }
+                renderAll();
+              }
+            });
+          } catch (e) {
+            _psPanelFor = null;
+            host.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
+              'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
+              'PracSuite comparison failed: ' + esc((e && e.message) || String(e)) + '</div>';
+          }
+        }
+        (function () { var n = document.querySelector('.navitem[data-sec="pracsuite"]'); if (n) n.addEventListener("click", mountPracSuitePanel); })();
 
         // ---- load ----
         function loadStub() {

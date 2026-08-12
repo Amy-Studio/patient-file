@@ -1816,11 +1816,23 @@
           // every historic order has been moved across.
           var planFrame = qs("o-plan");
           if (planFrame && id) {
-            var want = APPS.plan + "?patient=" + encodeURIComponent(id) +
-                       "&v=" + Math.floor(Date.now() / 60000);
-            if (planFrame.getAttribute("data-src") !== want) {
-              planFrame.setAttribute("data-src", want);
-              planFrame.src = want;
+            /* Reload the plan ONLY when it is a different patient.
+             *
+             * The cache-buster used to be part of what was compared, and it
+             * changes every minute, so any refresh of this page after the
+             * minute had ticked over reloaded the plan screen underneath
+             * whoever was using it. Saving a plan triggers exactly such a
+             * refresh, which killed the PracSuite tag writes mid-flight and is
+             * why no supplement or mobility tag ever arrived. It would also
+             * throw away typing in progress.
+             *
+             * So the comparison is on the patient, and the buster stays on the
+             * address for the first load of each one.
+             */
+            if (planFrame.getAttribute("data-patient") !== String(id)) {
+              planFrame.setAttribute("data-patient", String(id));
+              planFrame.src = APPS.plan + "?patient=" + encodeURIComponent(id) +
+                              "&v=" + Math.floor(Date.now() / 60000);
             }
           }
           // The PracSuite panel used to be mounted from here, on every patient

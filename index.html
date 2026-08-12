@@ -455,13 +455,13 @@
               <div class="field full"><label>Address</label><input id="f-address"></div>
               <div class="field"><label>Medicare number</label><input id="f-medicare_number"></div>
               <div class="field"><label>Medicare IRN</label><input id="f-medicare_irn"></div>
+              <div class="field"><label>Medicare expiry</label><input id="f-medicare_expiry"></div>
               <div class="field"><label>Health fund</label><input id="f-health_fund"></div>
               <div class="field"><label>Fund membership</label><input id="f-health_fund_membership"></div>
               <div class="field"><label>Next of kin</label><input id="f-nok_name"></div>
               <div class="field"><label>Next of kin phone</label><input id="f-nok_phone"></div>
               <div class="field"><label>Preferred name</label><input id="f-preferred_name"></div>
               <div class="field"><label>Sex</label><input id="f-sex"></div>
-              <div class="field"><label>Medicare expiry</label><input id="f-medicare_expiry"></div>
               <div class="field"><label>MRN</label><input id="f-mrn"></div>
               <div class="field"><label>Client ID</label><input id="f-client_id"></div>
             </div>
@@ -1007,7 +1007,7 @@
           planAction("data-ocf", async function (o, c) {
             var label = o.procedure_name || "this surgery";
             if (!confirm("Confirm " + label + " as the one going ahead?\n\nAny other live " +
-                         "plan for her is archived, so the surgical list has one answer.")) return;
+                         "plan for their is archived, so the surgical list has one answer.")) return;
             // Archive the others first: only one plan can be going ahead.
             await c.from("surgeon_orders").update({ archived_at: new Date().toISOString() })
               .eq("patient_id", state.patient.id).is("archived_at", null).neq("id", o.id);
@@ -1018,8 +1018,8 @@
           });
           planAction("data-oar", async function (o, c) {
             var label = o.procedure_name || "this surgery";
-            if (!confirm("Archive " + label + "?\n\nUse this when it was a real option she " +
-                         "did not choose. It is kept, so what she was offered and quoted is " +
+            if (!confirm("Archive " + label + "?\n\nUse this when it was a real option they " +
+                         "did not choose. It is kept, so what they was offered and quoted is " +
                          "still on record, but it stops appearing on the list.")) return;
             var r = await c.from("surgeon_orders")
               .update({ archived_at: new Date().toISOString(), confirmed_at: null }).eq("id", o.id);
@@ -1029,7 +1029,7 @@
           planAction("data-orm", async function (o, c) {
             var label = o.procedure_name || "this surgery";
             if (!confirm("Delete " + label + " for good?\n\nOnly do this if it was created by " +
-                         "mistake and was never a real plan. It cannot be undone.\n\nIf she was " +
+                         "mistake and was never a real plan. It cannot be undone.\n\nIf they was " +
                          "genuinely offered it, archive it instead.")) return;
             var r = await c.from("surgeon_orders").delete().eq("id", o.id);
             if (r.error) { toast("Couldn't delete: " + r.error.message); return; }
@@ -1331,10 +1331,10 @@
               // their own labels, so each is ticked and sent on its own.
               var filed = !!d.pracsuite_filed_at;
               var tickCell = filed
-                ? '<span title="Already on her PracSuite record" style="font-size:12px;color:var(--good-ink,#2d7a55);margin-right:10px;flex-shrink:0">✓ PracSuite</span>'
-                : '<label style="margin-right:10px;flex-shrink:0;cursor:pointer" title="Tick to send this to her PracSuite record"><input type="checkbox" class="pf-doc-tick" data-doc-tick="' + i + '"></label>';
+                ? '<span title="Already on their PracSuite record" style="font-size:12px;color:var(--good-ink,#2d7a55);margin-right:10px;flex-shrink:0">✓ PracSuite</span>'
+                : '<label style="margin-right:10px;flex-shrink:0;cursor:pointer" title="Tick to send this to their PracSuite record"><input type="checkbox" class="pf-doc-tick" data-doc-tick="' + i + '"></label>';
               return '<div class="doc" data-doc-i="' + i + '">' + tickCell +
-                '<div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span data-doc-rename="' + i + '" title="Rename it. This is the name it carries on her PracSuite record." style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Rename</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
+                '<div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span data-doc-rename="' + i + '" title="Rename it. This is the name it carries on their PracSuite record." style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Rename</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
             }).join("");
             return '<div class="subhead">' + c + '</div>' + rows;
           }).join("");
@@ -1469,7 +1469,7 @@
           var next = window.prompt(
             d.pracsuite_filed_at
               ? "Rename this document here.\n\nIt has already gone to PracSuite, and PracSuite keeps the name it was sent with."
-              : "What should this document be called?\n\nThis is the name it will carry on her PracSuite record.",
+              : "What should this document be called?\n\nThis is the name it will carry on their PracSuite record.",
             now);
           if (next == null) return;
           next = next.trim();
@@ -1505,14 +1505,14 @@
           var cid = state.patient && state.patient.client_id;
           if (!cid) {
             say('<b style="color:#a3402d">This patient is not linked to PracSuite yet</b>, so there is ' +
-                'nowhere to send these. Link her on the PracSuite tab first, then come back.');
+                'nowhere to send these. Link their on the PracSuite tab first, then come back.');
             return;
           }
           if (!window.ClinicPracSuiteFiles) {
             say('<b style="color:#a3402d">The PracSuite connection did not load.</b> Reload the page and try again.');
             return;
           }
-          // Show the names they will actually carry on her record, not our
+          // Show the names they will actually carry on their record, not our
           // shorthand, because that is the thing that cannot be changed after.
           if (!window.confirm(
               "Send to " + (state.patient.full_name || "this patient") + "'s PracSuite record:\n\n" +
@@ -1528,7 +1528,7 @@
               var dl = await client.storage.from(d.bucket).download(d.path);
               if (dl.error || !dl.data) throw new Error(dl.error ? dl.error.message : "the file could not be read");
               // A refusal for going too fast is worth waiting out rather than
-              // reporting as a failure and leaving her to work out which
+              // reporting as a failure and leaving their to work out which
               // documents to tick again.
               var res = await window.ClinicPracSuiteFiles.upload(cid, dl.data, pracSuiteFileName(d));
               if (!res.ok && /too soon|too many|slow down|429/i.test(String(res.reason || ""))) {
@@ -1824,8 +1824,8 @@
             }
           }
           // The PracSuite panel used to be mounted from here, on every patient
-          // that loaded. Mounting it asks PracSuite for the patient, her
-          // appointments and her contacts, so three requests went out for every
+          // that loaded. Mounting it asks PracSuite for the patient, their
+          // appointments and their contacts, so three requests went out for every
           // patient anybody so much as glanced at. It now mounts when the
           // PracSuite tab is opened (mountPracSuitePanel), and the quiet check
           // on open (runPsCheck) is the one thing that runs by itself.
@@ -1862,7 +1862,7 @@
         /* Inside the suite these open as a tab, not a browser window.
          *
          * A named window is the right answer when the file is opened on its
-         * own. Inside the suite it is the wrong one: pressing Quote threw her
+         * own. Inside the suite it is the wrong one: pressing Quote threw their
          * out of the program into a bare browser tab with no sidebar and no
          * patient file to come back to. The href stays exactly as it was, so
          * nothing changes when this page is opened by itself.
@@ -1965,7 +1965,7 @@
         })();
 
         // ---- Surgery record -------------------------------------------------
-        // One surgery, everything about it in one place: her case as the list
+        // One surgery, everything about it in one place: their case as the list
         // prints it, the plan behind it, and every document filed for it. A
         // cancelled surgery therefore costs nothing, and a future one can start
         // from what was already decided rather than from a blank screen.
@@ -2028,11 +2028,11 @@
           } catch (e) { /* the case details are still worth showing */ }
 
           host.innerHTML =
-            '<h3 style="font-size:13.5px;margin:0 0 6px">Her case</h3>' + srCase(o, pt) +
+            '<h3 style="font-size:13.5px;margin:0 0 6px">Their case</h3>' + srCase(o, pt) +
             // "On her file", not "for this surgery": documents are held against
             // the patient, not against one operation, so a patient with two
             // surgeries sees both sets here. Saying so beats implying otherwise.
-            '<h3 style="font-size:13.5px;margin:20px 0 6px">Documents on her file</h3>' +
+            '<h3 style="font-size:13.5px;margin:20px 0 6px">Documents on their file</h3>' +
             (docs.length
               ? '<ul style="margin:0;padding-left:18px">' + docs.map(function (d) {
                   // The same names the Documents tab shows and PracSuite gets.
@@ -2137,7 +2137,7 @@
           var names = Object.keys(all);
           if (!names.length) {
             host.innerHTML = '<div style="background:#e8f4ee;border:1px solid #cfe6da;color:#2d8a5f;' +
-              'border-radius:8px;padding:9px 13px;font-size:12.5px">Her details are complete. ' +
+              'border-radius:8px;padding:9px 13px;font-size:12.5px">Their details are complete. ' +
               'Every document can be built.</div>';
             return;
           }
@@ -2156,7 +2156,7 @@
           a.addEventListener("click", function () {
             var miss = missingFor(key);
             if (!miss.length) return;
-            // Say it, do not stop her. She can see what is missing and decide.
+            // Say it, do not stop their. They can see what is missing and decide.
             var st = qs("pf-status-contact") || qs("pf-status");
             if (st) st.textContent = "Building without: " + miss.join(", ");
           });
@@ -2333,7 +2333,7 @@
          * finds is still accepted one at a time by a person in the PracSuite
          * tab. The only thing written from here is the stamp saying when the
          * check ran and how many fields differed, and that is written to its
-         * own two columns and nowhere near her details.
+         * own two columns and nowhere near their details.
          *
          * The comparison itself lives in clinic-pracsuite-link.js and there is
          * only one of it, so the count on this banner and the rows in the panel
@@ -2341,7 +2341,7 @@
          */
         var _psRes = null;          // the last answer, for the banner
         var _psCheckedFor = null;   // patient id the check has already run for
-        var _psDismissedFor = null; // patient id whose banner she has closed
+        var _psDismissedFor = null; // patient id whose banner they has closed
         var _psPanelFor = null;     // patient id the panel is currently showing
         var _psChecking = false;
         var _psFail = "";           // a check that could not run, in plain words
@@ -2355,9 +2355,9 @@
         }
         function psLinkId(p) { return String((p && p.client_id) == null ? "" : p.client_id).trim(); }
 
-        // A check that actually compared her, which is the only kind that earns
+        // A check that actually compared their, which is the only kind that earns
         // a stamp. The module calls that answer "ok" when everything matched
-        // and "differs" when it did not; both of them looked at her. Anything
+        // and "differs" when it did not; both of them looked at their. Anything
         // else ("failed", "skipped", "unlinked", "unchecked") compared nothing,
         // and a count of nothing must never be written down as a clean result.
         function psComplete(res) {
@@ -2466,7 +2466,7 @@
             Promise.resolve(window.ClinicPracSuiteLink.check(state.patient, { lastCheckedAt: stored && stored.at }))
               .then(function (res) {
                 _psChecking = false;
-                if (!state.patient || state.patient.id !== pid) return;  // she has moved on
+                if (!state.patient || state.patient.id !== pid) return;  // they has moved on
                 _psRes = res;
                 // Only a completed comparison earns a stamp. "skipped" is the
                 // stamp we already had, and "failed" compared nothing.
@@ -2483,7 +2483,7 @@
           })();
         }
 
-        // Take her to the panel, where each difference is accepted one at a
+        // Take their to the panel, where each difference is accepted one at a
         // time. The nav handler switches the section; the listener below mounts.
         function psShowTab() {
           var n = document.querySelector('.navitem[data-sec="pracsuite"]');
@@ -2541,7 +2541,7 @@
           });
         }
 
-        // The date, in words, under her name. Never a guess: "never checked"
+        // The date, in words, under their name. Never a guess: "never checked"
         // and "checked in April" have to look different from each other and
         // from a check that is still running.
         function psStampText() {
@@ -2564,9 +2564,9 @@
           el.style.display = t ? "block" : "none";
         }
 
-        /* The panel, mounted when she opens the PracSuite tab and not before.
+        /* The panel, mounted when they opens the PracSuite tab and not before.
          *
-         * Mounting it reads the patient, her appointments and her contacts, so
+         * Mounting it reads the patient, their appointments and their contacts, so
          * doing it on load sent three requests to PracSuite for every patient
          * anybody glanced at. Opening the tab is the point at which somebody
          * intends to act on the comparison.
@@ -2580,7 +2580,7 @@
           if (!psReady()) {
             host.innerHTML = '<div style="background:var(--card);border:1px solid var(--line);' +
               'border-radius:8px;padding:9px 13px;font-size:12.5px;color:var(--muted)">' +
-              'Loading her PracSuite details…</div>';
+              'Loading their PracSuite details…</div>';
             var tries = 0;
             var iv = setInterval(function () {
               tries++;
@@ -2590,7 +2590,7 @@
                 clearInterval(iv);
                 host.innerHTML = '<div style="background:#fbeeee;border:1px solid #f1d6d6;' +
                   'color:#b7484a;border-radius:8px;padding:9px 13px;font-size:12.5px">' +
-                  'The PracSuite panel did not load, so her details were not compared. ' +
+                  'The PracSuite panel did not load, so their details were not compared. ' +
                   'Reload the page; if it keeps happening, tell Claude the PracSuite ' +
                   'script never arrived.</div>';
               }
@@ -2602,7 +2602,7 @@
             var stored = psStoredStamp(p);
             window.ClinicPracSuiteLink.mount(host, {
               patient: p,
-              // Only a linked patient is looked up on her own. An unlinked one
+              // Only a linked patient is looked up on their own. An unlinked one
               // gets the search boxes and waits to be told which record is hers.
               autoFind: !!psLinkId(p),
               lastCheckedAt: stored && stored.at,

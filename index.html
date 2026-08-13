@@ -1836,7 +1836,15 @@
         }
         // runPsCheck runs itself once per patient opened, so it is safe here:
         // renderAll is called again every time a slower table arrives.
-        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); runPsCheck(); }
+        /* PracSuite is asked ONLY when Amy presses the button.
+ *
+ * This called runPsCheck on every redraw, and a patient load redraws several
+ * times as each query comes back, so opening files went out to PracSuite
+ * again and again, re-offering differences she had already dealt with.
+ * Smartsoft monitor usage and may revoke access, so an automatic check is
+ * not a convenience, it is a risk to the whole connection.
+ * (Amy, 13 Aug 2026: "it only checks when i ask it to".) */
+        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); }
         function renderNotes() {
           var el = qs("pf-notes-list"); if (!el) return;
           var notes = (state.notes || []).filter(function (n) { return !n.deleted_at; });
@@ -2723,6 +2731,24 @@
           if (!p || !p.id || _psDismissedFor === p.id) { host.innerHTML = ""; return; }
           var L = window.ClinicPracSuiteLink;
           var tone = "", text = "", lead = "";
+
+          /* Nothing has been asked of PracSuite for this patient, and nothing
+           * will be until she presses this. Every automatic check is a request
+           * against an allowance Smartsoft monitor and can revoke. */
+          if (!_psChecking && !_psRes && !_psFail) {
+            host.innerHTML =
+              '<div style="background:var(--surface-1);border:1px solid var(--line);' +
+                'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55;' +
+                'display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+                '<span style="flex:1;min-width:220px;color:var(--muted)">Not compared against ' +
+                'PracSuite. Nothing is asked of PracSuite unless you ask for it.</span>' +
+                '<button id="pf-ps-check" class="btn" style="font-size:12.5px;padding:5px 12px">' +
+                'Check PracSuite now</button>' +
+              '</div>';
+            var cb = qs("pf-ps-check");
+            if (cb) cb.addEventListener("click", function () { _psCheckedFor = null; runPsCheck(); });
+            return;
+          }
 
           // Still running. Said out loud, and NOT dismissible, because the
           // whole point is that she can see the answer has not arrived before

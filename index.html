@@ -21,7 +21,10 @@
         var isLocal = ["localhost", "127.0.0.1"].indexOf(location.hostname) !== -1;
         var base = (isLocal && new URLSearchParams(location.search).get("local") === "1")
           ? "../clinic-style/" : "https://amy-studio.github.io/clinic-style/";
-        ["clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-surgery-docs.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
+        // clinic-medicare-expiry.js is first on purpose: clinic-patients.js
+        // reads it on every write, so the one shape for the card expiry has
+        // to be in the room before anything can save a patient.
+        ["clinic-medicare-expiry.js", "clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-surgery-docs.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
          // The PracSuite comparison. Loaded here, through the page's own
          // loader, so it gets the same cache-busting stamp as everything
          // else. Added as a plain tag at the foot of the page it never
@@ -728,6 +731,60 @@
           var p = state.patient || {};
           ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes"].forEach(function (k) { setVal("f-" + k, p[k]); });
           setVal("f-dob", p.dob ? String(p.dob).slice(0, 10) : "");
+          wireExpiryField();
+          sayAboutExpiry();
+        }
+
+        /* The Medicare expiry box, tidied to the one stored shape as she leaves
+         * it — "MM/YYYY", which is what is printed on the card.
+         *
+         * It happens on the box and not only on the save so that what she sees
+         * is what is stored. Nothing is ever guessed: a value the reader cannot
+         * understand is left exactly as she typed it and SAID OUT LOUD
+         * underneath, because a wrong expiry rejects a real claim while looking
+         * perfectly tidy, and an odd-looking one only gets checked.
+         */
+        function wireExpiryField() {
+          var el = qs("f-medicare_expiry");
+          if (!el || el.dataset.expiryWired) return;
+          el.dataset.expiryWired = "1";
+          el.setAttribute("placeholder", "MM/YYYY");
+          el.addEventListener("blur", function () {
+            var ME = window.ClinicMedicareExpiry;
+            if (ME && el.value) el.value = ME.normalise(el.value);
+            sayAboutExpiry();
+          });
+          el.addEventListener("input", sayAboutExpiry);
+        }
+        function sayAboutExpiry() {
+          var el = qs("f-medicare_expiry"); if (!el) return;
+          var note = qs("pf-expiry-note");
+          if (!note) {
+            note = document.createElement("div");
+            note.id = "pf-expiry-note";
+            note.style.cssText = "font-size:11.5px;line-height:1.5;margin-top:4px";
+            el.parentNode.appendChild(note);
+          }
+          var ME = window.ClinicMedicareExpiry;
+          if (!ME) { note.textContent = ""; note.style.display = "none"; return; }
+          var words = ME.explain(el.value);
+          if (words) {
+            note.textContent = words;
+            note.style.color = "#96660f";
+            note.style.display = "block";
+            return;
+          }
+          // Expired is a fact worth saying here, where it can still be fixed,
+          // rather than at the hospital. isExpired answers null when it does
+          // not know, and null is never printed as "current".
+          var gone = ME.isExpired(el.value);
+          if (gone === true) {
+            note.textContent = "This card expired. A claim on an expired card is rejected.";
+            note.style.color = "#b7484a";
+            note.style.display = "block";
+            return;
+          }
+          note.textContent = ""; note.style.display = "none";
         }
         function renderSurgery() {
           var p = state.patient || {};
@@ -2183,14 +2240,33 @@
           Object.keys(NEEDS).forEach(function (k) {
             missingFor(k).forEach(function (m) { (all[m] = all[m] || []).push(NEEDS[k].name); });
           });
+          /* The PracSuite check, said right where the documents get built.
+           *
+           * The banner at the top of the file says the same thing, but she
+           * scrolls past it to reach these buttons — and scrolling past it is
+           * exactly what happened on the day a whole document set was filed
+           * with an expiry PracSuite disagreed with. One count, from
+           * psUnsettled, so the two can never say different things.
+           */
+          var unsettled = "";
+          try { unsettled = psUnsettled(); } catch (e) {}
+          var psStrip = unsettled
+            ? '<div style="background:#fdf3dd;border:1px solid #f0ddb0;color:#96660f;' +
+              'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55;margin-bottom:8px">' +
+              '<b>The PracSuite check ' + esc(unsettled) + '</b> ' +
+              'Anything built now may be built on details that are about to change.</div>'
+            : "";
+
           var names = Object.keys(all);
           if (!names.length) {
-            host.innerHTML = '<div style="background:#e8f4ee;border:1px solid #cfe6da;color:#2d8a5f;' +
+            host.innerHTML = psStrip +
+              '<div style="background:#e8f4ee;border:1px solid #cfe6da;color:#2d8a5f;' +
               'border-radius:8px;padding:9px 13px;font-size:12.5px">Their details are complete. ' +
               'Every document can be built.</div>';
             return;
           }
-          host.innerHTML = '<div style="background:#fdf3dd;border:1px solid #f0ddb0;color:#96660f;' +
+          host.innerHTML = psStrip +
+            '<div style="background:#fdf3dd;border:1px solid #f0ddb0;color:#96660f;' +
             'border-radius:8px;padding:10px 13px;font-size:12.5px;line-height:1.6">' +
             '<b>Missing, and needed before these are built:</b><br>' +
             names.map(function (n) {
@@ -2198,16 +2274,47 @@
             }).join("<br>") +
             '<br><span style="opacity:.8">The PracSuite comparison above may already have these.</span></div>';
         }
-        // Warn before it opens, not after it is built wrong.
+        /* Warn before it opens, not after it is built wrong.
+         *
+         * Two separate warnings, and the second is the one today's incident is
+         * about. A patient was opened, a whole set of documents was built and
+         * filed, and only then did the quiet PracSuite check report that the
+         * Medicare expiry disagreed. Those documents carry the wrong expiry and
+         * PracSuite has no delete, so filing a wrong one is permanent.
+         *
+         * She is NOT blocked. The dialog's OK builds it anyway, in one click.
+         * Cancel is for when she would rather look first — and Cancel has to
+         * stop the event reaching the suite handler further up, which would
+         * otherwise open the app by postMessage regardless.
+         */
         function guardLaunch(a, key) {
           if (!a || a.dataset.guarded) return;
           a.dataset.guarded = "1";
-          a.addEventListener("click", function () {
-            var miss = missingFor(key);
-            if (!miss.length) return;
-            // Say it, do not stop their. They can see what is missing and decide.
+          a.addEventListener("click", function (e) {
             var st = qs("pf-status-contact") || qs("pf-status");
-            if (st) st.textContent = "Building without: " + miss.join(", ");
+            var miss = missingFor(key);
+            var unsettled = psUnsettled();
+            if (unsettled) {
+              var what = (NEEDS[key] && NEEDS[key].name) || "this document";
+              var ask = "The PracSuite check " + unsettled + "\n\n" +
+                        "Build the " + what + " on the details in this file anyway?\n\n" +
+                        "OK — build it now.\n" +
+                        "Cancel — wait and open the PracSuite tab first.";
+              if (!window.confirm(ask)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();     // the suite handler must not open it either
+                psShowTab();
+                if (st) st.textContent = "Waiting for the PracSuite check.";
+                return;
+              }
+              if (st) st.textContent = "Built before the PracSuite check settled — " + unsettled;
+            }
+            // Say what is absent, do not stop them. They can see what is
+            // missing and decide.
+            if (miss.length && st) {
+              st.textContent = (unsettled ? st.textContent + " " : "") +
+                               "Building without: " + miss.join(", ");
+            }
           });
         }
 
@@ -2215,6 +2322,12 @@
         function collectPatientPatch() {
           var patch = {};
           ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
+          // Saved without leaving the box (a keyboard save never fires blur),
+          // so the one stored shape is settled here too. Tidies only — a value
+          // the reader cannot understand is saved exactly as she typed it.
+          if (patch.medicare_expiry && window.ClinicMedicareExpiry) {
+            patch.medicare_expiry = window.ClinicMedicareExpiry.normalise(patch.medicare_expiry);
+          }
           patch.dob = val("f-dob") || null;
           patch.surgery_date = val("f-surgery_date") || null;
           patch.surgery_time = val("f-surgery_time") || null;
@@ -2497,7 +2610,14 @@
 
           var pid = p.id, tries = 0;
           _psChecking = true;
-          renderPsStamp();
+          // SAY IT IS RUNNING, from the first moment.
+          //
+          // This used to say nothing at all until it had an answer, and silence
+          // reads as "nothing wrong". A whole set of documents was built and
+          // filed in that silence, and only afterwards did the check report
+          // that the Medicare expiry disagreed with PracSuite — so the filed
+          // documents carry the wrong one, and filing cannot be undone.
+          psRenderAll();
           (function attempt() {
             if (!state.patient || state.patient.id !== pid) { _psChecking = false; return; }
             if (!psReady()) {
@@ -2508,7 +2628,7 @@
                         "Reload the page. If it keeps happening, tell Claude the PracSuite " +
                         "script never arrived. Nothing has been compared, so this is not the " +
                         "same as finding nothing wrong.";
-              renderPsBanner(); renderPsStamp();
+              psRenderAll();
               return;
             }
             var stored = psStoredStamp(state.patient);
@@ -2520,16 +2640,56 @@
                 // Only a completed comparison earns a stamp. "skipped" is the
                 // stamp we already had, and "failed" compared nothing.
                 if (psComplete(res)) psWriteStamp(pid, res.checkedAt, res.differs);
-                renderPsBanner(); renderPsStamp();
+                psRenderAll();
               }, function (e) {
                 _psChecking = false;
                 if (!state.patient || state.patient.id !== pid) return;
                 _psFail = "PracSuite could not be checked: " + ((e && e.message) || String(e)) +
                           ". Nothing has been compared, so this is not the same as finding " +
                           "nothing wrong.";
-                renderPsBanner(); renderPsStamp();
+                psRenderAll();
               });
           })();
+        }
+
+        /* Everything that shows the state of the check, redrawn together.
+         *
+         * The banner and the strip above the document buttons must never
+         * disagree about the same patient, and the strip was the piece that
+         * used to go stale: it was only drawn by wireLaunch, which does not run
+         * when an answer arrives from PracSuite.
+         */
+        function psRenderAll() {
+          renderPsBanner();
+          renderPsStamp();
+          try { renderReadiness(); } catch (e) {}
+        }
+
+        /* Is the check still open? Returns the reason in words, or "" when
+         * there is nothing hanging over this patient.
+         *
+         * "Unresolved" is deliberately wider than "still running": a check
+         * that finished and FOUND something is just as much a reason not to
+         * build a document yet, and so is one that could not run at all. A
+         * count of nothing must never read as nothing wrong.
+         */
+        function psUnsettled() {
+          var p = state.patient;
+          if (!p || !p.id) return "";
+          if (!psLinkId(p)) return "";                 // not linked: nothing to check against
+          if (_psCheckedFor !== p.id) return "has not started yet.";
+          if (_psChecking) return "has not finished yet.";
+          if (_psFail) return "could not run at all, so nothing has been compared.";
+          var n = null;
+          if (_psRes && (_psRes.status === "ok" || _psRes.status === "differs")) {
+            n = _psRes.differs;
+          } else {
+            var st = psStoredStamp(p);                 // checked elsewhere within the hour
+            n = st ? st.differs : null;
+          }
+          if (n) return "found " + n + (n === 1 ? " difference" : " differences") +
+                        " nobody has looked at yet.";
+          return "";
         }
 
         // Take their to the panel, where each difference is accepted one at a
@@ -2543,12 +2703,36 @@
                         warn: ["#fdf3dd", "#f0ddb0", "#96660f"],
                         bad:  ["#fbeeee", "#f1d6d6", "#b7484a"] };
 
+        // "1 difference to look at" — the headline over the explanation. Empty
+        // when there is no count to report, because a headline that is always
+        // there stops being read. A count of 0 is not a headline either: the
+        // absence of a banner already says that.
+        function psLead(n) {
+          if (!n) return "";
+          return '<b style="display:block;font-size:13.5px;margin-bottom:2px">' +
+                 n + (n === 1 ? " difference" : " differences") + " to look at</b>";
+        }
+
         function renderPsBanner() {
           var host = qs("pf-psbanner"); if (!host) return;
           var p = state.patient;
           if (!p || !p.id || _psDismissedFor === p.id) { host.innerHTML = ""; return; }
           var L = window.ClinicPracSuiteLink;
-          var tone = "", text = "";
+          var tone = "", text = "", lead = "";
+
+          // Still running. Said out loud, and NOT dismissible, because the
+          // whole point is that she can see the answer has not arrived before
+          // she starts building documents on the details it is checking.
+          if (_psChecking) {
+            var c0 = PS_TONE.info;
+            host.innerHTML =
+              '<div style="background:' + c0[0] + ';border:1px solid ' + c0[1] + ';color:' + c0[2] + ';' +
+                'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55">' +
+                '<b>Checking PracSuite…</b> Their details have not been compared yet. ' +
+                'Anything built now may be built on details that are about to change.' +
+              '</div>';
+            return;
+          }
 
           if (_psFail) { tone = "bad"; text = _psFail; }
           else if (_psRes && _psRes.status === "skipped") {
@@ -2560,6 +2744,7 @@
             var n = st && st.differs;
             if (n) {
               tone = "info";
+              lead = psLead(n);
               text = "PracSuite differed on " + n + (n === 1 ? " detail" : " details") +
                      " when it was last checked" +
                      ((L && L.ago && L.ago(st.at)) ? " (" + L.ago(st.at) + ")" : "") +
@@ -2568,6 +2753,11 @@
           } else if (_psRes && L && L.describe) {
             var d = L.describe(_psRes);
             tone = d.tone; text = d.text;
+            // The count, said first and said plainly. The sentence underneath
+            // explains it; the headline is what gets read while she is already
+            // reaching for Make quote. Same number the panel offers, because
+            // there is only one comparison.
+            lead = psLead(_psRes.differs);
           }
 
           if (!text || tone === "none" || !PS_TONE[tone]) { host.innerHTML = ""; return; }
@@ -2576,7 +2766,7 @@
             '<div style="background:' + c[0] + ';border:1px solid ' + c[1] + ';color:' + c[2] + ';' +
               'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55;' +
               'display:flex;gap:10px;align-items:flex-start">' +
-              '<span style="flex:1;min-width:0">' + esc(text) + '</span>' +
+              '<span style="flex:1;min-width:0">' + lead + esc(text) + '</span>' +
               '<button type="button" id="pf-psbanner-go" style="flex:none;border:1px solid ' + c[2] + ';' +
                 'background:transparent;color:' + c[2] + ';border-radius:6px;padding:3px 10px;' +
                 'font:inherit;font-size:12px;font-weight:600;cursor:pointer">Show me</button>' +
@@ -2799,12 +2989,33 @@
             + dups.slice(0, 4).map(function (p) {
               var bits = [];
               if (p.dob) bits.push("DOB " + isoToDmy(p.dob));
-              if (p.medicare_number) bits.push("Medicare …" + String(p.medicare_number).replace(/\D/g, "").slice(-4));
+              if (p.medicare_number) bits.push("Medicare …" + String(p.medicare_number).replace(/\D/g, "").slice(-4) + (p.medicare_irn ? "/" + p.medicare_irn : ""));
               if (p.phone) bits.push(p.phone);
-              return '<div class="np-dup-row"><b>' + esc(p.full_name || "(unnamed)") + '</b><span class="np-dim">' + esc(bits.join(" · ")) + '</span><button type="button" class="np-btn np-open" data-open="' + esc(p.id) + '">Open their file</button></div>';
+              if (p.identityBasis) bits.push("matches on " + p.identityBasis);
+              // An archived record is the one the search box CANNOT show her,
+              // so it has to be labelled here or she will make a second file
+              // for somebody she merged away this morning.
+              var arch = p.archived_at || p.isArchived;
+              var merged = String(p.notes || "").match(/^\[Merged into ([^\]]+)\]/);
+              return '<div class="np-dup-row"><b>' + esc(p.full_name || "(unnamed)") + '</b>'
+                + (arch ? '<span class="np-dim" style="color:#a3651f;font-weight:600"> ARCHIVED' + (merged ? " — merged into " + esc(merged[1]) : "") + '</span>' : "")
+                + '<span class="np-dim">' + esc(bits.join(" · ")) + '</span>'
+                + '<button type="button" class="np-btn np-open" data-open="' + esc(p.id) + '"' + (arch ? ' data-arch="1"' : "") + '>' + (arch ? "Restore &amp; open" : "Open their file") + '</button></div>';
             }).join("") + '</div>';
           Array.prototype.forEach.call(el.querySelectorAll("[data-open]"), function (b) {
-            b.addEventListener("click", function () { location.href = "?patient_id=" + encodeURIComponent(b.getAttribute("data-open")); });
+            b.addEventListener("click", function () {
+              var id = b.getAttribute("data-open");
+              if (b.getAttribute("data-arch") !== "1") { location.href = "?patient_id=" + encodeURIComponent(id); return; }
+              // Bring the archived record back BEFORE opening it: filing work
+              // onto a row every other screen hides is how work disappears.
+              b.disabled = true; b.textContent = "Restoring…";
+              Promise.resolve(window.ClinicPatients.restore(id)).then(function () {
+                location.href = "?patient_id=" + encodeURIComponent(id);
+              }, function (e) {
+                b.disabled = false; b.textContent = "Restore & open";
+                alert("Couldn't restore: " + ((e && e.message) || "error"));
+              });
+            });
           });
         }
         function npCreate() {
@@ -2815,16 +3026,35 @@
           var p = Promise.resolve();
           if (!npArmed) {
             btn.textContent = "Checking the register…";
-            p = Promise.resolve(window.ClinicPatients.findPotentialDuplicates ? window.ClinicPatients.findPotentialDuplicates(d) : []).catch(function () { return []; })
+            // ARCHIVED ROWS INCLUDED. The picker search above hides them, so
+            // for somebody archived as a duplicate this morning this check
+            // used to return NOTHING, no warning appeared at all, and the
+            // FIRST click made a second file. That is five of the six pairs
+            // in the register.
+            p = Promise.resolve(window.ClinicPatients.findPotentialDuplicates ? window.ClinicPatients.findPotentialDuplicates(d, { includeArchived: true }) : []).catch(function () { return []; })
               .then(function (dups) {
                 dups = dups || [];
-                if (dups.length) { renderNpDups(dups); npArmed = true; btn.textContent = "Save as new anyway"; btn.disabled = false; st.textContent = ""; return "stop"; }
+                // Strong identity matches (PracSuite id, Medicare + IRN,
+                // Medicare + DOB, name + DOB) come first and are listed even
+                // when the fuzzy pass missed them.
+                return Promise.resolve(window.ClinicPatients.resolveBeforeCreate ? window.ClinicPatients.resolveBeforeCreate(d) : null)
+                  .catch(function () { return null; })
+                  .then(function (res) {
+                    if (res && res.matches && res.matches.length) {
+                      var ids = {};
+                      res.matches.forEach(function (m) { ids[m.id] = true; });
+                      dups = res.matches.concat(dups.filter(function (x) { return !ids[x.id]; }));
+                    }
+                    if (dups.length) { renderNpDups(dups); npArmed = true; btn.textContent = "Save as new anyway"; btn.disabled = false; st.textContent = ""; return "stop"; }
+                  });
               });
           }
           p.then(function (r) {
             if (r === "stop") return;
             btn.textContent = "Creating…";
-            return window.ClinicPatients.create(d).then(function (row) {
+            // npArmed means she saw the matches and chose to go ahead — real
+            // namesakes and twins exist, so that decision has to be possible.
+            return window.ClinicPatients.create(d, npArmed ? { force: true } : {}).then(function (row) {
               location.href = "?patient_id=" + encodeURIComponent(row.id);
             });
           }).catch(function (e) {
@@ -2855,7 +3085,12 @@
           b.addEventListener("click", function () {
             var pt = state.patient; if (!pt || !pt.id) { status("No patient loaded"); return; }
             var name = pt.full_name || "this patient";
-            if (!confirm("Archive " + name + "?\n\nThey disappear from the lists in every clinic app. Nothing is deleted - restore them any time from the Dashboard's Archived tab.")) return;
+            // Say what actually happens. There is no Archived tab: the honest
+            // route back is the duplicate warning on the new-patient form,
+            // which now lists archived matches with a Restore button. Promising
+            // a tab that does not exist is why an archived person only ever
+            // came back as a NEW record.
+            if (!confirm("Archive " + name + "?\n\nThey disappear from the lists in every clinic app. Nothing is deleted: if you add them again later, the new-patient form will show this archived record and offer to restore it.")) return;
             var done = function () { location.href = "?"; };
             var fail = function (e) { status("Archive failed"); alert("Couldn't archive: " + ((e && e.message) || "error")); };
             try {
@@ -3072,7 +3307,20 @@
           });
           try {
             if (Object.keys(pPatch).length) { if (window.ClinicPatients && ClinicPatients.update) await ClinicPatients.update(pid, pPatch); else await client.from("patients").update(pPatch).eq("id", pid); Object.assign(P, pPatch); }
-            if (Object.keys(oPatch).length) { if (state.orderId) await client.from("surgeon_orders").update(oPatch).eq("id", state.orderId); else { var ins = await client.from("surgeon_orders").insert(Object.assign({ patient_id: pid, status: "draft" }, oPatch)).select().single(); if (ins && ins.data) { state.order = ins.data; state.orderId = ins.data.id; } } if (state.order) Object.assign(state.order, oPatch); }
+            if (Object.keys(oPatch).length) { if (state.orderId) await client.from("surgeon_orders").update(oPatch).eq("id", state.orderId); else { var ins = await client.from("surgeon_orders").insert(Object.assign({ patient_id: pid, status: "draft" }, oPatch)).select().single(); if (ins && ins.data) {
+              state.order = ins.data; state.orderId = ins.data.id;
+              /* Put it in the LIST the picker reads, not only in "the current
+               * one". Accepting a dropped note created the surgery plan and
+               * set it as current, but state.orders was left untouched, so
+               * the screen still said "No surgery yet" and the plan looked
+               * like it had not been made. It had; nothing could see it until
+               * the page was reloaded. (Amy, 13 Aug 2026: "nothing on the
+               * surgical plan is ready?") */
+              state.orders = state.orders || [];
+              if (!state.orders.some(function (o) { return o && o.id === ins.data.id; })) {
+                state.orders.unshift(ins.data);
+              }
+            } } if (state.order) Object.assign(state.order, oPatch); }
             var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
             var safe = file.name.replace(/[^\w.\- ]/g, "_");
             var path = "_patient-" + pid + "/" + ts + "__" + safe;

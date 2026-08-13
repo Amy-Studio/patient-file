@@ -2943,6 +2943,50 @@
           var ce = ex.clinical_extract || {};
           var oa = state.order || {};
           var intOf = function (v) { var n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
+          /* Plain English for a value the database stores as a code, and a
+           * readable form for a list. The STORED value is what gets written;
+           * these only change what Amy reads in the dialog, because
+           * "yes_5d" and "[object Object]" are not answers a person can check.
+           * (Amy, 13 Aug 2026, looking at the dialog: "not sure if we want it
+           * noted the way its extracting".) */
+          var sayCover = function (v) {
+            var t = String(v == null ? "" : v).trim().toLowerCase();
+            if (!t) return "";
+            if (t === "no" || t === "none" || t === "nil") return "No";
+            var m = t.match(/^yes[_\s]*(\d+)\s*d/);
+            if (m) return "Yes, " + m[1] + " days";
+            if (t === "yes") return "Yes";
+            return String(v);
+          };
+          var sayList = function (v) {
+            if (v == null) return "";
+            if (Array.isArray(v)) {
+              return v.map(function (x) {
+                if (x && typeof x === "object") {
+                  return [x.code, x.description].filter(Boolean).join(" ") +
+                         (x.qty > 1 ? " x " + x.qty : "");
+                }
+                return String(x);
+              }).filter(Boolean).join(", ");
+            }
+            return String(v);
+          };
+          var sayWeeks = function (v) {
+            if (v == null || v === "") return "";
+            var n = parseInt(v, 10);
+            return Number.isFinite(n) ? (n === 1 ? "1 week" : n + " weeks") : String(v);
+          };
+          var sayDays = function (v) {
+            if (v == null || v === "") return "";
+            var n = parseInt(v, 10);
+            return Number.isFinite(n) ? (n === 1 ? "1 day" : n + " days") : String(v);
+          };
+          var sayDrug = function (st, drug, dose) {
+            var w = { not_taking: "Not taking", taking: "Taking", ceased: "Ceased",
+                      check: "To be confirmed" }[String(st || "").toLowerCase()];
+            if (!w && !drug && !dose) return "";
+            return [w || "Status not recorded", drug || "", dose || ""].filter(Boolean).join(", ");
+          };
           var defs = [
             ["Procedure", oa.procedure_name || P.surgery_procedure, ex.surgery_procedure, [["patients", "surgery_procedure"], ["order", "procedure_name"]]],
             ["Estimated duration (min)", (oa.est_duration_min != null ? oa.est_duration_min : P.surgery_duration_min), intOf(ce.est_duration_min), [["patients", "surgery_duration_min"], ["order", "est_duration_min"]]],
@@ -2956,13 +3000,66 @@
             ["Address", P.address, ex.address, [["patients", "address"]]],
             ["Allergies", oa.allergies || (oa.allergies_nka ? "NKA" : ""), ce.allergies || (ce.allergies_nka ? "NKA" : ""), [["order", "allergies"]]],
             ["GLP-1 / SGLT2 meds", oa.glp1_sglt2, ce.glp1_sglt2, [["order", "glp1_sglt2"]]],
-            ["Antibiotic cover", oa.ab_cover, ce.ab_cover, [["order", "ab_cover"]]],
-            ["Antithrombotic cover", oa.at_cover, ce.at_cover, [["order", "at_cover"]]],
+            ["Antibiotic cover", oa.ab_cover, ce.ab_cover, [["order", "ab_cover"]], sayCover(oa.ab_cover), sayCover(ce.ab_cover)],
+            ["Antithrombotic cover", oa.at_cover, ce.at_cover, [["order", "at_cover"]], sayCover(oa.at_cover), sayCover(ce.at_cover)],
             ["Weight-bearing", oa.weight_bearing, ce.weight_bearing, [["order", "weight_bearing"]]],
-            ["Driving off (weeks)", oa.driving_weeks_off, intOf(ce.driving_weeks_off), [["order", "driving_weeks_off"]]]
+            ["Driving off (weeks)", oa.driving_weeks_off, intOf(ce.driving_weeks_off), [["order", "driving_weeks_off"]]],
+
+            /* Everything else the reader finds. It extracts 48 fields and this
+             * list offered 16, so most of a plan and the whole recovery guide
+             * were being read and then dropped on the floor, leaving Amy to
+             * retype them per patient. Each line shows a human form and stores
+             * the real value. (13 Aug 2026.) */
+            ["Item numbers", oa.procedure_codes, ce.procedure_codes, [["order", "procedure_codes"]], sayList(oa.procedure_codes), sayList(ce.procedure_codes)],
+            ["Prosthesis / implants", oa.prosthesis_details, ce.prosthesis_details, [["order", "prosthesis_details"]]],
+            ["Theatre equipment", oa.theatre_equipment, ce.theatre_equipment, [["order", "theatre_equipment"]]],
+            ["Theatre alerts", oa.theatre_alerts, ce.theatre_alerts, [["order", "theatre_alerts"]]],
+            ["To order in", oa.chloe_order, ce.chloe_order, [["order", "chloe_order"]]],
+            ["Admission", oa.admission_type, ce.admission_type, [["order", "admission_type"]]],
+            ["Anaesthesia", oa.anaesthesia_type, ce.anaesthesia_type, [["order", "anaesthesia_type"]]],
+            ["Risk level", oa.risk_stratification, ce.risk_stratification, [["order", "risk_stratification"]]],
+            ["Banding rule", oa.banding_rule, ce.banding_rule, [["order", "banding_rule"]]],
+            ["PracSuite quote number", oa.pracsuite_quote_number, ce.pracsuite_quote_number, [["order", "pracsuite_quote_number"]]],
+            ["Supplements", oa.supplements, ce.supplements, [["order", "supplements"]], sayList(oa.supplements), sayList(ce.supplements)],
+            ["Mobility aid", oa.mobility_aid, ce.mobility_aid, [["order", "mobility_aid"]]],
+            ["Crutches (weeks)", oa.crutches_weeks, intOf(ce.crutches_weeks), [["order", "crutches_weeks"]], sayWeeks(oa.crutches_weeks), sayWeeks(ce.crutches_weeks)],
+            ["Knee scooter (weeks)", oa.knee_scooter_weeks, intOf(ce.knee_scooter_weeks), [["order", "knee_scooter_weeks"]], sayWeeks(oa.knee_scooter_weeks), sayWeeks(ce.knee_scooter_weeks)],
+            ["Footwear", oa.footwear, ce.footwear, [["order", "footwear"]]],
+            ["Footwear (weeks)", oa.footwear_weeks, intOf(ce.footwear_weeks), [["order", "footwear_weeks"]], sayWeeks(oa.footwear_weeks), sayWeeks(ce.footwear_weeks)],
+            ["Partial weight-bearing at (weeks)", oa.partial_wb_at_weeks, intOf(ce.partial_wb_at_weeks), [["order", "partial_wb_at_weeks"]], sayWeeks(oa.partial_wb_at_weeks), sayWeeks(ce.partial_wb_at_weeks)],
+            ["Full weight-bearing at (weeks)", oa.full_wb_at_weeks, intOf(ce.full_wb_at_weeks), [["order", "full_wb_at_weeks"]], sayWeeks(oa.full_wb_at_weeks), sayWeeks(ce.full_wb_at_weeks)],
+            ["Pain plan", oa.pain_plan, ce.pain_plan, [["order", "pain_plan"]]],
+            /* The recovery guide's own answers. These are what the patient's
+             * booklet prints, so reading them off the note is most of the
+             * booklet already written. */
+            ["Desk work (weeks)", oa.work_desk_weeks, intOf(ce.work_desk_weeks), [["order", "work_desk_weeks"]], sayWeeks(oa.work_desk_weeks), sayWeeks(ce.work_desk_weeks)],
+            ["Active work (weeks)", oa.work_active_weeks, intOf(ce.work_active_weeks), [["order", "work_active_weeks"]], sayWeeks(oa.work_active_weeks), sayWeeks(ce.work_active_weeks)],
+            ["Sport (weeks)", oa.sport_weeks, intOf(ce.sport_weeks), [["order", "sport_weeks"]], sayWeeks(oa.sport_weeks), sayWeeks(ce.sport_weeks)],
+            ["Flying (weeks)", oa.flying_weeks_off, intOf(ce.flying_weeks_off), [["order", "flying_weeks_off"]], sayWeeks(oa.flying_weeks_off), sayWeeks(ce.flying_weeks_off)],
+            ["Swimming (weeks)", oa.swimming_weeks_off, intOf(ce.swimming_weeks_off), [["order", "swimming_weeks_off"]], sayWeeks(oa.swimming_weeks_off), sayWeeks(ce.swimming_weeks_off)],
+            ["Normal shoes (weeks)", oa.normal_shoes_weeks, intOf(ce.normal_shoes_weeks), [["order", "normal_shoes_weeks"]], sayWeeks(oa.normal_shoes_weeks), sayWeeks(ce.normal_shoes_weeks)],
+            ["Social events (weeks)", oa.social_event_weeks, intOf(ce.social_event_weeks), [["order", "social_event_weeks"]], sayWeeks(oa.social_event_weeks), sayWeeks(ce.social_event_weeks)],
+            ["Showering at (days)", oa.shower_wet_at_days, intOf(ce.shower_wet_at_days), [["order", "shower_wet_at_days"]], sayDays(oa.shower_wet_at_days), sayDays(ce.shower_wet_at_days)],
+            ["Travel notes", oa.travel_notes, ce.travel_notes, [["order", "travel_notes"]]],
+            /* GLP-1 and SGLT2, one answer per drug family. */
+            ["GLP-1", oa.glp1_status, ce.glp1_status, [["order", "glp1_status"]], sayDrug(oa.glp1_status, oa.glp1_drug, oa.glp1_last_dose), sayDrug(ce.glp1_status, ce.glp1_drug, ce.glp1_last_dose)],
+            ["GLP-1 drug", oa.glp1_drug, ce.glp1_drug, [["order", "glp1_drug"]]],
+            ["GLP-1 last dose", oa.glp1_last_dose, ce.glp1_last_dose, [["order", "glp1_last_dose"]]],
+            ["SGLT2", oa.sglt2_status, ce.sglt2_status, [["order", "sglt2_status"]], sayDrug(oa.sglt2_status, oa.sglt2_drug, oa.sglt2_last_dose), sayDrug(ce.sglt2_status, ce.sglt2_drug, ce.sglt2_last_dose)],
+            ["SGLT2 drug", oa.sglt2_drug, ce.sglt2_drug, [["order", "sglt2_drug"]]],
+            ["SGLT2 last dose", oa.sglt2_last_dose, ce.sglt2_last_dose, [["order", "sglt2_last_dose"]]],
           ];
           var rows = [], byKey = {};
-          defs.forEach(function (d) { var label = d[0], cur = d[1], inc = d[2], writes = d[3]; if (inc == null || inc === "") return; rows.push({ key: label, label: label, current: cur == null ? "" : cur, incoming: inc }); byKey[label] = { writes: writes }; });
+          defs.forEach(function (d) {
+            var label = d[0], cur = d[1], inc = d[2], writes = d[3];
+            // An empty array counts as nothing found, the same as a blank.
+            if (inc == null || inc === "" || (Array.isArray(inc) && !inc.length)) return;
+            rows.push({ key: label, label: label,
+              current: cur == null ? "" : cur, incoming: inc,
+              // Display only. The row still STORES what is in current/incoming.
+              showCurrent: d[4] || null, showIncoming: d[5] || null });
+            byKey[label] = { writes: writes };
+          });
           var kindMap = { clinical_notes: "Clinical notes", quote: "Fee quote", pamphlet: "Pamphlet", referral: "Referral", scan_report: "Scan / report" };
           var niceKind = kindMap[ex.document_kind] || "Document";
           var result = await window.ClinicMergeReview.open({ title: "Update patient from dropped file", patientName: P.full_name || "this patient", subtitle: "from " + niceKind.toLowerCase(), rows: rows, docName: niceKind + (ex.notes_drafted_date ? " — " + ex.notes_drafted_date : "") });

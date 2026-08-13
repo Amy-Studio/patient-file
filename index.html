@@ -644,6 +644,12 @@
         };
         var VENUE = { sjm: "Sir John Monash", masada: "Masada", vsc: "VSC Day Surgery", clinic: "Clinic", other: "Other" };
         var state = { patient: null, order: null, docs: [], orderId: null };
+        /* Bumped whenever this patient's SURGERIES change (confirmed,
+         * archived, deleted, copied). wireLaunch reloads the plan frame when
+         * it moves, and only then, so an ordinary redraw cannot throw away
+         * what is being typed and a deleted plan cannot stay on screen waiting
+         * to be saved back. */
+        var planGen = 0;
 
         function sb() { return (window.ClinicAuth && ClinicAuth.getClient) ? ClinicAuth.getClient() : null; }
         function qs(id) { return document.getElementById(id); }
@@ -1014,7 +1020,7 @@
             var r = await c.from("surgeon_orders")
               .update({ confirmed_at: new Date().toISOString(), archived_at: null }).eq("id", o.id);
             if (r.error) { toast("Couldn't confirm: " + r.error.message); return; }
-            toast("Confirmed"); if (typeof loadReal === "function") loadReal();
+            toast("Confirmed"); planGen++; if (typeof loadReal === "function") loadReal();
           });
           planAction("data-oar", async function (o, c) {
             var label = o.procedure_name || "this surgery";
@@ -1024,7 +1030,7 @@
             var r = await c.from("surgeon_orders")
               .update({ archived_at: new Date().toISOString(), confirmed_at: null }).eq("id", o.id);
             if (r.error) { toast("Couldn't archive: " + r.error.message); return; }
-            toast("Archived"); if (typeof loadReal === "function") loadReal();
+            toast("Archived"); planGen++; if (typeof loadReal === "function") loadReal();
           });
           planAction("data-orm", async function (o, c) {
             var label = o.procedure_name || "this surgery";
@@ -1033,7 +1039,7 @@
                          "genuinely offered it, archive it instead.")) return;
             var r = await c.from("surgeon_orders").delete().eq("id", o.id);
             if (r.error) { toast("Couldn't delete: " + r.error.message); return; }
-            toast("Deleted"); if (typeof loadReal === "function") loadReal();
+            toast("Deleted"); planGen++; if (typeof loadReal === "function") loadReal();
           });
           Array.prototype.forEach.call(el.querySelectorAll("[data-oi]"), function (c) { c.addEventListener("click", function () { setSurgery(parseInt(c.getAttribute("data-oi"), 10)); }); });
           var ns = el.querySelector("[data-newsurg]"); if (ns) ns.addEventListener("click", newSurgery);
@@ -1829,8 +1835,18 @@
              * So the comparison is on the patient, and the buster stays on the
              * address for the first load of each one.
              */
-            if (planFrame.getAttribute("data-patient") !== String(id)) {
-              planFrame.setAttribute("data-patient", String(id));
+            /* ...but DO reload when this patient's surgeries have changed.
+             *
+             * Comparing on the patient alone was too blunt the other way: once
+             * a plan was on screen it never reloaded, so deleting or archiving
+             * a surgery left the deleted plan sitting there, and one press of
+             * Save on it wrote the whole thing back into the database. A
+             * counter bumped by the handlers that change the surgeries makes
+             * the frame reload exactly then, and never on an ordinary redraw.
+             */
+            var want = String(id) + "#" + planGen;
+            if (planFrame.getAttribute("data-patient") !== want) {
+              planFrame.setAttribute("data-patient", want);
               planFrame.src = APPS.plan + "?patient=" + encodeURIComponent(id) +
                               "&v=" + Math.floor(Date.now() / 60000);
             }
@@ -2080,6 +2096,7 @@
             const ins = await c.from("surgeon_orders").insert(copy).select("id").single();
             if (ins.error) { toast("Could not copy: " + ins.error.message); return; }
             toast("Copied. It is a draft, with no date.");
+            planGen++;
             if (typeof loadReal === "function") loadReal();
           };
         }

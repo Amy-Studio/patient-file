@@ -2685,7 +2685,11 @@
             n = _psRes.differs;
           } else {
             var st = psStoredStamp(p);                 // checked elsewhere within the hour
-            n = st ? st.differs : null;
+            if (!st) return "has not run for this patient.";
+            // A stamp with no count is a check whose ANSWER is not here. That
+            // is not the same as a clean one, and it must not read as one.
+            if (st.differs == null) return "was last run somewhere else and its answer is not here.";
+            n = st.differs;
           }
           if (n) return "found " + n + (n === 1 ? " difference" : " differences") +
                         " nobody has looked at yet.";
@@ -3307,6 +3311,54 @@
           });
           try {
             if (Object.keys(pPatch).length) { if (window.ClinicPatients && ClinicPatients.update) await ClinicPatients.update(pid, pPatch); else await client.from("patients").update(pPatch).eq("id", pid); Object.assign(P, pPatch); }
+            /* The recovery answers must ALSO go where the plan screen reads
+             * them. It paints its recovery lines from the recovery_plan
+             * object, keyed by its own names, and never looks at the flat
+             * week columns this dialog writes. So every week Steve had put in
+             * his note reached the database and none of it reached his
+             * screen: "nothing carried to surgical plan". (Amy, 13 Aug 2026.)
+             *
+             * Both are written. The flat columns are what the booklet and the
+             * older readers use; recovery_plan is what the plan paints. The
+             * wording is the plan's own, so a value lands on its button. */
+            var REC_FROM_COLS = [
+              ["work_desk_weeks",     "work_desk",    "weeks"],
+              ["work_active_weeks",   "work_active",  "weeks"],
+              ["sport_weeks",         "sport",        "weeks"],
+              ["flying_weeks_off",    "flying",       "weeks"],
+              ["swimming_weeks_off",  "water",        "weeks"],
+              ["normal_shoes_weeks",  "normal_shoes", "weeks"],
+              ["driving_weeks_off",   "driving",      "weeks"],
+              ["shower_wet_at_days",  "shower",       "days"]
+            ];
+            var recAdd = {};
+            REC_FROM_COLS.forEach(function (r) {
+              var v = oPatch[r[0]];
+              if (v == null || v === "") return;
+              var n = parseInt(v, 10);
+              if (!Number.isFinite(n)) return;
+              recAdd[r[1]] = r[2] === "days"
+                ? (n === 1 ? "1 day" : n + " days")
+                : (n === 1 ? "1 week" : n + " weeks");
+            });
+            if (oPatch.weight_bearing) recAdd.starting_wb = oPatch.weight_bearing;
+            if (oPatch.footwear) recAdd.footwear = oPatch.footwear;
+            if (oPatch.supplements) {
+              recAdd.supplements = Array.isArray(oPatch.supplements)
+                ? oPatch.supplements.join("|") : String(oPatch.supplements);
+            }
+            if (Object.keys(recAdd).length) {
+              // Never overwrite an answer already on the plan: fill blanks only.
+              var priorRec = (state.order && state.order.recovery_plan &&
+                              typeof state.order.recovery_plan === "object")
+                ? state.order.recovery_plan : {};
+              var merged = {};
+              Object.keys(priorRec).forEach(function (k) { merged[k] = priorRec[k]; });
+              Object.keys(recAdd).forEach(function (k) {
+                if (merged[k] == null || merged[k] === "") merged[k] = recAdd[k];
+              });
+              oPatch.recovery_plan = merged;
+            }
             if (Object.keys(oPatch).length) { if (state.orderId) await client.from("surgeon_orders").update(oPatch).eq("id", state.orderId); else { var ins = await client.from("surgeon_orders").insert(Object.assign({ patient_id: pid, status: "draft" }, oPatch)).select().single(); if (ins && ins.data) {
               state.order = ins.data; state.orderId = ins.data.id;
               /* Put it in the LIST the picker reads, not only in "the current

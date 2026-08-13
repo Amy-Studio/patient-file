@@ -311,6 +311,15 @@
       .doc { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; background: var(--surface); transition: border-color .12s, box-shadow .12s; }
       .doc:hover { border-color: #c9d3e0; box-shadow: var(--shadow-sm); }
       .doc .dname { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+      /* What KIND of file it is. Two documents can carry the same name and be
+         a PDF and a Word file, and the list showed only the name, so the only
+         way to tell them apart was to open each one. */
+      .doc .dtype { display: inline-block; margin-right: 7px; padding: 1px 6px; border-radius: 5px;
+        font-size: 9.5px; font-weight: 700; letter-spacing: .06em; vertical-align: 1px;
+        background: var(--surface-1); border: 1px solid var(--line); color: var(--muted); }
+      .doc .dtype.pdf { background: #fbeeee; border-color: #f1d6d6; color: #a3402d; }
+      .doc .dtype.doc { background: #eaf1fb; border-color: #d8e4f4; color: #234e7d; }
+      .doc .dtype.img { background: #e8f4ee; border-color: #cfe6da; color: #2d7a55; }
       .dmeta { font-size: 11px; font-weight: 400; color: var(--muted); }
       .doc a { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--navy); text-decoration: none; }
       .pill { font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 2px 8px; }
@@ -1340,7 +1349,7 @@
                 ? '<span title="Already on their PracSuite record" style="font-size:12px;color:var(--good-ink,#2d7a55);margin-right:10px;flex-shrink:0">✓ PracSuite</span>'
                 : '<label style="margin-right:10px;flex-shrink:0;cursor:pointer" title="Tick to send this to their PracSuite record"><input type="checkbox" class="pf-doc-tick" data-doc-tick="' + i + '"></label>';
               return '<div class="doc" data-doc-i="' + i + '">' + tickCell +
-                '<div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span data-doc-rename="' + i + '" title="Rename it. This is the name it carries on their PracSuite record." style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Rename</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
+                '<div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + docTypePill(d) + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span data-doc-rename="' + i + '" title="Rename it. This is the name it carries on their PracSuite record." style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Rename</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
             }).join("");
             return '<div class="subhead">' + c + '</div>' + rows;
           }).join("");
@@ -1492,6 +1501,24 @@
           }
           d.display_name = next;
           renderDocs();
+        }
+        /* The file type, from the stored file itself rather than from its
+         * name. A person can rename a document to anything; what it IS cannot
+         * be renamed. (Amy, 13 Aug 2026: two rows can carry the same name and
+         * be a PDF and a Word file.) */
+        function docTypePill(d) {
+          var m = /\.([a-z0-9]{2,5})$/i.exec(String(d.path || d.url || ""));
+          if (!m) return "";
+          var ext = m[1].toLowerCase();
+          var cls = ext === "pdf" ? "pdf"
+                  : (ext === "docx" || ext === "doc") ? "doc"
+                  : ["png","jpg","jpeg","gif","tif","tiff","webp","heic"].indexOf(ext) >= 0 ? "img"
+                  : "";
+          var text = (ext === "docx" || ext === "doc") ? "WORD"
+                   : ["xlsx","xls","csv"].indexOf(ext) >= 0 ? "EXCEL"
+                   : ext.toUpperCase();
+          return '<span class="dtype ' + cls + '" title="' + esc(ext.toUpperCase()) +
+                 ' file">' + esc(text) + '</span>';
         }
         function pracSuiteFileName(d) {
           var base = pracSuiteDocName(d).replace(/[\/\\:*?"<>|]/g, "-").trim();

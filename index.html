@@ -3925,6 +3925,9 @@
              * His words win. The day count is only offered when there is no
              * phrase to offer, which is the case where he really did write a
              * number of days. */
+            // Elevation, in his words. Every note carries "Elevation for 72
+            // hours" and nothing has ever offered it. (Amy, 14 Aug 2026.)
+            ["Keep the foot elevated for", (oa.recovery_plan && oa.recovery_plan.elevation) || "", ce.elevation, [["order", "elevation"]]],
             ["Showering / getting wet", (oa.recovery_plan && oa.recovery_plan.shower) || "", ce.shower_wet_text, [["order", "shower_wet_text"]]],
             ["Showering at (days)", oa.shower_wet_at_days,
               (ce.shower_wet_text ? null : intOf(ce.shower_wet_at_days)),
@@ -4039,6 +4042,35 @@
               ? (n === 1 ? "1 day" : n + " days")
               : (n === 1 ? "1 week" : n + " weeks");
           });
+          /* Elevation, in his words. Not a column on surgeon_orders and it
+           * does not need to be: the plan reads the recovery block. Sending it
+           * as a column would have the database refuse the whole plan update,
+           * which is exactly what the review weeks did this afternoon. So it
+           * is taken out of the patch once its words are safely stored.
+           * (Amy, 14 Aug 2026: "also theres no section for the elevation?") */
+          if (oPatch.elevation) {
+            var elevSaid = String(oPatch.elevation).trim();
+            if (elevSaid) recAdd.elevation = elevSaid;
+            delete oPatch.elevation;
+          }
+          /* WHICH hospital is not the same fact as WHETHER it is a hospital.
+           *
+           * The drop wrote surgery_venue ("sjm", "masada", "other") and never
+           * venue_type, which is the column the plan screen actually reads for
+           * its clinic-or-hospital line. So Jessica Marks' quote said
+           * "Prov. No. 439004FJ", the reader correctly worked out Sir John
+           * Monash, and her plan still showed no venue at all. (Amy, 14 Aug
+           * 2026: "it didnt detect hospital"; "it needs to look at the invoice
+           * draft provider number", which it does, the answer just had nowhere
+           * to land.)
+           *
+           * "other" means a hospital whose name we do not have yet. That is
+           * still a hospital, and saying so is not a guess. Only an actual
+           * blank leaves venue_type alone. */
+          if (oPatch.surgery_venue) {
+            oPatch.venue_type = String(oPatch.surgery_venue).toLowerCase() === "clinic"
+              ? "clinic" : "hospital";
+          }
           if (oPatch.weight_bearing) recAdd.starting_wb = oPatch.weight_bearing;
           if (oPatch.footwear) recAdd.footwear = oPatch.footwear;
           /* His phrase, verbatim, and last so it beats anything derived from a

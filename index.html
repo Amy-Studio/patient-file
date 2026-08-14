@@ -341,6 +341,25 @@
       #pf-overview label { font-size: 12.5px !important; }
       .note-save { background: var(--navy) !important; }
 
+      /* The drop zone has to SHOW that it is working. An AI read takes several
+         seconds and the only sign of it was one line of small grey text at the
+         top of the page, so from where Amy is looking nothing happens at all,
+         and she drops the same file again. That is how one note gets filed
+         three times. (Amy, 14 Aug 2026: "it looks like nothing has happened.") */
+      @keyframes pf-dz-spin { to { transform: rotate(360deg); } }
+      #pf-dropz { border: 2px dashed #cdd6e4; background: #fbfcfe; transition: background .15s, border-color .15s; }
+      #pf-dropz-live { display: none; }
+      #pf-dropz.busy { border-style: solid; border-color: var(--navy); background: #f4f8fc; }
+      #pf-dropz.done { border-style: solid; border-color: #2f7a58; background: #f3faf6; }
+      #pf-dropz.fail { border-style: solid; border-color: #b3392f; background: #fdf5f4; }
+      #pf-dropz .pf-dz-spin { display: inline-block; width: 11px; height: 11px; margin-right: 7px;
+        vertical-align: -1px; border: 2px solid #c9d7e8; border-top-color: var(--navy);
+        border-radius: 50%; animation: pf-dz-spin .7s linear infinite; }
+      #pf-dropz .pf-dz-strong { display: block; font-size: 13px; font-weight: 600; color: var(--ink); }
+      #pf-dropz .pf-dz-line { display: block; margin-top: 4px; font-size: 12px; line-height: 1.5; }
+      #pf-dropz .pf-dz-bad { color: #b3392f; }
+      #pf-dropz .pf-dz-good { color: #2f7a58; }
+
       @media (max-width: 760px) {
         .body { flex-direction: column; }
         nav.side { width: 100%; display: flex; flex-wrap: wrap; }
@@ -613,8 +632,17 @@
         <span style="display:none"><a id="pf-make-quote" href="#"></a><a id="pf-make-pamphlet" href="#"></a></span>
 
             <div id="pf-docs"></div>
-            <label id="pf-dropz" style="display:block;margin-top:12px;border:2px dashed #cdd6e4;border-radius:8px;padding:13px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;background:#fbfcfe">
-              Drop a file here (or click). Clinical notes are read and offered as updates; everything is filed to this patient.
+            <!-- The idle border + background moved OUT of the style attribute
+                 and into the stylesheet (#pf-dropz below). An inline style beats
+                 a class, so while they lived here the busy / saved / failed
+                 colours could never paint. -->
+            <label id="pf-dropz" style="display:block;margin-top:12px;border-radius:8px;padding:13px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer">
+              <span id="pf-dropz-idle">Drop a file here (or click). Clinical notes are read and offered as updates; everything is filed to this patient.</span>
+              <!-- Filled the MOMENT a file lands, and it is the only thing on
+                   screen where she is actually looking: which file, which of
+                   how many, and what is being done to it right now. Empty
+                   means idle. See dzSet/dzBusy below. -->
+              <span id="pf-dropz-live" aria-live="polite"></span>
               <input type="file" id="pf-dropz-input" multiple style="display:none">
             </label>
             <div id="pf-preview" style="display:none; margin-top:16px"></div>
@@ -3192,19 +3220,91 @@
         //      clinic-patient.html page). Clinical notes are AI-read and
         //      offered as updates via the merge-review popup; every file is
         //      uploaded to the patient's folder + listed in Documents. ----
+        /* ---- The drop zone says what it is doing ----------------------------
+         * Everything below writes into the drop zone itself, because that is
+         * where she is looking when she drops a file. The top-of-page status()
+         * line is kept as well, but it is small, grey and far away, and on its
+         * own it read as "nothing happened".
+         *
+         * Rules this has to keep:
+         *   - it changes the MOMENT a file lands (before the first await)
+         *   - it names the file, and says which of several it is on
+         *   - it survives the whole read, including the review popup
+         *   - it clears on success AND on failure
+         *   - a failure says what failed and whether anything was saved
+         */
+        var dzClearTimer = null;
+        function dzCancelClear() { if (dzClearTimer) { clearTimeout(dzClearTimer); dzClearTimer = null; } }
+        function dzSet(html, cls) {
+          var dz = qs("pf-dropz"), live = qs("pf-dropz-live"), idle = qs("pf-dropz-idle");
+          if (!dz || !live) return;
+          // Any new message cancels a pending tidy-up, so the clear-down of the
+          // PREVIOUS file can never wipe the message of the one now running.
+          if (html) dzCancelClear();
+          dz.classList.remove("busy", "done", "fail");
+          if (!html) { live.style.display = "none"; live.innerHTML = ""; if (idle) idle.style.display = ""; return; }
+          if (cls) dz.classList.add(cls);
+          if (idle) idle.style.display = "none";
+          live.style.display = "block";
+          live.innerHTML = html;
+        }
+        // Clear after a pause, so the answer stays readable. Failures are held
+        // much longer than successes: a message about something that did NOT
+        // save must not disappear before it has been read.
+        function dzHold(ms) {
+          dzCancelClear();
+          dzClearTimer = setTimeout(function () { dzClearTimer = null; dzSet("", ""); }, ms || 8000);
+        }
+        // "2 of 3: " when there are several; nothing at all when there is one.
+        function dzWhich(idx, total) { return (total > 1) ? (idx + " of " + total + ": ") : ""; }
+        function dzBusy(verb, idx, total, name, sub) {
+          dzSet('<span class="pf-dz-strong"><span class="pf-dz-spin"></span>' +
+                esc(verb) + " " + esc(dzWhich(idx, total)) + esc(name) + "</span>" +
+                (sub ? '<span class="pf-dz-line">' + esc(sub) + "</span>" : ""), "busy");
+        }
+        function dzFail(head, lines) {
+          dzSet('<span class="pf-dz-strong pf-dz-bad">' + esc(head) + "</span>" +
+                (lines || []).map(function (l) {
+                  return '<span class="pf-dz-line">' + esc(l) + "</span>";
+                }).join(""), "fail");
+          dzHold(30000);
+        }
+        /* The real reason, in the words the thing that failed actually gave.
+         * "Couldn't save" with no reason is what sends Amy hunting through a
+         * record that is fine, or trusting one that is not. */
+        function pfWhy(e) {
+          if (!e) return "no reason given";
+          var m = e.message || e.error_description || e.msg || e.hint || String(e);
+          m = String(m).trim();
+          return m && m !== "[object Object]" ? m : "no reason given";
+        }
+        function pfList(a) {
+          a = a || [];
+          if (a.length <= 1) return a[0] || "";
+          return a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
+        }
         function refreshDocs() {
           var client = sb(); var p = state.patient;
           if (!client || !p || !p.id) return;
           client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false })
             .then(function (r) { if (r && !r.error) { state.docs = r.data || []; renderDocs(); } });
         }
-        async function pfProcessNote(file) {
+        async function pfProcessNote(file, idx, total) {
+          idx = idx || 1; total = total || 1;
           var client = sb(); var P = state.patient; var pid = P && P.id;
-          if (!client || !P) return { handled: false };
-          if (!(window.ClinicSmartInbox && ClinicSmartInbox.extractFromFile && window.ClinicMergeReview)) return { handled: false };
+          if (!client || !P) return { handled: false, reason: "no patient is open" };
+          if (!(window.ClinicSmartInbox && ClinicSmartInbox.extractFromFile && window.ClinicMergeReview)) return { handled: false, reason: "the file reader has not finished loading" };
           status("Reading " + file.name + "…");
-          var ex; try { ex = await ClinicSmartInbox.extractFromFile(file); } catch (e) { return { handled: false }; }
-          if (!ex) return { handled: false };
+          dzBusy("Reading", idx, total, file.name,
+                 "Reading it and looking for details to add. This takes a few seconds. It is working, please don't drop it again.");
+          /* Why the read failed used to be swallowed here and the file just
+           * quietly went down the plain-filing path, so a drop that failed its
+           * AI read looked exactly like a drop of a file that has nothing in
+           * it. The reason is carried back so the caller can say it. */
+          var ex, readErr = null;
+          try { ex = await ClinicSmartInbox.extractFromFile(file); } catch (e) { readErr = pfWhy(e); }
+          if (readErr) return { handled: false, reason: "the read failed (" + readErr + ")" };
+          if (!ex) return { handled: false, reason: "there was no readable text in it" };
           var ce = ex.clinical_extract || {};
           var oa = state.order || {};
           var intOf = function (v) { var n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
@@ -3318,6 +3418,7 @@
             ["Social events (weeks)", oa.social_event_weeks, intOf(ce.social_event_weeks), [["order", "social_event_weeks"]], sayWeeks(oa.social_event_weeks), sayWeeks(ce.social_event_weeks)],
             ["Showering at (days)", oa.shower_wet_at_days, intOf(ce.shower_wet_at_days), [["order", "shower_wet_at_days"]], sayDays(oa.shower_wet_at_days), sayDays(ce.shower_wet_at_days)],
             ["Travel notes", oa.travel_notes, ce.travel_notes, [["order", "travel_notes"]]],
+            ["Reviews after surgery", oa.postop_review_weeks, ce.postop_review_weeks, [["order", "postop_review_weeks"]], sayList(oa.postop_review_weeks), sayList(ce.postop_review_weeks)],
             /* GLP-1 and SGLT2, one answer per drug family. */
             ["GLP-1", oa.glp1_status, ce.glp1_status, [["order", "glp1_status"]], sayDrug(oa.glp1_status, oa.glp1_drug, oa.glp1_last_dose), sayDrug(ce.glp1_status, ce.glp1_drug, ce.glp1_last_dose)],
             ["GLP-1 drug", oa.glp1_drug, ce.glp1_drug, [["order", "glp1_drug"]]],
@@ -3339,105 +3440,264 @@
           });
           var kindMap = { clinical_notes: "Clinical notes", quote: "Fee quote", pamphlet: "Pamphlet", referral: "Referral", scan_report: "Scan / report" };
           var niceKind = kindMap[ex.document_kind] || "Document";
+          // The popup is now the thing that is happening, so the zone stops
+          // spinning and points at it. It stays on screen underneath.
+          dzSet('<span class="pf-dz-strong">Read ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
+                '<span class="pf-dz-line">Waiting for you to choose what to keep, in the box on screen.</span>', "busy");
           var result = await window.ClinicMergeReview.open({ title: "Update patient from dropped file", patientName: P.full_name || "this patient", subtitle: "from " + niceKind.toLowerCase(), rows: rows, docName: niceKind + (ex.notes_drafted_date ? " — " + ex.notes_drafted_date : "") });
-          if (!result) { status("Left as-is — nothing saved."); return { handled: true }; }
+          if (!result) {
+            /* Cancel means the whole drop is abandoned, and that includes the
+             * file: it is NOT uploaded and NOT listed in Documents. The old
+             * wording ("Left as-is — nothing saved") was true about the record
+             * but left her believing the document had still been filed, which
+             * is how a dropped letter disappears. Say both halves. */
+            status("Cancelled. Nothing saved.");
+            dzFail("Cancelled: " + dzWhich(idx, total) + file.name,
+                   ["Nothing was changed on her record, and the file was NOT filed.",
+                    "Drop it again if you want it kept."]);
+            return { handled: true };
+          }
           status("Saving…");
+          dzBusy("Saving", idx, total, file.name, "Writing what you kept, then filing the file.");
           var pPatch = {}, oPatch = {};
           (result.changes || []).forEach(function (ch) {
             var w = (byKey[ch.label] || {}).writes || [];
             w.forEach(function (t) { var table = t[0], col = t[1]; var v = ch.value; if (/(_min|_weeks|_days)$/.test(col)) { var n = parseInt(v, 10); if (Number.isFinite(n)) v = n; } (table === "patients" ? pPatch : oPatch)[col] = v; });
           });
-          try {
-            if (Object.keys(pPatch).length) { if (window.ClinicPatients && ClinicPatients.update) await ClinicPatients.update(pid, pPatch); else await client.from("patients").update(pPatch).eq("id", pid); Object.assign(P, pPatch); }
-            /* The recovery answers must ALSO go where the plan screen reads
-             * them. It paints its recovery lines from the recovery_plan
-             * object, keyed by its own names, and never looks at the flat
-             * week columns this dialog writes. So every week Steve had put in
-             * his note reached the database and none of it reached his
-             * screen: "nothing carried to surgical plan". (Amy, 13 Aug 2026.)
-             *
-             * Both are written. The flat columns are what the booklet and the
-             * older readers use; recovery_plan is what the plan paints. The
-             * wording is the plan's own, so a value lands on its button. */
-            var REC_FROM_COLS = [
-              ["work_desk_weeks",     "work_desk",    "weeks"],
-              ["work_active_weeks",   "work_active",  "weeks"],
-              ["sport_weeks",         "sport",        "weeks"],
-              ["flying_weeks_off",    "flying",       "weeks"],
-              ["swimming_weeks_off",  "water",        "weeks"],
-              ["normal_shoes_weeks",  "normal_shoes", "weeks"],
-              ["driving_weeks_off",   "driving",      "weeks"],
-              ["shower_wet_at_days",  "shower",       "days"]
-            ];
-            var recAdd = {};
-            REC_FROM_COLS.forEach(function (r) {
-              var v = oPatch[r[0]];
-              if (v == null || v === "") return;
-              var n = parseInt(v, 10);
-              if (!Number.isFinite(n)) return;
-              recAdd[r[1]] = r[2] === "days"
-                ? (n === 1 ? "1 day" : n + " days")
-                : (n === 1 ? "1 week" : n + " weeks");
+          /* What ACTUALLY landed, and what actually did not, each with the
+           * reason the thing that failed gave.
+           *
+           * This whole block used to be ONE try/catch around four separate
+           * writes, and it was wrong in both directions on the same day:
+           *   - a failure in the LAST write (filing the document) printed
+           *     "Couldn't save" over a patient update and a plan update that
+           *     had both already succeeded, so Amy went back and retyped
+           *     values that were in the record;
+           *   - three of the four writes are supabase-js calls, which return
+           *     { error } and NEVER throw, so a rejected plan update or a
+           *     rejected upload fell straight through to "Saved ✓" with
+           *     nothing written at all.
+           * Each write is now its own step, its error is actually looked at,
+           * and the message names exactly what saved and what did not.
+           * (Amy, 14 Aug 2026: told "not saved" for things that were saved,
+           * and "saved" for things that were not, both in one day.) */
+          var savedBits = [], failBits = [], planChanged = false, docFiled = false, recordChanged = false;
+          if (Object.keys(pPatch).length) {
+            try {
+              if (window.ClinicPatients && ClinicPatients.update) await ClinicPatients.update(pid, pPatch);
+              else { var pr = await client.from("patients").update(pPatch).eq("id", pid); if (pr && pr.error) throw pr.error; }
+              Object.assign(P, pPatch);
+              recordChanged = true;
+              savedBits.push("her details");
+            } catch (e) { failBits.push("her details (" + pfWhy(e) + ")"); }
+          }
+          /* The recovery answers must ALSO go where the plan screen reads
+           * them. It paints its recovery lines from the recovery_plan
+           * object, keyed by its own names, and never looks at the flat
+           * week columns this dialog writes. So every week Steve had put in
+           * his note reached the database and none of it reached his
+           * screen: "nothing carried to surgical plan". (Amy, 13 Aug 2026.)
+           *
+           * Both are written. The flat columns are what the booklet and the
+           * older readers use; recovery_plan is what the plan paints. The
+           * wording is the plan's own, so a value lands on its button. */
+          var REC_FROM_COLS = [
+            ["work_desk_weeks",     "work_desk",    "weeks"],
+            ["work_active_weeks",   "work_active",  "weeks"],
+            ["sport_weeks",         "sport",        "weeks"],
+            ["flying_weeks_off",    "flying",       "weeks"],
+            ["swimming_weeks_off",  "water",        "weeks"],
+            ["normal_shoes_weeks",  "normal_shoes", "weeks"],
+            ["driving_weeks_off",   "driving",      "weeks"],
+            ["shower_wet_at_days",  "shower",       "days"]
+          ];
+          var recAdd = {};
+          REC_FROM_COLS.forEach(function (r) {
+            var v = oPatch[r[0]];
+            if (v == null || v === "") return;
+            var n = parseInt(v, 10);
+            if (!Number.isFinite(n)) return;
+            recAdd[r[1]] = r[2] === "days"
+              ? (n === 1 ? "1 day" : n + " days")
+              : (n === 1 ? "1 week" : n + " weeks");
+          });
+          if (oPatch.weight_bearing) recAdd.starting_wb = oPatch.weight_bearing;
+          if (oPatch.footwear) recAdd.footwear = oPatch.footwear;
+            if (oPatch.postop_review_weeks) {
+              recAdd.post_op_reviews = Array.isArray(oPatch.postop_review_weeks)
+                ? oPatch.postop_review_weeks.join("|")
+                : String(oPatch.postop_review_weeks);
+            }
+          if (oPatch.supplements) {
+            recAdd.supplements = Array.isArray(oPatch.supplements)
+              ? oPatch.supplements.join("|") : String(oPatch.supplements);
+          }
+          if (Object.keys(recAdd).length) {
+            // Never overwrite an answer already on the plan: fill blanks only.
+            var priorRec = (state.order && state.order.recovery_plan &&
+                            typeof state.order.recovery_plan === "object")
+              ? state.order.recovery_plan : {};
+            var merged = {};
+            Object.keys(priorRec).forEach(function (k) { merged[k] = priorRec[k]; });
+            Object.keys(recAdd).forEach(function (k) {
+              if (merged[k] == null || merged[k] === "") merged[k] = recAdd[k];
             });
-            if (oPatch.weight_bearing) recAdd.starting_wb = oPatch.weight_bearing;
-            if (oPatch.footwear) recAdd.footwear = oPatch.footwear;
-            if (oPatch.supplements) {
-              recAdd.supplements = Array.isArray(oPatch.supplements)
-                ? oPatch.supplements.join("|") : String(oPatch.supplements);
-            }
-            if (Object.keys(recAdd).length) {
-              // Never overwrite an answer already on the plan: fill blanks only.
-              var priorRec = (state.order && state.order.recovery_plan &&
-                              typeof state.order.recovery_plan === "object")
-                ? state.order.recovery_plan : {};
-              var merged = {};
-              Object.keys(priorRec).forEach(function (k) { merged[k] = priorRec[k]; });
-              Object.keys(recAdd).forEach(function (k) {
-                if (merged[k] == null || merged[k] === "") merged[k] = recAdd[k];
-              });
-              oPatch.recovery_plan = merged;
-            }
-            if (Object.keys(oPatch).length) { if (state.orderId) await client.from("surgeon_orders").update(oPatch).eq("id", state.orderId); else { var ins = await client.from("surgeon_orders").insert(Object.assign({ patient_id: pid, status: "draft" }, oPatch)).select().single(); if (ins && ins.data) {
-              state.order = ins.data; state.orderId = ins.data.id;
-              /* Put it in the LIST the picker reads, not only in "the current
-               * one". Accepting a dropped note created the surgery plan and
-               * set it as current, but state.orders was left untouched, so
-               * the screen still said "No surgery yet" and the plan looked
-               * like it had not been made. It had; nothing could see it until
-               * the page was reloaded. (Amy, 13 Aug 2026: "nothing on the
-               * surgical plan is ready?") */
-              state.orders = state.orders || [];
-              if (!state.orders.some(function (o) { return o && o.id === ins.data.id; })) {
-                state.orders.unshift(ins.data);
+            oPatch.recovery_plan = merged;
+          }
+          if (Object.keys(oPatch).length) {
+            try {
+              if (state.orderId) {
+                var ur = await client.from("surgeon_orders").update(oPatch).eq("id", state.orderId);
+                if (ur && ur.error) throw ur.error;
+                if (state.order) Object.assign(state.order, oPatch);
+              } else {
+                var ins = await client.from("surgeon_orders").insert(Object.assign({ patient_id: pid, status: "draft" }, oPatch)).select().single();
+                if (ins && ins.error) throw ins.error;
+                if (!ins || !ins.data) throw new Error("the database did not return the new surgery");
+                state.order = ins.data; state.orderId = ins.data.id;
+                /* Put it in the LIST the picker reads, not only in "the current
+                 * one". Accepting a dropped note created the surgery plan and
+                 * set it as current, but state.orders was left untouched, so
+                 * the screen still said "No surgery yet" and the plan looked
+                 * like it had not been made. It had; nothing could see it until
+                 * the page was reloaded. (Amy, 13 Aug 2026: "nothing on the
+                 * surgical plan is ready?") */
+                state.orders = state.orders || [];
+                if (!state.orders.some(function (o) { return o && o.id === ins.data.id; })) {
+                  state.orders.unshift(ins.data);
+                }
               }
-            } } if (state.order) Object.assign(state.order, oPatch); }
-            var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-            var safe = file.name.replace(/[^\w.\- ]/g, "_");
-            var path = "_patient-" + pid + "/" + ts + "__" + safe;
-            await client.storage.from("shared-docs").upload(path, file, { upsert: false });
-            await client.from("patient_documents").insert({ patient_id: pid, doc_type: (ex.document_kind || "other"), bucket: "shared-docs", path: path, label: (result.docName || file.name.replace(/\.[^.]+$/, "")), generated_at: new Date().toISOString() });
-            status("Saved ✓"); toast("File read + saved to " + (P.full_name || "patient"));
-            refreshDocs(); renderAll();
-          } catch (e) { status(""); toast("Couldn't save: " + (e.message || e)); }
+              planChanged = true; recordChanged = true;
+              savedBits.push("the surgery plan");
+            } catch (e) { failBits.push("the surgery plan (" + pfWhy(e) + ")"); }
+          }
+          var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+          var safe = file.name.replace(/[^\w.\- ]/g, "_");
+          var path = "_patient-" + pid + "/" + ts + "__" + safe;
+          /* Uploading the file and listing it in Documents are two writes and
+           * they fail differently, so they are reported differently. An
+           * upload that worked and a Documents row that did not leaves the
+           * file safely in storage but invisible in the list; calling that
+           * "not saved" sends her hunting for a file that is there. */
+          var uploaded = false;
+          try {
+            var up = await client.storage.from("shared-docs").upload(path, file, { upsert: false });
+            if (up && up.error) throw up.error;
+            uploaded = true;
+          } catch (e) { failBits.push("uploading the file (" + pfWhy(e) + "), so it is not filed"); }
+          if (uploaded) {
+            try {
+              var di = await client.from("patient_documents").insert({ patient_id: pid, doc_type: (ex.document_kind || "other"), bucket: "shared-docs", path: path, label: (result.docName || file.name.replace(/\.[^.]+$/, "")), generated_at: new Date().toISOString() });
+              if (di && di.error) throw di.error;
+              docFiled = true;
+              savedBits.push("the file");
+            } catch (e) { failBits.push("listing the file in Documents (" + pfWhy(e) + "), though the file itself DID upload"); }
+          }
+          /* Everything on screen catches up now, without a reload.
+           *
+           * planGen is what makes the plan iframe re-read the database. It only
+           * reloads when its data-patient attribute changes, and that is built
+           * from the patient id plus planGen, so for a SECOND plan on the SAME
+           * patient nothing changed and the frame kept showing the old plan (or
+           * an empty one) until Amy pressed refresh. Bumping it only when the
+           * order actually changed means an ordinary document drop still never
+           * disturbs a plan somebody is typing into.
+           * (Amy, 14 Aug 2026: "dont make me have to refresh".) */
+          if (planChanged) planGen++;
+          if (recordChanged || docFiled) renderAll();
+          if (docFiled) refreshDocs();
+          var who = P.full_name || "patient";
+          if (!failBits.length) {
+            status("Saved ✓");
+            toast("File read + saved to " + who);
+            dzSet('<span class="pf-dz-strong pf-dz-good">&#10003; Saved ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
+                  '<span class="pf-dz-line">Saved ' + esc(pfList(savedBits) || "nothing to change") + "." +
+                  (planChanged ? " The Surgery plan below is already showing it, no refresh needed." : "") + "</span>", "done");
+            dzHold(9000);
+          } else if (savedBits.length) {
+            // Half-saved is its own answer. Saying "couldn't save" here is what
+            // made her retype values that were already in the record.
+            status("Part saved. See the drop box.");
+            toast("Part saved. See the drop box.");
+            dzSet('<span class="pf-dz-strong">Part saved: ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
+                  '<span class="pf-dz-line pf-dz-good">Saved: ' + esc(pfList(savedBits)) + ".</span>" +
+                  '<span class="pf-dz-line pf-dz-bad">NOT saved: ' + esc(pfList(failBits)) + ".</span>", "fail");
+            dzHold(30000);
+          } else {
+            status("Nothing saved. See the drop box.");
+            toast("Nothing saved. See the drop box.");
+            dzFail("Nothing was saved: " + dzWhich(idx, total) + file.name,
+                   ["Failed on " + pfList(failBits) + ".",
+                    "Her record is unchanged. Nothing was half-written."]);
+          }
           return { handled: true };
         }
         async function pfUploadFiles(files) {
           var client = sb(); var pid = state.patient && state.patient.id;
-          if (!client || !pid || !files || !files.length) return;
-          for (var i = 0; i < files.length; i++) {
+          if (!files || !files.length) return;
+          /* Say why nothing is going to happen. Both of these used to return in
+           * silence, which on screen is indistinguishable from a drop that
+           * worked — so the file looked filed and was not anywhere. */
+          if (!client) {
+            dzFail("Not signed in. Nothing was saved.",
+                   ["The file was not filed and nothing was read.",
+                    "Sign in, then drop it again."]);
+            toast("Not signed in. Nothing saved."); return;
+          }
+          if (!pid) {
+            dzFail("No patient is open. Nothing was saved.",
+                   ["The file was not filed and nothing was read.",
+                    "Open the patient first, then drop it on them."]);
+            toast("No patient open. Nothing saved."); return;
+          }
+          var total = files.length;
+          for (var i = 0; i < total; i++) {
             var file = files[i];
+            var n = i + 1;
             try {
-              var r = await pfProcessNote(file);
+              var r = await pfProcessNote(file, n, total);
               if (r && r.handled) continue;
+              /* Not read: no reader, nothing readable in it, or the read
+               * itself failed. The file is still filed, but she is told WHY it
+               * was not read, because a bare "Filed ✓" reads as "read, checked
+               * and filed" and she would never know the note was not looked at. */
+              var why = (r && r.reason) || "it is not a kind of file the reader can open";
               status("Filing " + file.name + "…");
+              dzBusy("Filing", n, total, file.name, "Not read: " + why + ". Filing it to Documents anyway.");
               var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
               var safe = file.name.replace(/[^\w.\- ]/g, "_");
               var path = "_patient-" + pid + "/" + ts + "__" + safe;
               var up = await client.storage.from("shared-docs").upload(path, file, { upsert: false });
-              if (up.error) { toast("Upload failed: " + up.error.message); continue; }
-              await client.from("patient_documents").insert({ patient_id: pid, doc_type: "other", bucket: "shared-docs", path: path, label: file.name.replace(/\.[^.]+$/, ""), generated_at: new Date().toISOString() });
+              if (up && up.error) {
+                status("Not filed");
+                toast("Upload failed: " + pfWhy(up.error));
+                dzFail("NOT filed: " + dzWhich(n, total) + file.name,
+                       ["The upload failed (" + pfWhy(up.error) + ").",
+                        "Nothing was saved for this file. Try dropping it again."]);
+                continue;
+              }
+              // The Documents row is a second write and it can fail on its own.
+              // Unchecked, it printed "Filed ✓" over a file that would never
+              // appear in the list.
+              var di = await client.from("patient_documents").insert({ patient_id: pid, doc_type: "other", bucket: "shared-docs", path: path, label: file.name.replace(/\.[^.]+$/, ""), generated_at: new Date().toISOString() });
+              if (di && di.error) {
+                status("Not listed");
+                toast("Filed but not listed: " + pfWhy(di.error));
+                dzFail("Uploaded but NOT listed: " + dzWhich(n, total) + file.name,
+                       ["The file uploaded, but adding it to Documents failed (" + pfWhy(di.error) + ").",
+                        "It will not show in the list until that is fixed."]);
+                continue;
+              }
               status("Filed ✓");
-            } catch (e) { toast("Upload error: " + (e.message || e)); }
+              dzSet('<span class="pf-dz-strong pf-dz-good">&#10003; Filed ' + esc(dzWhich(n, total)) + esc(file.name) + "</span>" +
+                    '<span class="pf-dz-line">Not read: ' + esc(why) + ". Nothing was changed on her record.</span>", "done");
+              dzHold(9000);
+            } catch (e) {
+              status("Not filed");
+              toast("Upload error: " + pfWhy(e));
+              dzFail("NOT filed: " + dzWhich(n, total) + (file && file.name ? file.name : "file"),
+                     [pfWhy(e), "Nothing was saved for this file."]);
+            }
           }
           refreshDocs();
         }
@@ -3445,13 +3705,23 @@
           var dz = document.getElementById("pf-dropz");
           var inp = document.getElementById("pf-dropz-input");
           if (!dz || !inp) return;
-          inp.addEventListener("change", function () { if (window.__pfPreview) { toast("Preview — not saved"); return; } pfUploadFiles(inp.files); inp.value = ""; });
+          // Preview mode saves nothing anywhere, so say that instead of
+          // starting a read that would end in a message about a save.
+          function previewStop() {
+            toast("Preview — not saved");
+            dzFail("Preview mode. Nothing was saved.",
+                   ["This is a preview of the page. The file was not read and not filed."]);
+          }
+          inp.addEventListener("change", function () { if (window.__pfPreview) { previewStop(); return; } pfUploadFiles(inp.files); inp.value = ""; });
           dz.addEventListener("dragover", function (e) { e.preventDefault(); dz.style.background = "#eef5f7"; dz.style.borderColor = "#468a83"; });
-          dz.addEventListener("dragleave", function () { dz.style.background = "#fbfcfe"; dz.style.borderColor = "#cdd6e4"; });
+          dz.addEventListener("dragleave", function () { dz.style.background = ""; dz.style.borderColor = ""; });
           dz.addEventListener("drop", function (e) {
             e.preventDefault();
-            dz.style.background = "#fbfcfe"; dz.style.borderColor = "#cdd6e4";
-            if (window.__pfPreview) { toast("Preview — not saved"); return; }
+            // Drop the drag highlight by REMOVING it, not by repainting the
+            // idle colours: an inline colour beats the busy / saved / failed
+            // classes, so repainting it here hid every one of them.
+            dz.style.background = ""; dz.style.borderColor = "";
+            if (window.__pfPreview) { previewStop(); return; }
             if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) pfUploadFiles(e.dataTransfer.files);
           });
         })();

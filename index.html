@@ -3849,6 +3849,71 @@
             }
             return String(v);
           };
+          /* ITEM NUMBERS ARE NUMBERS. Nothing else.
+           *
+           * sayList prints a code and its description together, which is right
+           * for a sandal or a supplement and wrong here: the reader has no
+           * description for an item number, so it fills one in with the
+           * procedure name, and the row read "49866 Left IM3 Morton's
+           * neuroma-bursa complex excision" with the operation already named on
+           * its own line above. (Amy, 14 Aug 2026: "WHY IS THE ITEM NUMBER
+           * SAYING THE PROCEDURE NAME. IT SHOULDNT SAY THAT")
+           *
+           * A description that says something the code does not is still shown,
+           * because a real one carries the side or the count. One that merely
+           * repeats the operation is dropped. */
+          // Two bits of text reduced to the same key when they say the same
+          // thing: case, punctuation and spacing ignored.
+          var looseSame = function (t) {
+            return String(t == null ? "" : t).toLowerCase().replace(/[^a-z0-9]+/g, "");
+          };
+          var codesOnly = function (v, procName) {
+            if (v == null) return "";
+            var proc = looseSame(procName);
+            var arr = Array.isArray(v) ? v : [v];
+            return arr.map(function (x) {
+              if (!x) return "";
+              if (typeof x !== "object") return String(x);
+              var code = String(x.code || "").trim();
+              var desc = String(x.description || "").trim();
+              if (!code) return desc;
+              // The description repeats the operation, or the code, so say the code.
+              if (!desc || looseSame(desc) === proc || looseSame(desc) === looseSame(code)) {
+                return code + (x.qty > 1 ? " x " + x.qty : "");
+              }
+              return code + " " + desc + (x.qty > 1 ? " x " + x.qty : "");
+            }).filter(Boolean).join(", ");
+          };
+          /* And the same on what is STORED, not only what is shown.
+           *
+           * The description travels with the code into the plan, the quote and
+           * the theatre list, so a description that is really the operation
+           * name would print there too. It is dropped at the door rather than
+           * hidden on one screen. The code, the quantity and any genuine
+           * description are untouched. */
+          var cleanCodes = function (v, procName) {
+            if (!Array.isArray(v)) return v;
+            var proc = looseSame(procName);
+            return v.map(function (x) {
+              if (!x || typeof x !== "object") return x;
+              var desc = String(x.description || "").trim();
+              if (!desc) return x;
+              if (looseSame(desc) !== proc && looseSame(desc) !== looseSame(x.code)) return x;
+              var out = {};
+              Object.keys(x).forEach(function (k) { if (k !== "description") out[k] = x[k]; });
+              return out;
+            });
+          };
+          // The banding rule is the numbers. Everything from "when:" onwards is
+          // the form explaining itself to the surgeon.
+          var bandingOnly = function (v) {
+            var s = String(v == null ? "" : v).trim();
+            if (!s) return v;
+            var m = s.match(/^\s*([\d]{1,3}(?:\s*[-–—/]\s*[\d]{1,3})+(?:\s*\/\s*\d+)?)/);
+            var rule = m ? m[1] : s.split(/\s+when\b/i)[0];
+            // One kind of dash, so the same rule stops looking like two.
+            return String(rule).replace(/[–—]/g, "-").replace(/\s*-\s*/g, "-").trim();
+          };
           var sayWeeks = function (v) {
             if (v == null || v === "") return "";
             var n = parseInt(v, 10);
@@ -3888,7 +3953,10 @@
              * were being read and then dropped on the floor, leaving Amy to
              * retype them per patient. Each line shows a human form and stores
              * the real value. (13 Aug 2026.) */
-            ["Item numbers", oa.procedure_codes, ce.procedure_codes, [["order", "procedure_codes"]], sayList(oa.procedure_codes), sayList(ce.procedure_codes)],
+            ["Item numbers", oa.procedure_codes, cleanCodes(ce.procedure_codes, ce.procedure_name || ex.surgery_procedure),
+              [["order", "procedure_codes"]],
+              codesOnly(oa.procedure_codes, oa.procedure_name),
+              codesOnly(ce.procedure_codes, ce.procedure_name || ex.surgery_procedure)],
             ["Prosthesis / implants", oa.prosthesis_details, ce.prosthesis_details, [["order", "prosthesis_details"]]],
             ["Theatre equipment", oa.theatre_equipment, ce.theatre_equipment, [["order", "theatre_equipment"]]],
             ["Theatre alerts", oa.theatre_alerts, ce.theatre_alerts, [["order", "theatre_alerts"]]],
@@ -3896,7 +3964,14 @@
             ["Admission", oa.admission_type, ce.admission_type, [["order", "admission_type"]]],
             ["Anaesthesia", oa.anaesthesia_type, ce.anaesthesia_type, [["order", "anaesthesia_type"]]],
             ["Risk level", oa.risk_stratification, ce.risk_stratification, [["order", "risk_stratification"]]],
-            ["Banding rule", oa.banding_rule, ce.banding_rule, [["order", "banding_rule"]]],
+            /* The rule, not the paragraph explaining it. The form asks "Which
+             * banding rule would you like to apply" and the answer he ticks
+             * carries two sentences of explanation with it, so the row read as
+             * a wall of text against a stored "100-50-25-10/0". Same rule,
+             * said twice, one of them unreadable. The dashes are normalised
+             * too, because the form uses long ones and the record uses short.
+             * (14 Aug 2026.) */
+            ["Banding rule", oa.banding_rule, bandingOnly(ce.banding_rule), [["order", "banding_rule"]]],
             ["PracSuite quote number", oa.pracsuite_quote_number, ce.pracsuite_quote_number, [["order", "pracsuite_quote_number"]]],
             ["Supplements", oa.supplements, ce.supplements, [["order", "supplements"]], sayList(oa.supplements), sayList(ce.supplements)],
             ["Mobility aid", oa.mobility_aid, ce.mobility_aid, [["order", "mobility_aid"]]],

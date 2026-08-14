@@ -3419,6 +3419,12 @@
             ["Showering at (days)", oa.shower_wet_at_days, intOf(ce.shower_wet_at_days), [["order", "shower_wet_at_days"]], sayDays(oa.shower_wet_at_days), sayDays(ce.shower_wet_at_days)],
             ["Travel notes", oa.travel_notes, ce.travel_notes, [["order", "travel_notes"]]],
             ["Reviews after surgery", oa.postop_review_weeks, ce.postop_review_weeks, [["order", "postop_review_weeks"]], sayList(oa.postop_review_weeks), sayList(ce.postop_review_weeks)],
+            /* The non-service lines off a draft quote: the sandal, the brace,
+             * the splint, the dressing. The reader finds them and nothing ever
+             * offered them, so F414s sat in the extract and never reached the
+             * plan or the item numbers, and Amy could not carry it on to the
+             * quote. (Amy, 14 Aug 2026.) */
+            ["Quoted items (sandal, brace, splint)", oa.quote_items, ce.quote_items, [["order", "quote_items"]], sayList(oa.quote_items), sayList(ce.quote_items)],
             /* GLP-1 and SGLT2, one answer per drug family. */
             ["GLP-1", oa.glp1_status, ce.glp1_status, [["order", "glp1_status"]], sayDrug(oa.glp1_status, oa.glp1_drug, oa.glp1_last_dose), sayDrug(ce.glp1_status, ce.glp1_drug, ce.glp1_last_dose)],
             ["GLP-1 drug", oa.glp1_drug, ce.glp1_drug, [["order", "glp1_drug"]]],

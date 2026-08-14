@@ -1720,9 +1720,15 @@
               failed.push({ d: d, why: (e && e.message) || "unknown" });
             }
           }
-          // The quote tag means it is on their PracSuite record, so it goes
-          // now rather than when a PDF happened to be rendered.
-          if (done.some(function (x) { return /^quote/.test(String(x.doc_type || "")); }) &&
+          // The quote tag means THE QUOTE is on their PracSuite record, so it
+          // goes now rather than when a PDF happened to be rendered.
+          // Only the Surgical Fee Quote itself earns it. The old test was any
+          // doc_type starting with "quote", which is also true of the cover
+          // letter, the informed financial consent, the payment authority and
+          // the screening form, so sending a cover letter on its own told
+          // PracSuite a quote had been uploaded when none had. (Amy, 15 Aug
+          // 2026: the tag is only for the Surgical Fee Quote.)
+          if (done.some(function (x) { return String(x.doc_type || "") === "quote_main"; }) &&
               window.ClinicPracSuiteTags) {
             try { await window.ClinicPracSuiteTags.tag(cid, "quote.uploaded"); } catch (e) {}
           }
@@ -1827,26 +1833,37 @@
             }
           }
           var parts = [];
-          if (got.length === 1) {
-            saveBlobAs(got[0].blob, got[0].name);
-            parts.push('<b style="color:#2d7a55">1 downloaded.</b>');
-          } else if (got.length > 1) {
-            say("Zipping " + got.length + " documents…");
-            var zipped = await ensureJsZip();
-            if (zipped) {
-              var zip = new JSZip();
-              got.forEach(function (g) { zip.file(g.name, g.blob); });
-              var who = String((state.patient && state.patient.full_name) || "Patient").replace(/[\/\\:*?"<>|]/g, "-").trim();
-              saveBlobAs(await zip.generateAsync({ type: "blob" }), who + " - documents.zip");
-              parts.push('<b style="color:#2d7a55">' + got.length + ' downloaded as a zip.</b>');
-            } else {
-              // No zip library, so hand over the files one at a time rather
-              // than nothing at all. The browser asks once about multiple
-              // downloads; say so, or it reads as the button failing.
-              got.forEach(function (g) { saveBlobAs(g.blob, g.name); });
-              parts.push('<b style="color:#2d7a55">' + got.length + ' downloaded</b> one file at a time ' +
-                '(the zip library did not load, so allow multiple downloads if the browser asks).');
+          // Zipping is the one step with nothing above it to catch a failure.
+          // Without this the button stays greyed out mid-sentence and the
+          // only way out is a reload, which reads as the whole thing being
+          // broken. Say what happened and hand the files over singly instead.
+          try {
+            if (got.length === 1) {
+              saveBlobAs(got[0].blob, got[0].name);
+              parts.push('<b style="color:#2d7a55">1 downloaded.</b>');
+            } else if (got.length > 1) {
+              say("Zipping " + got.length + " documents…");
+              var zipped = await ensureJsZip();
+              if (zipped) {
+                var zip = new JSZip();
+                got.forEach(function (g) { zip.file(g.name, g.blob); });
+                var who = String((state.patient && state.patient.full_name) || "Patient").replace(/[\/\\:*?"<>|]/g, "-").trim();
+                saveBlobAs(await zip.generateAsync({ type: "blob" }), who + " - documents.zip");
+                parts.push('<b style="color:#2d7a55">' + got.length + ' downloaded as a zip.</b>');
+              } else {
+                // No zip library, so hand over the files one at a time rather
+                // than nothing at all. The browser asks once about multiple
+                // downloads; say so, or it reads as the button failing.
+                got.forEach(function (g) { saveBlobAs(g.blob, g.name); });
+                parts.push('<b style="color:#2d7a55">' + got.length + ' downloaded</b> one file at a time ' +
+                  '(the zip library did not load, so allow multiple downloads if the browser asks).');
+              }
             }
+          } catch (zipErr) {
+            try { got.forEach(function (g) { saveBlobAs(g.blob, g.name); }); } catch (e2) {}
+            parts.push('<b style="color:#a3402d">The zip could not be made</b> (' +
+              esc((zipErr && zipErr.message) || "unknown") + '), so the ' + got.length +
+              ' documents were downloaded one at a time instead.');
           }
           if (failed.length) {
             parts.push('<b style="color:#a3402d">' + failed.length + ' could not be downloaded:</b> ' +
@@ -4187,6 +4204,78 @@
             var v = (c && typeof c === "object") ? c.code : c;
             return String(v == null ? "" : v).trim().toUpperCase();
           };
+          /* THE CLINIC'S OWN LIST, and what each item bills as.
+           *
+           * clinic-procedure-codes.js is the one list every app reads.
+           * ClinicCodes is the lookup; ClinicProcedureCodes is a plain array
+           * kept for older callers, so both are read here and whichever is
+           * loaded answers. Reading mbsFor off the ARRAY silently returns
+           * nothing, which is how an earlier version came to believe no code
+           * had an MBS number at all. */
+          var catList = function () {
+            try {
+              if (window.ClinicCodes && typeof window.ClinicCodes.list === "function") {
+                var l = window.ClinicCodes.list();
+                if (l && l.length) return l;
+              }
+            } catch (e) {}
+            return Array.isArray(window.ClinicProcedureCodes) ? window.ClinicProcedureCodes : [];
+          };
+          var catByCode = function (code) {
+            var want = codeKey(code); if (!want) return null;
+            var l = catList();
+            for (var i = 0; i < l.length; i++) {
+              if (codeKey(l[i] && l[i].code) === want) return l[i];
+            }
+            return null;
+          };
+          // Every clinic item that bills as this MBS number. Often more than
+          // one: 49833 is F782uf, F782uni, F783uf and F783uni, four different
+          // operations at four different prices.
+          var catByMbs = function (n) {
+            var want = String(n == null ? "" : n).trim();
+            if (!want) return [];
+            return catList().filter(function (e) {
+              return String((e && e.mbs) || "").trim() === want;
+            });
+          };
+          // A bare MBS item number, as Dr Edwards writes them on a clinical
+          // note. Every clinic item number starts with a letter, so a run of
+          // digits on its own is never one of ours.
+          var isMbsNumber = function (v) {
+            return /^\d{4,6}$/.test(String(v == null ? "" : v).trim());
+          };
+          /* A quoted item, as the reader writes it: either an object, or a
+           * line like "F414s - Post-Operative Sandal (Simple Darco)" where the
+           * clinic's code comes first. The separator in that line is the
+           * reader's, not ours, so every kind is accepted.
+           *
+           * The leading word only counts as a code when the clinic's list
+           * knows it, or when it is unmistakably one of ours. "Post-Operative
+           * Dressing" begins with a hyphenated word and must never be read as
+           * a code called "Post". */
+          var quotedText = function (x) {
+            if (x && typeof x === "object") {
+              return [x.code, x.description || x.name].filter(Boolean).join(" ").trim() ||
+                     String(x.code || "").trim();
+            }
+            return String(x == null ? "" : x).trim();
+          };
+          var quotedCode = function (x) {
+            if (x && typeof x === "object") return String(x.code || "").trim();
+            var s = String(x == null ? "" : x).trim();
+            var m = s.match(/^([A-Za-z][A-Za-z0-9._-]{0,15}?)\s*(?:[–—:]|\s-\s)\s*\S/);
+            if (!m) return "";
+            var c = m[1];
+            if (catByCode(c)) return c;
+            return /^F\d{2,4}[A-Za-z0-9-]*$/.test(c) ? c : "";
+          };
+          // The one shape a quoted item is compared on: its code when it has
+          // one, and otherwise its own words.
+          var quotedKey = function (x) {
+            var c = quotedCode(x);
+            return c ? c.toUpperCase() : looseSame(quotedText(x));
+          };
           // The banding rule is the numbers. Everything from "when:" onwards is
           // the form explaining itself to the surgeon.
           var bandingOnly = function (v) {
@@ -4302,6 +4391,41 @@
               });
               return out;
             };
+            /* ONE ROW PER QUOTED ITEM, and NOT an item number.
+             *
+             * The sandal, the brace, the splint and the dressing arrived as a
+             * single lump, so three things off one file were all or nothing
+             * and Amy could not take the dressing without the sandal. (Amy,
+             * 15 Aug 2026: rename it "Items to add to the quote".)
+             *
+             * These stay in the quoted-items list and are NEVER added to the
+             * item numbers. The sandal reaches the surgery plan from the DRAFT
+             * QUOTE, as F414s, like every other item; feeding it in from here
+             * as well would put it on the quote twice. What this list is for
+             * is the booklet, and for Amy to read against the quote to see
+             * what Dr Edwards asked for that the quote does not have. */
+            var quotedDefs = function () {
+              var inc = Array.isArray(ce.quote_items) ? ce.quote_items
+                      : (ce.quote_items ? [ce.quote_items] : []);
+              if (!inc.length) return [];
+              var have = {};
+              (Array.isArray(oa.quote_items) ? oa.quote_items : []).forEach(function (x) {
+                var k = quotedKey(x); if (k) have[k] = true;
+              });
+              var seen = {}, out = [];
+              inc.forEach(function (x) {
+                var k = quotedKey(x); if (!k || seen[k]) return;
+                seen[k] = true;
+                var name = quotedText(x);
+                out.push(["Items to add to the quote: " + name,
+                          have[k] ? name : "", name,
+                          [["order", "quote_items"]],
+                          have[k] ? "Already on this surgery plan" : "",
+                          name,
+                          { quoteItem: x }]);
+              });
+              return out;
+            };
             return [
             ["Procedure", onFile(oa.procedure_name, P.surgery_procedure, ex.surgery_procedure), ex.surgery_procedure, [["patients", "surgery_procedure"], ["order", "procedure_name"]]],
             ["Estimated duration (min)", onFile(oa.est_duration_min, P.surgery_duration_min, intOf(ce.est_duration_min)), intOf(ce.est_duration_min), [["patients", "surgery_duration_min"], ["order", "est_duration_min"]]],
@@ -4400,12 +4524,10 @@
               weeksList(ce.postop_review_weeks), [["order", "postop_review_weeks"]],
               uiReviews ? ("Week " + uiReviews.split(", ").join(", week ")) : recSaid("post_op_reviews"),
               weeksList(ce.postop_review_weeks) ? ("Week " + weeksList(ce.postop_review_weeks).split(", ").join(", week ")) : ""],
-            /* The non-service lines off a draft quote: the sandal, the brace,
-             * the splint, the dressing. The reader finds them and nothing ever
-             * offered them, so F414s sat in the extract and never reached the
-             * plan or the item numbers, and Amy could not carry it on to the
-             * quote. (Amy, 14 Aug 2026.) */
-            ["Quoted items (sandal, brace, splint)", oa.quote_items, ce.quote_items, [["order", "quote_items"]], sayList(oa.quote_items), sayList(ce.quote_items)],
+            /* The non-service things named on the file: the sandal, the brace,
+             * the splint, the dressing. See quotedDefs above. They go in here,
+             * one row each, so she can take the dressing without the sandal. */
+            ], quotedDefs(), [
             /* GLP-1 and SGLT2, one answer per drug family. */
             ["GLP-1", oa.glp1_status, ce.glp1_status, [["order", "glp1_status"]], sayDrug(oa.glp1_status, oa.glp1_drug, oa.glp1_last_dose), sayDrug(ce.glp1_status, ce.glp1_drug, ce.glp1_last_dose)],
             ["GLP-1 drug", oa.glp1_drug, ce.glp1_drug, [["order", "glp1_drug"]]],
@@ -4529,7 +4651,8 @@
               current: cur == null ? "" : cur, incoming: inc,
               // Display only. The row still STORES what is in current/incoming.
               showCurrent: d[4] || null, showIncoming: d[5] || null });
-            byKey[label] = { writes: writes, codeObj: (d[6] && d[6].codeObj) || null };
+            byKey[label] = { writes: writes, codeObj: (d[6] && d[6].codeObj) || null,
+                             quoteItem: (d[6] && d[6].quoteItem) || null };
           });
           // The popup is now the thing that is happening, so the zone stops
           // spinning and points at it. It stays on screen underneath.
@@ -4539,12 +4662,16 @@
           if (!result) return dropAbandoned();
           status("Saving…");
           dzBusy("Saving", idx, total, file.name, "Writing what you kept, then filing the file.");
-          var pPatch = {}, oPatch = {}, codePicks = [];
+          var pPatch = {}, oPatch = {}, codePicks = [], quotePicks = [];
           (result.changes || []).forEach(function (ch) {
             var b = byKey[ch.label] || {};
             // An item number is a row of its own but not a column of its own.
             // The ticked ones are gathered here and added to the list below.
             if (b.codeObj) { codePicks.push(b.codeObj); return; }
+            // Same for a quoted item: a row each, one list. Writing the column
+            // straight from the row would let the last one ticked overwrite
+            // every other one, so ticking three would save one.
+            if (b.quoteItem) { quotePicks.push(b.quoteItem); return; }
             var w = b.writes || [];
             w.forEach(function (t) {
               var table = t[0], col = t[1], v = ch.value;
@@ -4578,6 +4705,22 @@
               codeSeen[k] = true; codeList.push(c); codeAdded++;
             });
             if (codeAdded) oPatch.procedure_codes = codeList;
+          }
+          /* And the quoted items she ticked, on the same terms: added to what
+           * is there, never replacing it, and never added twice. These go to
+           * the quoted-items list only. They are deliberately NOT put in with
+           * the item numbers: the sandal reaches the plan from the draft quote
+           * as F414s, and adding it from here as well would quote it twice. */
+          if (quotePicks.length) {
+            var qList = Array.isArray(oa.quote_items) ? oa.quote_items.slice() : [];
+            var qSeen = {}, qAdded = 0;
+            qList.forEach(function (x) { var k = quotedKey(x); if (k) qSeen[k] = true; });
+            quotePicks.forEach(function (x) {
+              var k = quotedKey(x);
+              if (!k || qSeen[k]) return;
+              qSeen[k] = true; qList.push(x); qAdded++;
+            });
+            if (qAdded) oPatch.quote_items = qList;
           }
           /* What she was OFFERED and did not take.
            *

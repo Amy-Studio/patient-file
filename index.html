@@ -400,6 +400,15 @@
           </div>
           <div id="pf-newform" style="display:none; margin-top:14px; border:1px solid var(--line); border-radius:var(--radius); padding:14px; background:#fbfcfe">
             <div style="font-size:13px; font-weight:600; color:var(--navy); margin-bottom:10px">New patient</div>
+            <!-- STEP 2 OF 3. The register was searched by the box above; PracSuite
+                 is asked next, and only then does "Create patient" appear. Somebody
+                 brought across from PracSuite carries their PracSuite ID, which is
+                 the one thing that stops them ever looking new here again. Nothing
+                 is asked of PracSuite until this button is pressed. -->
+            <div id="np-ps" style="margin-bottom:12px; border:1px solid #f0ddb0; background:#fdf3dd; border-radius:var(--radius); padding:10px 12px">
+              <div id="np-ps-msg" style="font-size:12.5px; line-height:1.5; color:#96660f">Nobody in this program matched. Search PracSuite before making a new record — if they are there, bringing them across keeps them as one person in both.</div>
+              <div style="margin-top:8px"><button type="button" id="np-ps-btn" class="np-btn">Search PracSuite</button></div>
+            </div>
             <div class="grid2">
               <div class="field full"><label>Full name (required)</label><input id="np-full_name" autocomplete="off"></div>
               <div class="field"><label>Date of birth</label><input id="np-dob" type="date"></div>
@@ -409,7 +418,7 @@
               <div class="field"><label>Health fund</label><input id="np-health_fund" autocomplete="off"></div>
             </div>
             <div id="np-dups" style="display:none; margin-top:12px"></div>
-            <div style="display:flex; gap:8px; align-items:center; margin-top:12px">
+            <div id="np-actions" style="display:flex; gap:8px; align-items:center; margin-top:12px">
               <button type="button" id="np-save" class="np-btn primary">Create patient</button>
               <button type="button" id="np-cancel" class="np-btn ghost">Cancel</button>
               <span id="np-status" style="font-size:12.5px; color:var(--red)"></span>
@@ -502,7 +511,7 @@
                  the page it saved things you could not see from there. -->
             <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
                         display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <button class="save-btn" id="pf-save" disabled>Save her details</button>
+              <button class="save-btn" id="pf-save" disabled>Save their details</button>
               <span class="status" id="pf-status-contact"></span>
             </div>
 </div>
@@ -589,7 +598,7 @@
           <div class="section" id="sec-surgeryrecord">
             <h2>Surgery record</h2>
             <div class="panel-sub">Everything kept together for the surgery selected above:
-              her case as it appears on the list, the plan, and every document filed.
+              their case as it appears on the list, the plan, and every document filed.
               If a surgery is cancelled none of this is lost, and a future one can be
               started from it.</div>
             <div id="sr-body"><span style="font-size:12.5px;color:var(--muted)">Loading…</span></div>
@@ -597,8 +606,13 @@
 
           <div class="section" id="sec-pracsuite">
             <h2>PracSuite</h2>
-            <div class="panel-sub">Compare her against PracSuite and bring across anything
-              missing: Medicare, health fund, next of kin, and her surgery booking.</div>
+            <!-- Neutral, always. Nothing here knows whether this patient is a
+                 man or a woman, and a name or a title is not something to
+                 guess it from. (Amy has asked twice: "why is it saying
+                 'her'?", and a male patient's PracSuite note read "her to
+                 organise".) -->
+            <div class="panel-sub">Compare this patient against PracSuite and bring across anything
+              missing: Medicare, health fund, next of kin, and their surgery booking.</div>
 
       <!-- Always a visible box with a heading. An empty div was
            indistinguishable from a broken one, which is exactly what
@@ -607,10 +621,10 @@
       <div style="margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden">
         <div style="background:var(--card);padding:8px 13px;font-size:11px;letter-spacing:.04em;
                     color:var(--accent-ink);border-bottom:1px solid var(--line)">
-          PRACSUITE &middot; her details, compared
+          PRACSUITE &middot; their details, compared
         </div>
         <div id="pf-pracsuite" style="padding:12px 13px">
-          <span style="font-size:12.5px;color:var(--muted)">Waiting for her file to load…</span>
+          <span style="font-size:12.5px;color:var(--muted)">Waiting for this file to load…</span>
         </div>
       </div>
           </div>
@@ -726,6 +740,18 @@
             n.classList.add("active");
             var s = qs("sec-" + n.getAttribute("data-sec"));
             if (s) s.classList.add("active");
+            /* Opening a tab reads this patient again from OUR OWN database, so
+             * a value accepted off a dropped note, a plan saved in the frame,
+             * or a document another app filed is already there by the time she
+             * reaches the tab that shows it. Nothing is asked of PracSuite:
+             * this is our three tables, and the PracSuite check still waits
+             * for the button. (Amy, 14 Aug 2026: "i have to keep refreshing".)
+             *
+             * It is skipped while she is part-way through typing, and
+             * throttled, so moving around a file is not a query per click.
+             * pfReloadRecord is defined further down; this handler only runs
+             * on a click, by which time the whole script has loaded. */
+            try { pfReloadRecord(); } catch (e) {}
           });
         });
 
@@ -1067,10 +1093,10 @@
             '<div style="background:#fdf3dd;border:1px solid #f0ddb0;border-radius:10px;' +
             'padding:11px 13px;margin-bottom:10px">' +
             '<div style="font-size:13px;font-weight:700;color:#96660f;margin-bottom:3px">' +
-            'She has ' + live.length + ' plans. Which one is going ahead?</div>' +
+            'They have ' + live.length + ' plans. Which one is going ahead?</div>' +
             '<div style="font-size:12px;color:#96660f;opacity:.85;margin-bottom:9px">' +
             'Until this is answered the surgical list and the booking screen will both ask, ' +
-            'and nothing can be printed for her.</div>' +
+            'and nothing can be printed for them.</div>' +
             live.map(function (o) {
               var i = orders.indexOf(o);
               return '<button type="button" data-ocf="' + i + '" style="font-size:12.5px;' +
@@ -1104,7 +1130,7 @@
           planAction("data-ocf", async function (o, c) {
             var label = o.procedure_name || "this surgery";
             if (!confirm("Confirm " + label + " as the one going ahead?\n\nAny other live " +
-                         "plan for their is archived, so the surgical list has one answer.")) return;
+                         "plan for this patient is archived, so the surgical list has one answer.")) return;
             // Archive the others first: only one plan can be going ahead.
             await c.from("surgeon_orders").update({ archived_at: new Date().toISOString() })
               .eq("patient_id", state.patient.id).is("archived_at", null).neq("id", o.id);
@@ -1116,7 +1142,7 @@
           planAction("data-oar", async function (o, c) {
             var label = o.procedure_name || "this surgery";
             if (!confirm("Archive " + label + "?\n\nUse this when it was a real option they " +
-                         "did not choose. It is kept, so what they was offered and quoted is " +
+                         "did not choose. It is kept, so what they were offered and quoted is " +
                          "still on record, but it stops appearing on the list.")) return;
             var r = await c.from("surgeon_orders")
               .update({ archived_at: new Date().toISOString(), confirmed_at: null }).eq("id", o.id);
@@ -1126,7 +1152,7 @@
           planAction("data-orm", async function (o, c) {
             var label = o.procedure_name || "this surgery";
             if (!confirm("Delete " + label + " for good?\n\nOnly do this if it was created by " +
-                         "mistake and was never a real plan. It cannot be undone.\n\nIf they was " +
+                         "mistake and was never a real plan. It cannot be undone.\n\nIf they were " +
                          "genuinely offered it, archive it instead.")) return;
             var r = await c.from("surgeon_orders").delete().eq("id", o.id);
             if (r.error) { toast("Couldn't delete: " + r.error.message); return; }
@@ -1489,7 +1515,7 @@
             bar.innerHTML =
               '<button type="button" id="pf-ps-send" class="btn" style="opacity:.55">Send to PracSuite</button>' +
               '<span id="pf-ps-note" style="font-size:12.5px;color:var(--muted)">' +
-              'Tick what you want on her PracSuite record. Nothing goes across until you press Send, ' +
+              'Tick what you want on their PracSuite record. Nothing goes across until you press Send, ' +
               'and PracSuite has no way to take a file back.</span>';
             host.parentNode.insertBefore(bar, host);
             qs("pf-ps-send").addEventListener("click", sendTickedToPracSuite);
@@ -1616,7 +1642,7 @@
           var cid = state.patient && state.patient.client_id;
           if (!cid) {
             say('<b style="color:#a3402d">This patient is not linked to PracSuite yet</b>, so there is ' +
-                'nowhere to send these. Link their on the PracSuite tab first, then come back.');
+                'nowhere to send these. Link them on the PracSuite tab first, then come back.');
             return;
           }
           if (!window.ClinicPracSuiteFiles) {
@@ -1639,7 +1665,7 @@
               var dl = await client.storage.from(d.bucket).download(d.path);
               if (dl.error || !dl.data) throw new Error(dl.error ? dl.error.message : "the file could not be read");
               // A refusal for going too fast is worth waiting out rather than
-              // reporting as a failure and leaving their to work out which
+              // reporting as a failure and leaving her to work out which
               // documents to tick again.
               var res = await window.ClinicPracSuiteFiles.upload(cid, dl.data, pracSuiteFileName(d));
               if (!res.ok && /too soon|too many|slow down|429/i.test(String(res.reason || ""))) {
@@ -1862,16 +1888,18 @@
           if (p.created_at) h.push('<div class="doc"><span class="dname">Created</span><span class="dmeta" style="margin-left:auto">' + isoToDmy(p.created_at) + (p.created_by ? " · " + esc(p.created_by) : "") + '</span></div>');
           qs("pf-history").innerHTML = h.length ? h.join("") : '<div class="empty">No history yet.</div>';
         }
-        // runPsCheck runs itself once per patient opened, so it is safe here:
-        // renderAll is called again every time a slower table arrives.
-        /* PracSuite is asked ONLY when Amy presses the button.
- *
- * This called runPsCheck on every redraw, and a patient load redraws several
- * times as each query comes back, so opening files went out to PracSuite
- * again and again, re-offering differences she had already dealt with.
- * Smartsoft monitor usage and may revoke access, so an automatic check is
- * not a convenience, it is a risk to the whole connection.
- * (Amy, 13 Aug 2026: "it only checks when i ask it to".) */
+        /* Redraw everything from what is already in memory. It reads no table
+         * and asks PracSuite nothing.
+         *
+         * It used to call runPsCheck, and a patient load redraws several times
+         * as each query comes back, so opening a file went out to PracSuite
+         * again and again, re-offering differences she had already dealt with.
+         * Smartsoft monitor usage and may revoke access, so an automatic check
+         * is not a convenience, it is a risk to the whole connection.
+         * (Amy, 13 Aug 2026: "it only checks when i ask it to".)
+         *
+         * To pick up what another app or another tab has written, use
+         * pfReloadRecord, which reads OUR OWN three tables and then calls this. */
         function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); }
         function renderNotes() {
           var el = qs("pf-notes-list"); if (!el) return;
@@ -1968,8 +1996,9 @@
           // that loaded. Mounting it asks PracSuite for the patient, their
           // appointments and their contacts, so three requests went out for every
           // patient anybody so much as glanced at. It now mounts when the
-          // PracSuite tab is opened (mountPracSuitePanel), and the quiet check
-          // on open (runPsCheck) is the one thing that runs by itself.
+          // PracSuite tab is opened (mountPracSuitePanel). Nothing on this page
+          // asks PracSuite by itself any more: runPsCheck runs only from the
+          // button on the status line.
           qs("pf-make-quote").href = APPS.quote + q;
           qs("pf-make-pamphlet").href = APPS.pamphlet + (id ? ("?patient_id=" + encodeURIComponent(id) + (oid ? "&order_id=" + encodeURIComponent(oid) : "")) : "");
           // Booked patient → the surgical list app loads their whole operating
@@ -2003,7 +2032,7 @@
         /* Inside the suite these open as a tab, not a browser window.
          *
          * A named window is the right answer when the file is opened on its
-         * own. Inside the suite it is the wrong one: pressing Quote threw their
+         * own. Inside the suite it is the wrong one: pressing Quote threw her
          * out of the program into a bare browser tab with no sidebar and no
          * patient file to come back to. The href stays exactly as it was, so
          * nothing changes when this page is opened by itself.
@@ -2170,7 +2199,7 @@
 
           host.innerHTML =
             '<h3 style="font-size:13.5px;margin:0 0 6px">Their case</h3>' + srCase(o, pt) +
-            // "On her file", not "for this surgery": documents are held against
+            // "On their file", not "for this surgery": documents are held against
             // the patient, not against one operation, so a patient with two
             // surgeries sees both sets here. Saying so beats implying otherwise.
             '<h3 style="font-size:13.5px;margin:20px 0 6px">Documents on their file</h3>' +
@@ -2190,7 +2219,7 @@
 
           const dup = qs("sr-dup");
           if (dup) dup.onclick = async function () {
-            if (!confirm("Start a new surgery for her, copying this plan?\n\n" +
+            if (!confirm("Start a new surgery for this patient, copying this plan?\n\n" +
                          "The procedure, items, implants and recovery plan are copied. " +
                          "Dates and anything already approved are not.")) return;
             const c = sb();
@@ -2276,13 +2305,18 @@
           Object.keys(NEEDS).forEach(function (k) {
             missingFor(k).forEach(function (m) { (all[m] = all[m] || []).push(NEEDS[k].name); });
           });
-          /* The PracSuite check, said right where the documents get built.
+          /* The PracSuite check again, right where the documents get built.
            *
-           * The banner at the top of the file says the same thing, but she
-           * scrolls past it to reach these buttons — and scrolling past it is
-           * exactly what happened on the day a whole document set was filed
-           * with an expiry PracSuite disagreed with. One count, from
-           * psUnsettled, so the two can never say different things.
+           * This is NOT a second opinion. The words come from psUnsettled,
+           * which comes from psState, which is the one thing that works out
+           * what the check is doing, so this and the status line at the top of
+           * the file cannot say different things. It is repeated here because
+           * she scrolls past the top of the file to reach these buttons, and
+           * scrolling past it is exactly what happened on the day a whole
+           * document set was filed with an expiry PracSuite disagreed with.
+           *
+           * It says nothing at all when nothing is hanging over the patient,
+           * so it is a warning rather than a running commentary.
            */
           var unsettled = "";
           try { unsettled = psUnsettled(); } catch (e) {}
@@ -2290,7 +2324,8 @@
             ? '<div style="background:#fdf3dd;border:1px solid #f0ddb0;color:#96660f;' +
               'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55;margin-bottom:8px">' +
               '<b>The PracSuite check ' + esc(unsettled) + '</b> ' +
-              'Anything built now may be built on details that are about to change.</div>'
+              'Anything built now may be built on details that are about to change. ' +
+              '<span style="opacity:.8">This is the same check as the line at the top of this file.</span></div>'
             : "";
 
           var names = Object.keys(all);
@@ -2444,6 +2479,12 @@
         function pfMarkDirty(e) {
           if (!e || !e.target || !e.target.closest) return;
           if (e.target.closest("#pf-picker")) return;      // search/new-patient picker isn't the open file
+          /* Choosing a file to drop is not an unsaved edit. The drop zone sits
+           * inside the patient's card, so picking a file marked the whole file
+           * dirty: it put an "unsaved changes" prompt in the way of leaving
+           * the tab, and it blocked the re-read that is meant to show what the
+           * drop just saved. (Amy, 14 Aug 2026.) */
+          if (e.target.closest("#pf-dropz")) return;
           if (e.target.closest(".pcard")) pfDirty = true;   // an edit inside the open patient's card
         }
         document.addEventListener("input", pfMarkDirty, true);
@@ -2507,17 +2548,64 @@
         (function () { var b = qs("o-edit-toggle"); if (b) b.addEventListener("click", function () { orderEditing = !orderEditing; renderOrder(); }); })();
         // ---- Surgeon workflow tabs: render the Pre-op plan + Audit forms
         // INLINE inside their tabs (no pop-up), lazily on first open. ----
-        var _ppMounted = false, _opMounted = false;
+        /* These two are handed a COPY of the surgery when they mount, so once
+         * built they cannot see the surgery change underneath them. They were
+         * built once per page load, which is why values accepted off a dropped
+         * note only ever appeared in them after a browser reload, and why
+         * switching to a different surgery left the previous one's answers on
+         * screen. (Amy, 14 Aug 2026: "i have to keep refreshing".)
+         *
+         * They are rebuilt when the tab is opened again AND the stored surgery
+         * has actually moved on, which is what orderGen counts.
+         *
+         * They are NEVER rebuilt over typing. A form somebody has started
+         * filling in is left exactly as it is, and said so out loud, because
+         * rebuilding it would throw that typing away and nothing clinical may
+         * disappear without her seeing it go.
+         */
+        var _ppFor = null, _opFor = null;
+        function formSig() { return String(state.orderId || "") + "#" + orderGen; }
         function mountSurgeonForm(host, modName, mount) {
           var el = qs(host); if (!el) return;
-          if (!window[modName] || !window[modName].mountInline) { el.innerHTML = '<div class="empty">Still loading — reopen this tab in a moment.</div>'; return false; }
+          if (!window[modName] || !window[modName].mountInline) { el.innerHTML = '<div class="empty">Still loading. Reopen this tab in a moment.</div>'; return false; }
           if (!state.patient || !state.patient.id) { el.innerHTML = '<div class="empty">Open a patient first.</div>'; return false; }
           if (!state.orderId) { el.innerHTML = '<div class="empty">Save the patient\'s surgery details first (Surgeon order tab), then reopen this tab.</div>'; return false; }
           window[modName].mountInline(el, Object.assign({}, state.order, { id: state.orderId }), state.patient);
+          // A fresh build has nothing typed into it yet, and from here on any
+          // typing inside it marks it so it will not be built over.
+          el.dataset.pfTyped = "";
+          if (el.dataset.pfWatched !== "1") {
+            el.dataset.pfWatched = "1";
+            var mark = function () { el.dataset.pfTyped = "1"; };
+            el.addEventListener("input", mark, true);
+            el.addEventListener("change", mark, true);
+          }
           return true;
         }
-        function mountPreop() { if (_ppMounted) return; if (mountSurgeonForm("pp-inline", "ClinicPreopPlan")) _ppMounted = true; }
-        function mountOperative() { if (_opMounted) return; if (mountSurgeonForm("op-inline", "ClinicSurgeryAudit")) _opMounted = true; }
+        /* Rebuild, unless there is typing in there to lose. The note goes
+         * ABOVE the form rather than replacing it, so what she typed is still
+         * on screen and still saveable. */
+        function mountSurgeonTab(host, modName, sigRef, setSig) {
+          var el = qs(host); if (!el) return;
+          var sig = formSig();
+          if (sigRef === sig) return;                     // already showing this surgery
+          var noteId = host + "-stale";
+          var old = qs(noteId); if (old && old.parentNode) old.parentNode.removeChild(old);
+          if (sigRef !== null && el.dataset.pfTyped === "1") {
+            var note = document.createElement("div");
+            note.id = noteId;
+            note.style.cssText = "background:#fdf3dd;border:1px solid #f0ddb0;color:#96660f;" +
+              "border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55;margin-bottom:10px";
+            note.textContent = "This surgery has changed since this form was opened, and there is " +
+              "typing in it that has not been saved. Nothing has been touched. Save what you have " +
+              "typed, then open this tab again to see the newer details.";
+            el.parentNode.insertBefore(note, el);
+            return;
+          }
+          if (mountSurgeonForm(host, modName)) setSig(sig);
+        }
+        function mountPreop() { mountSurgeonTab("pp-inline", "ClinicPreopPlan", _ppFor, function (s) { _ppFor = s; }); }
+        function mountOperative() { mountSurgeonTab("op-inline", "ClinicSurgeryAudit", _opFor, function (s) { _opFor = s; }); }
         (function () { var n = document.querySelector('.navitem[data-sec="preop"]'); if (n) n.addEventListener("click", mountPreop); })();
         (function () { var n = document.querySelector('.navitem[data-sec="operative"]'); if (n) n.addEventListener("click", mountOperative); })();
 
@@ -2539,7 +2627,7 @@
          */
         var _psRes = null;          // the last answer, for the banner
         var _psCheckedFor = null;   // patient id the check has already run for
-        var _psDismissedFor = null; // patient id whose banner they has closed
+        var _psDismissedFor = null; // patient id whose banner she has closed
         var _psPanelFor = null;     // patient id the panel is currently showing
         var _psChecking = false;
         var _psFail = "";           // a check that could not run, in plain words
@@ -2553,9 +2641,9 @@
         }
         function psLinkId(p) { return String((p && p.client_id) == null ? "" : p.client_id).trim(); }
 
-        // A check that actually compared their, which is the only kind that earns
+        // A check that actually compared them, which is the only kind that earns
         // a stamp. The module calls that answer "ok" when everything matched
-        // and "differs" when it did not; both of them looked at their. Anything
+        // and "differs" when it did not; both of them looked at the patient. Anything
         // else ("failed", "skipped", "unlinked", "unchecked") compared nothing,
         // and a count of nothing must never be written down as a clean result.
         function psComplete(res) {
@@ -2636,7 +2724,7 @@
          * hour is not asked about again. That interval is in the module, as
          * CHECK_INTERVAL_MS, and there is one of it.
          */
-        function runPsCheck() {
+        function runPsCheck(force) {
           var p = state.patient;
           if (!p || !p.id) return;
           if (_psCheckedFor === p.id) return;
@@ -2668,10 +2756,18 @@
               return;
             }
             var stored = psStoredStamp(state.patient);
-            Promise.resolve(window.ClinicPracSuiteLink.check(state.patient, { lastCheckedAt: stored && stored.at }))
+            /* force is set only when she pressed "Check PracSuite again". A
+             * check inside the hour is normally honoured from the stamp and
+             * asks PracSuite nothing, which is right for an ordinary open but
+             * wrong for a deliberate press: pressing a button and watching the
+             * same old date sit there would just make her press it again. One
+             * press, one request. */
+            Promise.resolve(window.ClinicPracSuiteLink.check(state.patient,
+                            force ? { force: true }
+                                  : { lastCheckedAt: stored && stored.at }))
               .then(function (res) {
                 _psChecking = false;
-                if (!state.patient || state.patient.id !== pid) return;  // they has moved on
+                if (!state.patient || state.patient.id !== pid) return;  // she has moved on
                 _psRes = res;
                 // Only a completed comparison earns a stamp. "skipped" is the
                 // stamp we already had, and "failed" compared nothing.
@@ -2701,47 +2797,130 @@
           try { renderReadiness(); } catch (e) {}
         }
 
-        /* Is the check still open? Returns the reason in words, or "" when
-         * there is nothing hanging over this patient.
+        /* ---- ONE state for the PracSuite check, and one line that says it ---
          *
-         * "Unresolved" is deliberately wider than "still running": a check
-         * that finished and FOUND something is just as much a reason not to
-         * build a document yet, and so is one that could not run at all. A
-         * count of nothing must never read as nothing wrong.
+         * (Amy, 14 Aug 2026: "PracSuite checked 14 minutes ago", "Not compared
+         * against PracSuite" and "The PracSuite check has not started yet" were
+         * all on the screen at the same time, and they cannot all be true.
+         * They came from three places that each worked the state out for
+         * themselves: the line under the patient's name read the saved date,
+         * the banner read only what THIS page had asked, and the strip above
+         * the document buttons asked psUnsettled, which called anything this
+         * page had not run itself "not started". Since the check went
+         * manual-only, not running it on this page is the ordinary case, so
+         * all three were answering different questions and every one of them
+         * was "right". There is one state now, worked out here, and nothing
+         * anywhere works it out again.)
+         *
+         * Reading the state asks PracSuite NOTHING. It looks at the answer
+         * this page already has and at the stamp already on the record. The
+         * only thing that asks PracSuite is the button, pressed by hand.
+         *
+         * Returns:
+         *   key       which of the states this is, in one word
+         *   tone      which colour box it belongs in
+         *   count     differences, or null when no comparison actually happened
+         *   text      the whole sentence, in plain English
+         *   unsettled why this is still hanging over the patient, or "" when
+         *             nothing is. The strip by the document buttons and the
+         *             warning before a document opens both use this, so they
+         *             can never say something the status line does not.
          */
-        function psUnsettled() {
+        function psState() {
           var p = state.patient;
-          if (!p || !p.id) return "";
-          if (!psLinkId(p)) return "";                 // not linked: nothing to check against
-          if (_psCheckedFor !== p.id) return "has not started yet.";
-          if (_psChecking) return "has not finished yet.";
-          if (_psFail) return "could not run at all, so nothing has been compared.";
-          var n = null;
-          if (_psRes && (_psRes.status === "ok" || _psRes.status === "differs")) {
-            n = _psRes.differs;
-          } else {
-            var st = psStoredStamp(p);                 // checked elsewhere within the hour
-            if (!st) return "has not run for this patient.";
-            // A stamp with no count is a check whose ANSWER is not here. That
-            // is not the same as a clean one, and it must not read as one.
-            if (st.differs == null) return "was last run somewhere else and its answer is not here.";
-            n = st.differs;
+          var L = window.ClinicPracSuiteLink;
+          var out = { key: "none", tone: "plain", count: null, at: "", when: "",
+                      text: "", unsettled: "" };
+          if (!p || !p.id) return out;
+          if (!psLinkId(p)) {
+            // Nothing to compare against, so nothing is hanging over them.
+            out.key = "unlinked";
+            out.text = "This patient is not linked to a PracSuite record, so there is nothing " +
+                       "to compare against. Open the PracSuite tab to search for them by name.";
+            return out;
           }
-          if (n) return "found " + n + (n === 1 ? " difference" : " differences") +
-                        " nobody has looked at yet.";
-          return "";
+          if (_psChecking) {
+            out.key = "checking"; out.tone = "info";
+            out.text = "Checking PracSuite now. Their details have not been compared yet, so " +
+                       "anything built this minute may be built on details that are about to change.";
+            out.unsettled = "has not finished yet.";
+            return out;
+          }
+          if (_psFail) {
+            out.key = "failed"; out.tone = "bad"; out.text = _psFail;
+            out.unsettled = "could not run at all, so nothing has been compared.";
+            return out;
+          }
+          /* The answer this page has, or else the stamp the last completed
+           * check wrote down. They are the same comparison. Calling the stamp
+           * "not started" because this page did not run it is exactly what put
+           * a date and a "has not started" on the screen together.
+           */
+          var st = psStoredStamp(p);
+          if (_psRes && (_psRes.status === "ok" || _psRes.status === "differs")) {
+            out.count = _psRes.differs;
+            out.at = _psRes.checkedAt || (st && st.at) || "";
+          } else if (st) {
+            out.count = (st.differs == null) ? null : st.differs;
+            out.at = st.at || "";
+          } else {
+            out.key = "never"; out.tone = "warn";
+            out.text = "PracSuite has not been checked for this patient. Nothing is asked of " +
+                       "PracSuite unless you ask for it.";
+            out.unsettled = "has not been run for this patient.";
+            return out;
+          }
+          out.when = (out.at && L && L.ago) ? L.ago(out.at) : "";
+          var whenBit = out.when ? " " + out.when : "";
+          if (out.count == null) {
+            // A stamp with no count is a check whose ANSWER is not here. That
+            // is not the same as a clean one and must never read as one.
+            out.key = "unknown"; out.tone = "warn";
+            out.text = "PracSuite was checked" + whenBit + ", but the answer to that check is " +
+                       "not on this page. That is not the same as finding nothing wrong.";
+            out.unsettled = "was last run somewhere else and its answer is not here.";
+            return out;
+          }
+          if (out.count > 0) {
+            out.key = "differs"; out.tone = "info";
+            out.text = "PracSuite differed on " + out.count +
+                       (out.count === 1 ? " detail" : " details") + " when it was checked" +
+                       whenBit + ". Open the PracSuite tab to take them one at a time.";
+            out.unsettled = "found " + out.count +
+                            (out.count === 1 ? " difference" : " differences") +
+                            " nobody has looked at yet.";
+            return out;
+          }
+          out.key = "clean"; out.tone = "good";
+          out.text = "PracSuite matched this file when it was checked" + whenBit + ".";
+          return out;
         }
 
-        // Take their to the panel, where each difference is accepted one at a
+        /* Is anything still hanging over this patient? The words come straight
+         * out of psState, so the strip by the document buttons and the warning
+         * before a document opens can never disagree with the status line.
+         *
+         * "Unsettled" is deliberately wider than "still running": a check that
+         * finished and FOUND something is just as much a reason not to build a
+         * document yet, and so is one that could not run at all.
+         */
+        function psUnsettled() { return psState().unsettled; }
+
+        // Take her to the panel, where each difference is accepted one at a
         // time. The nav handler switches the section; the listener below mounts.
         function psShowTab() {
           var n = document.querySelector('.navitem[data-sec="pracsuite"]');
           if (n) n.click(); else mountPracSuitePanel();
         }
 
-        var PS_TONE = { info: ["#eef3fa", "#d6e2f0", "#2f5680"],
-                        warn: ["#fdf3dd", "#f0ddb0", "#96660f"],
-                        bad:  ["#fbeeee", "#f1d6d6", "#b7484a"] };
+        var PS_TONE = { info:  ["#eef3fa", "#d6e2f0", "#2f5680"],
+                        warn:  ["#fdf3dd", "#f0ddb0", "#96660f"],
+                        bad:   ["#fbeeee", "#f1d6d6", "#b7484a"],
+                        // Checked and everything matched. Same green as the
+                        // "details are complete" line by the document buttons.
+                        good:  ["#e8f4ee", "#cfe6da", "#2d8a5f"],
+                        // Nothing to report, said quietly.
+                        plain: ["var(--surface-1)", "var(--line)", "var(--muted)"] };
 
         // "1 difference to look at" — the headline over the explanation. Empty
         // when there is no count to report, because a headline that is always
@@ -2753,120 +2932,194 @@
                  n + (n === 1 ? " difference" : " differences") + " to look at</b>";
         }
 
+        /* THE status line. One box, one state, one sentence.
+         *
+         * Everything it says comes out of psState, so it cannot contradict the
+         * strip by the document buttons or the warning before a document
+         * opens. It used to work the state out itself from _psRes alone, which
+         * is why it said "Not compared against PracSuite" over a record that
+         * had been compared a quarter of an hour earlier.
+         */
         function renderPsBanner() {
           var host = qs("pf-psbanner"); if (!host) return;
           var p = state.patient;
           if (!p || !p.id || _psDismissedFor === p.id) { host.innerHTML = ""; return; }
-          var L = window.ClinicPracSuiteLink;
-          var tone = "", text = "", lead = "";
+          var s = psState();
+          if (!s.text) { host.innerHTML = ""; return; }
+          var c = PS_TONE[s.tone] || PS_TONE.plain;
 
-          /* Nothing has been asked of PracSuite for this patient, and nothing
-           * will be until she presses this. Every automatic check is a request
-           * against an allowance Smartsoft monitor and can revoke. */
-          if (!_psChecking && !_psRes && !_psFail) {
-            host.innerHTML =
-              '<div style="background:var(--surface-1);border:1px solid var(--line);' +
-                'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55;' +
-                'display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
-                '<span style="flex:1;min-width:220px;color:var(--muted)">Not compared against ' +
-                'PracSuite. Nothing is asked of PracSuite unless you ask for it.</span>' +
-                '<button id="pf-ps-check" class="btn" style="font-size:12.5px;padding:5px 12px">' +
-                'Check PracSuite now</button>' +
-              '</div>';
-            var cb = qs("pf-ps-check");
-            if (cb) cb.addEventListener("click", function () { _psCheckedFor = null; runPsCheck(); });
-            return;
-          }
+          /* While it is running there is nothing to press. No check button,
+           * because that would be a second request for an answer already on
+           * its way, and no way to hide it, because the whole point is that
+           * she can see the answer has not arrived before she starts building
+           * documents on the details it is checking.
+           */
+          var busy = (s.key === "checking");
 
-          // Still running. Said out loud, and NOT dismissible, because the
-          // whole point is that she can see the answer has not arrived before
-          // she starts building documents on the details it is checking.
-          if (_psChecking) {
-            var c0 = PS_TONE.info;
-            host.innerHTML =
-              '<div style="background:' + c0[0] + ';border:1px solid ' + c0[1] + ';color:' + c0[2] + ';' +
-                'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55">' +
-                '<b>Checking PracSuite…</b> Their details have not been compared yet. ' +
-                'Anything built now may be built on details that are about to change.' +
-              '</div>';
-            return;
-          }
+          // Only offered when the tab has something in it worth opening.
+          var goBtn = (s.key === "differs" || s.key === "unknown" || s.key === "unlinked")
+            ? '<button type="button" id="pf-psbanner-go" style="flex:none;border:1px solid ' + c[2] + ';' +
+              'background:transparent;color:' + c[2] + ';border-radius:6px;padding:3px 10px;' +
+              'font:inherit;font-size:12px;font-weight:600;cursor:pointer">Show me</button>'
+            : "";
 
-          if (_psFail) { tone = "bad"; text = _psFail; }
-          else if (_psRes && _psRes.status === "skipped") {
-            // Checked recently by somebody else, so there is no live comparison
-            // on this page, only the count the last completed one wrote down.
-            // Saying nothing here would let a patient with three known
-            // differences read as a clean file for an hour.
-            var st = psStoredStamp(p);
-            var n = st && st.differs;
-            if (n) {
-              tone = "info";
-              lead = psLead(n);
-              text = "PracSuite differed on " + n + (n === 1 ? " detail" : " details") +
-                     " when it was last checked" +
-                     ((L && L.ago && L.ago(st.at)) ? " (" + L.ago(st.at) + ")" : "") +
-                     ". Open the PracSuite tab to take them one at a time.";
-            }
-          } else if (_psRes && L && L.describe) {
-            var d = L.describe(_psRes);
-            tone = d.tone; text = d.text;
-            // The count, said first and said plainly. The sentence underneath
-            // explains it; the headline is what gets read while she is already
-            // reaching for Make quote. Same number the panel offers, because
-            // there is only one comparison.
-            lead = psLead(_psRes.differs);
-          }
+          /* The one and only thing on this page that asks PracSuite anything.
+           * No check when a patient is opened, no check on a redraw, no timer.
+           * (Amy, 14 Aug 2026: "it needs to stop checking pracsuite every few
+           * minutes... they will revoke our api access!!! stop it. it only
+           * checks when i ask it to.") */
+          // Not offered while it is running, and not offered to a patient with
+          // no PracSuite record to check against: pressing it would ask
+          // nothing and answer nothing, which looks exactly like a fault.
+          var checkBtn = (busy || s.key === "unlinked") ? ""
+            : '<button type="button" id="pf-ps-check" style="flex:none;border:1px solid ' + c[2] + ';' +
+              'background:transparent;color:' + c[2] + ';border-radius:6px;padding:3px 10px;' +
+              'font:inherit;font-size:12px;font-weight:600;cursor:pointer">' +
+              (s.key === "never" ? "Check PracSuite now" : "Check PracSuite again") + '</button>';
 
-          if (!text || tone === "none" || !PS_TONE[tone]) { host.innerHTML = ""; return; }
-          var c = PS_TONE[tone];
+          var xBtn = busy ? ""
+            : '<button type="button" id="pf-psbanner-x" title="Hide this until the file is opened again" ' +
+              'style="flex:none;border:0;background:transparent;color:' + c[2] + ';opacity:.7;' +
+              'font:inherit;font-size:15px;line-height:1;cursor:pointer;padding:2px 2px">&times;</button>';
+
           host.innerHTML =
             '<div style="background:' + c[0] + ';border:1px solid ' + c[1] + ';color:' + c[2] + ';' +
               'border-radius:8px;padding:9px 13px;font-size:12.5px;line-height:1.55;' +
-              'display:flex;gap:10px;align-items:flex-start">' +
-              '<span style="flex:1;min-width:0">' + lead + esc(text) + '</span>' +
-              '<button type="button" id="pf-psbanner-go" style="flex:none;border:1px solid ' + c[2] + ';' +
-                'background:transparent;color:' + c[2] + ';border-radius:6px;padding:3px 10px;' +
-                'font:inherit;font-size:12px;font-weight:600;cursor:pointer">Show me</button>' +
-              '<button type="button" id="pf-psbanner-x" title="Hide this until the file is opened again" ' +
-                'style="flex:none;border:0;background:transparent;color:' + c[2] + ';opacity:.7;' +
-                'font:inherit;font-size:15px;line-height:1;cursor:pointer;padding:2px 2px">&times;</button>' +
+              'display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">' +
+              '<span style="flex:1;min-width:220px">' + psLead(s.count) + esc(s.text) + '</span>' +
+              goBtn + checkBtn + xBtn +
             '</div>';
-          qs("pf-psbanner-go").addEventListener("click", psShowTab);
-          qs("pf-psbanner-x").addEventListener("click", function () {
-            _psDismissedFor = p.id; renderPsBanner();
-          });
+
+          var g = qs("pf-psbanner-go"); if (g) g.addEventListener("click", psShowTab);
+          var cb = qs("pf-ps-check");
+          // She pressed it, so ask properly: force past both the stamp and the
+          // answer already in hand. One press, one request.
+          if (cb) cb.addEventListener("click", function () { _psCheckedFor = null; runPsCheck(true); });
+          var x = qs("pf-psbanner-x");
+          if (x) x.addEventListener("click", function () { _psDismissedFor = p.id; renderPsBanner(); });
         }
 
-        // The date, in words, under their name. Never a guess: "never checked"
-        // and "checked in April" have to look different from each other and
-        // from a check that is still running.
-        function psStampText() {
-          var p = state.patient;
-          if (!p || !p.id) return "";
-          if (!psLinkId(p)) return "Not linked to a PracSuite record, so nothing is checked.";
-          var L = window.ClinicPracSuiteLink;
-          var stored = psStoredStamp(p);
-          var at = (_psRes && _psRes.checkedAt) || (stored && stored.at) || "";
-          var when = (at && L && L.ago) ? L.ago(at) : "";
-          if (!when) return _psChecking ? "Checking her against PracSuite…"
-                                        : "PracSuite has never been checked for this patient.";
-          return "PracSuite checked " + when + "." + (_psChecking ? " Checking again now…" : "");
-        }
+        /* The line under the patient's name is no longer a second status.
+         *
+         * It said "PracSuite checked 14 minutes ago" while the banner below it
+         * said "Not compared against PracSuite", and both were true of
+         * different questions. There is one status line now and it is the
+         * banner. All that is left here is the note about the date not being
+         * saved properly, which is a fault in this program rather than
+         * anything about the patient, so it does not belong in the status.
+         */
         function renderPsStamp() {
           var el = qs("pf-ps-stamp"); if (!el) return;
-          var t = psStampText();
-          if (t && _psStampNote) t += " " + _psStampNote;
-          el.textContent = t;
-          el.style.display = t ? "block" : "none";
+          el.textContent = _psStampNote || "";
+          el.style.display = _psStampNote ? "block" : "none";
         }
 
-        /* The panel, mounted when they opens the PracSuite tab and not before.
+        /* Take the rows that were just brought across OFF the comparison table.
          *
-         * Mounting it reads the patient, their appointments and their contacts, so
-         * doing it on load sent three requests to PracSuite for every patient
-         * anybody glanced at. Opening the tab is the point at which somebody
-         * intends to act on the comparison.
+         * (Amy, 14 Aug 2026, on Jessica Marks: the bring-over saved, the green
+         * "Saved" line appeared, the button greyed out, and all thirteen rows
+         * stayed on screen still ticked with a dash under "Here now" - so the
+         * table went on telling her the record was empty when it had just been
+         * filled from PracSuite. "this should disapear once saved".)
+         *
+         * PracSuite is NOT asked again, and cannot be: what was just written
+         * CAME from PracSuite, so the two agree by construction, and every
+         * request spends an allowance Smartsoft can revoke. The comparison is
+         * redone in memory by recompare(), against the PracSuite record
+         * already fetched this session, and a row only leaves the table when
+         * THAT says our value now matches.
+         *
+         * Which is what makes it safe. A row whose write did not land still
+         * disagrees, so it stays exactly where it is and is named. A row
+         * disappearing is her only sign that it saved, so one that vanished on
+         * a failed write would be the worst thing this could do.
+         *
+         * A row she left unticked also stays, silently: it is a real
+         * difference she has not decided about yet, and deciding it is hers.
+         *
+         * The table belongs to clinic-pracsuite-link.js, which is why this
+         * reads that markup rather than rebuilding it, and why it does nothing
+         * at all if it does not find what it expects.
+         */
+        function psClearResolvedRows(host, again) {
+          if (!host) return;
+          var out = host.querySelector("#pslOut"); if (!out) return;
+          var table = out.querySelector("table"); if (!table) return;
+          var done = out.querySelector("#pslDone");
+          /* A comparison that did not actually happen tells us nothing about
+           * which rows landed. Leave every row where it is and say why, rather
+           * than clear the wrong ones or call a saved row unsaved. */
+          if (!psComplete(again)) {
+            if (done) {
+              done.innerHTML += '<div class="psl-msg warn">The list below could not be worked ' +
+                'out again, so it is still showing what it showed before the save. Open this tab ' +
+                'again to rebuild it.</div>';
+            }
+            return;
+          }
+          var agreed = {};
+          (again.rows || []).forEach(function (r) { if (r && r.state === "agree") agreed[r.i] = true; });
+
+          var cleared = [], stuck = [], left = 0;
+          Array.prototype.forEach.call(table.querySelectorAll("tr"), function (tr) {
+            var cb = tr.querySelector("input[type=checkbox][data-i]");
+            if (!cb) return;                                  // the heading row
+            var i = parseInt(cb.getAttribute("data-i"), 10);
+            var lab = tr.querySelector(".lab");
+            var label = (lab && lab.textContent) ? lab.textContent.trim() : "that detail";
+            if (agreed[i]) {
+              // On the record now, so there is nothing left to decide about it.
+              if (cb.checked) cleared.push(label);
+              if (tr.parentNode) tr.parentNode.removeChild(tr);
+              return;
+            }
+            left++;
+            // Ticked, and STILL different from PracSuite. Whatever happened, it
+            // did not save, and she has to be told which one rather than left
+            // to notice it herself.
+            if (cb.checked) stuck.push(label);
+          });
+
+          var say = "";
+          if (cleared.length) {
+            say += '<div class="psl-msg ok">' + esc(pfList(cleared)) +
+                   (cleared.length === 1 ? " is" : " are") + " on this file now, so " +
+                   (cleared.length === 1 ? "that row has" : "those rows have") +
+                   " gone from the list below.</div>";
+          }
+          if (stuck.length) {
+            say += '<div class="psl-msg bad"><b>Still not saved:</b> ' + esc(pfList(stuck)) +
+                   ". " + (stuck.length === 1 ? "That row is" : "Those rows are") +
+                   " still in the list because this file still does not match PracSuite. " +
+                   "Nothing has been hidden. Try again, or type it in by hand.</div>";
+          }
+          if (!left) {
+            if (table.parentNode) table.parentNode.removeChild(table);
+            say += '<p class="psl-note">Nothing is left to bring over. Everything PracSuite ' +
+                   "holds for this patient is on this file.</p>";
+            // Nothing to apply, so the button stays out of the way.
+            var noneBtn = out.querySelector("#pslApply");
+            if (noneBtn) noneBtn.disabled = true;
+          } else {
+            /* Rows are still listed, so the button has to work again. It was
+             * disabled by the press that got us here and only ever came back
+             * on an error, which left her unable to bring the rest across
+             * without leaving the tab and coming back. Pressing it writes to
+             * this program only; it asks PracSuite nothing. */
+            var apply = out.querySelector("#pslApply");
+            if (apply) apply.disabled = false;
+          }
+          if (!say) return;
+          if (done) done.innerHTML += say;
+          else out.insertAdjacentHTML("beforeend", say);
+        }
+
+        /* The panel, mounted when she opens the PracSuite tab and not before.
+         *
+         * Mounting it reads the patient, their appointments and their contacts,
+         * so doing it on load sent three requests to PracSuite for every
+         * patient anybody glanced at. Opening the tab is the point at which
+         * somebody intends to act on the comparison.
          */
         function mountPracSuitePanel() {
           var host = qs("pf-pracsuite"); if (!host) return;
@@ -2904,21 +3157,33 @@
               autoFind: !!psLinkId(p),
               lastCheckedAt: stored && stored.at,
               onDone: function (row) {
-                // Something was accepted, so our side has changed. Redo the
-                // comparison against the record already fetched, which costs
-                // PracSuite nothing, and let the count follow the edit.
+                /* Something was accepted, so our side has changed. Redo the
+                 * comparison against the PracSuite record already fetched,
+                 * which costs PracSuite nothing, and let the count and the
+                 * table below both follow the edit.
+                 *
+                 * row is what the database handed BACK, not what was sent, so
+                 * everything from here on is judged against what is actually
+                 * stored. */
                 if (row) state.patient = Object.assign(state.patient || {}, row);
+                var again = null;
                 try {
-                  var again = window.ClinicPracSuiteLink.recompare(state.patient);
+                  again = window.ClinicPracSuiteLink.recompare(state.patient);
                   if (psComplete(again)) {
                     _psRes = again;
                     psWriteStamp(pid, again.checkedAt, again.differs);
                   }
                 } catch (e) {
+                  again = null;
                   _psStampNote = "The count could not be worked out again after that change (" +
                                  ((e && e.message) || "no reason given") + ").";
                 }
+                // Rows that landed leave the table; rows that did not, stay.
+                try { psClearResolvedRows(host, again); } catch (e) {}
                 renderAll();
+                // And read our own record back, so the rest of the file shows
+                // what PracSuite just filled in without a browser refresh.
+                try { pfReloadRecord({ now: true }); } catch (e) {}
               }
             });
           } catch (e) {
@@ -2998,8 +3263,11 @@
           if (!rows.length) {
             var q = (qs("pf-search").value || "").trim();
             var nameLike = q && !/^[\d\s()+-]+$/.test(q);
-            qs("pf-results").innerHTML = '<div class="empty" style="margin-bottom:10px">No matching patients.</div>'
-              + (q ? '<button type="button" class="np-btn" id="pf-create-from-search">+ Add ' + (nameLike ? '"' + esc(q) + '"' : "them") + ' as a new patient</button>' : "");
+            // Nobody here. The next step is PracSuite, not a new record — the
+            // form this opens leads with the PracSuite search and only shows
+            // "Create patient" after it.
+            qs("pf-results").innerHTML = '<div class="empty" style="margin-bottom:10px">No matching patients in this program.</div>'
+              + (q ? '<button type="button" class="np-btn" id="pf-create-from-search">Search PracSuite for ' + (nameLike ? '"' + esc(q) + '"' : "them") + ', or add them</button>' : "");
             var cb = document.getElementById("pf-create-from-search");
             if (cb) cb.addEventListener("click", function () { openNewForm(nameLike ? q : ""); });
             return;
@@ -3033,9 +3301,75 @@
           qs("np-status").textContent = "";
           qs("np-save").textContent = "Create patient";
           if (prefillName) qs("np-full_name").value = prefillName;
+          resetPsGate();
           try { qs("np-full_name").focus(); } catch (_) {}
           f.scrollIntoView({ block: "nearest" });
         }
+
+        /* ---- the PracSuite step, between "not here" and "create" ----------
+         *
+         * Amy's order: search this program first, then PracSuite, and only
+         * then create. So "Create patient" stays out of sight until PracSuite
+         * has been asked. It is one press, never automatic — Smartsoft can
+         * revoke the connection for traffic nobody asked for.
+         *
+         * It is a step, not a wall. Whatever PracSuite says, and even when the
+         * connection is missing entirely, the create button appears with a
+         * sentence saying which of those happened. A patient who cannot be
+         * added is worse than a patient added twice.
+         */
+        function showCreateRow(msg, tone) {
+          var a = qs("np-actions"); if (a) a.style.display = "flex";
+          var m = qs("np-ps-msg");
+          if (m && msg) { m.textContent = msg; m.style.color = (tone === "warn") ? "#96660f" : "var(--ink-soft, #4a5a72)"; }
+        }
+        function resetPsGate() {
+          var a = qs("np-actions"); if (a) a.style.display = "none";
+          var box = qs("np-ps"); if (box) box.style.display = "";
+          var btn = qs("np-ps-btn");
+          if (btn) { btn.disabled = false; btn.textContent = "Search PracSuite"; }
+          var m = qs("np-ps-msg");
+          if (m) {
+            m.style.color = "#96660f";
+            m.textContent = "Nobody in this program matched. Search PracSuite before making a new record — if they are there, bringing them across keeps them as one person in both.";
+          }
+          // No PracSuite connection on this page (or the backend is down):
+          // don't hide the only way to add a patient behind a button that
+          // cannot work.
+          if (!window.ClinicPracSuiteLink || !window.ClinicPracSuiteLink.openSearch) {
+            if (btn) btn.disabled = true;
+            showCreateRow("PracSuite can't be searched from here right now, so this record is being created without that check. If they exist in PracSuite, link them from their file afterwards.", "warn");
+          }
+        }
+        (function wirePsSearch() {
+          var btn = qs("np-ps-btn"); if (!btn) return;
+          btn.addEventListener("click", async function () {
+            var typed = (qs("np-full_name").value || "").trim();
+            if (!typed) { qs("np-status").textContent = "Type their name first — PracSuite is searched by surname."; return; }
+            qs("np-status").textContent = "";
+            btn.disabled = true; btn.textContent = "Searching PracSuite…";
+            try {
+              var out = await window.ClinicPracSuiteLink.openSearch({ name: typed });
+              if (out && out.patient && out.patient.id) {
+                // Brought across WITH its client_id, so this person can never
+                // look new here again. Straight into their file.
+                location.href = "?patient_id=" + encodeURIComponent(out.patient.id);
+                return;
+              }
+              if (out && out.hits === 0) {
+                showCreateRow("PracSuite has nobody with that surname either. Creating a new record is the right thing to do now.");
+              } else if (out && out.hits > 0) {
+                showCreateRow("Nobody was brought across from PracSuite. Create a new record only if none of those was them.", "warn");
+              } else {
+                showCreateRow("PracSuite wasn't searched. You can still create a new record — but if they are in PracSuite, bringing them across is what stops them looking new again.", "warn");
+              }
+            } catch (e) {
+              showCreateRow("PracSuite couldn't be searched (" + ((e && e.message) || "error") + "). Nothing was compared, so this is not the same as finding nobody.", "warn");
+            } finally {
+              btn.disabled = false; btn.textContent = "Search PracSuite again";
+            }
+          });
+        })();
         function npDraft() {
           function v(id) { var el = qs(id); var t = el && el.value ? el.value.trim() : ""; return t || null; }
           return { full_name: v("np-full_name"), dob: v("np-dob"), phone: v("np-phone"), email: v("np-email"), medicare_number: v("np-medicare_number"), health_fund: v("np-health_fund") };
@@ -3214,6 +3548,112 @@
             pfQ(client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }), "hires").then(function (r) { if (r && !r.error) { state.hires = r.data || []; renderAll(); } else { console.warn("[PF] hires:", r && r.error && r.error.message); } });
             pfQ(client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }), "notes").then(function (r) { if (r && !r.error) { state.notes = r.data || []; renderAll(); } else { console.warn("[PF] notes:", r && r.error && r.error.message); } });
           }).catch(function (e) { clearWatchdog(); status("Load failed"); qs("pf-meta").textContent = "Something went wrong loading this patient. Reload the page; if it keeps happening, log out and back in from the Dashboard."; console.error("[PF] load error", e); });
+        }
+
+        /* ---- Read this patient again, quietly ------------------------------
+         *
+         * (Amy, 14 Aug 2026: "i have to keep refreshing", and "the refresh on
+         * the patients documents or surgery plan after adding things? without
+         * the need for a manual refresh?")
+         *
+         * Two separate reasons she was reaching for the browser refresh:
+         *
+         *   - accepting values off a dropped note wrote them to the database
+         *     and then PATCHED what was already in memory. Anything drawn from
+         *     a row this page had not read again stayed exactly as it was, so
+         *     the screen showed yesterday's answer over today's record;
+         *   - moving between the tabs of a file read nothing at all. The nav
+         *     handler only swapped which section was visible. A plan saved in
+         *     the frame, a document filed by the pre-op pack, or an edit made
+         *     in a second window of the suite was invisible here until the
+         *     whole page was reloaded.
+         *
+         * This asks PracSuite NOTHING. It reads the three tables this page
+         * owns, in this program's own database, and redraws. Every PracSuite
+         * request still waits for the button on the status line.
+         * (Amy, 14 Aug 2026: "it only checks when i ask it to".)
+         *
+         * Options:
+         *   now   skip the every-few-seconds throttle, for a save that has
+         *         just happened and whose answer she is waiting to see.
+         */
+        var _pfReloadAt = 0, _pfReloading = false;
+        // Bumped when the selected surgery's STORED values change under us.
+        // The surgeon forms are handed a copy of the surgery when they mount,
+        // so this is how they find out the copy has gone out of date.
+        var orderGen = 0;
+        function pfReloadRecord(opts) {
+          opts = opts || {};
+          var client = sb(), p = state.patient;
+          if (window.__pfPreview) return Promise.resolve(false);
+          if (!client || !p || !p.id) return Promise.resolve(false);
+          /* Typing beats the database, always. Repainting the contact and
+           * surgery boxes from a fresh read would wipe whatever she is
+           * half-way through typing, and nothing she has typed may vanish
+           * without her seeing it go. Her Save clears this flag, and the next
+           * tab she opens picks the new values up then. */
+          if (pfDirty) return Promise.resolve(false);
+          if (_pfReloading) return Promise.resolve(false);
+          // Moving between tabs must not become one query per click.
+          if (!opts.now && (Date.now() - _pfReloadAt) < 4000) return Promise.resolve(false);
+          _pfReloading = true; _pfReloadAt = Date.now();
+          var pid = p.id, keepOrderId = state.orderId;
+          // supabase-js hands errors back as { error }; ClinicPatients.get can
+          // reject. One shape for both, so a single failing table cannot throw
+          // away the two that worked.
+          function safe(pr) {
+            return Promise.resolve(pr).then(function (r) { return r; },
+                                            function (e) { return { error: e }; });
+          }
+          // window.ClinicPatients, spelled out. The bare global works in a
+          // browser and nowhere else, which is exactly the kind of thing that
+          // parses clean and throws at load.
+          var getP = (window.ClinicPatients && window.ClinicPatients.get)
+            ? safe(window.ClinicPatients.get(pid)).then(function (r) { return (r && r.error) ? r : { data: r }; })
+            : safe(client.from("patients").select("*").eq("id", pid).maybeSingle());
+          return Promise.all([
+            getP,
+            safe(client.from("surgeon_orders").select("*").eq("patient_id", pid).is("archived_at", null).order("created_at", { ascending: false })),
+            safe(client.from("patient_documents").select("*").eq("patient_id", pid).order("generated_at", { ascending: false }))
+          ]).then(function (res) {
+            _pfReloading = false;
+            // She moved on while this was in the air. Painting the old patient
+            // over the new one would be far worse than being a moment stale.
+            if (!state.patient || state.patient.id !== pid) return false;
+            var pr = res[0], or = res[1], dr = res[2], moved = false;
+            if (pr && !pr.error && pr.data && pr.data.id) { state.patient = pr.data; moved = true; }
+            if (or && !or.error) {
+              var was = JSON.stringify(state.order || null);
+              state.orders = or.data || [];
+              /* Keep whichever surgery she was looking at selected. Falling
+               * back to the newest would move her onto a different plan behind
+               * her back, and a plan is not something to swap silently. */
+              var keep = state.orders.filter(function (o) { return o && o.id === keepOrderId; })[0];
+              var pick = keep || state.orders[0] || null;
+              state.order = pick; state.orderId = pick ? pick.id : null;
+              if (JSON.stringify(state.order || null) !== was) orderGen++;
+              moved = true;
+            }
+            if (dr && !dr.error) { state.docs = dr.data || []; state.docsError = null; moved = true; }
+            if (moved) renderAll();
+            /* The pre-op and operative forms are built from a copy, so a
+             * redraw does not reach them. If one of them is the tab she is
+             * looking at right now, offer it the newer surgery. It rebuilds
+             * only if the surgery really moved and nothing is typed into it. */
+            try {
+              var pp = qs("sec-preop"), op = qs("sec-operative");
+              if (pp && pp.classList.contains("active")) mountPreop();
+              if (op && op.classList.contains("active")) mountOperative();
+            } catch (e) {}
+            return moved;
+          }, function (e) {
+            // Nothing is written by any of this, so a failed re-read leaves
+            // the screen showing what it was already showing. Say so in the
+            // console rather than throwing a message over her work.
+            _pfReloading = false;
+            console.warn("[PF] re-read failed", e);
+            return false;
+          });
         }
 
         // ---- Drop files onto THIS patient (ported from the retired
@@ -3416,6 +3856,18 @@
             ["Swimming (weeks)", oa.swimming_weeks_off, intOf(ce.swimming_weeks_off), [["order", "swimming_weeks_off"]], sayWeeks(oa.swimming_weeks_off), sayWeeks(ce.swimming_weeks_off)],
             ["Normal shoes (weeks)", oa.normal_shoes_weeks, intOf(ce.normal_shoes_weeks), [["order", "normal_shoes_weeks"]], sayWeeks(oa.normal_shoes_weeks), sayWeeks(ce.normal_shoes_weeks)],
             ["Social events (weeks)", oa.social_event_weeks, intOf(ce.social_event_weeks), [["order", "social_event_weeks"]], sayWeeks(oa.social_event_weeks), sayWeeks(ce.social_event_weeks)],
+            /* His own words about showering, offered as his own words.
+             *
+             * "2+ weeks" was being turned into 14 days, and 14 days is a
+             * precision he never gave: it reads as an instruction to shower on
+             * the fourteenth day, which is not what "2+ weeks" says. (Amy, 14
+             * Aug 2026: "showering/bathing is 2+ weeks so not sure why it
+             * keeps creating its own 14 days. it doesnt say that anywhere.")
+             *
+             * The reader now sends his phrase as shower_wet_text and only
+             * fills the day count when he actually wrote days, so the row
+             * below is offered only in that case and the two never compete. */
+            ["Showering / getting wet", (oa.recovery_plan && oa.recovery_plan.shower) || "", ce.shower_wet_text, [["order", "shower_wet_text"]]],
             ["Showering at (days)", oa.shower_wet_at_days, intOf(ce.shower_wet_at_days), [["order", "shower_wet_at_days"]], sayDays(oa.shower_wet_at_days), sayDays(ce.shower_wet_at_days)],
             ["Travel notes", oa.travel_notes, ce.travel_notes, [["order", "travel_notes"]]],
             ["Reviews after surgery", oa.postop_review_weeks, ce.postop_review_weeks, [["order", "postop_review_weeks"]], sayList(oa.postop_review_weeks), sayList(ce.postop_review_weeks)],
@@ -3459,7 +3911,7 @@
              * is how a dropped letter disappears. Say both halves. */
             status("Cancelled. Nothing saved.");
             dzFail("Cancelled: " + dzWhich(idx, total) + file.name,
-                   ["Nothing was changed on her record, and the file was NOT filed.",
+                   ["Nothing was changed on this patient's record, and the file was NOT filed.",
                     "Drop it again if you want it kept."]);
             return { handled: true };
           }
@@ -3494,8 +3946,8 @@
               else { var pr = await client.from("patients").update(pPatch).eq("id", pid); if (pr && pr.error) throw pr.error; }
               Object.assign(P, pPatch);
               recordChanged = true;
-              savedBits.push("her details");
-            } catch (e) { failBits.push("her details (" + pfWhy(e) + ")"); }
+              savedBits.push("their details");
+            } catch (e) { failBits.push("their details (" + pfWhy(e) + ")"); }
           }
           /* The recovery answers must ALSO go where the plan screen reads
            * them. It paints its recovery lines from the recovery_plan
@@ -3529,11 +3981,65 @@
           });
           if (oPatch.weight_bearing) recAdd.starting_wb = oPatch.weight_bearing;
           if (oPatch.footwear) recAdd.footwear = oPatch.footwear;
-            if (oPatch.postop_review_weeks) {
-              recAdd.post_op_reviews = Array.isArray(oPatch.postop_review_weeks)
-                ? oPatch.postop_review_weeks.join("|")
-                : String(oPatch.postop_review_weeks);
+          /* His phrase, verbatim, and last so it beats anything derived from a
+           * day count. The plan's own showering line offers "2+ weeks" as an
+           * answer, so his words land on that button exactly.
+           *
+           * shower_wet_text is NOT a column on surgeon_orders and does not
+           * need to be: the plan reads the recovery block. Sending it as a
+           * column would have the database refuse the whole plan update, which
+           * is what the review weeks did. So it is taken out of the patch here,
+           * once its words are safely in the recovery block. */
+          if (oPatch.shower_wet_text) {
+            var showerSaid = String(oPatch.shower_wet_text).trim();
+            if (showerSaid) recAdd.shower = showerSaid;
+            delete oPatch.shower_wet_text;
+          }
+          /* THE REVIEW WEEKS ARE NOT A COLUMN. On surgeon_orders they live
+           * inside the order_ui object, as order_ui.postop_review_weeks, which
+           * is what the Surgery tab reads and writes.
+           *
+           * This wrote them to a bare "postop_review_weeks" column, which does
+           * not exist, so the database refused the ENTIRE plan update and Amy
+           * was told "NOT saved: the surgery plan (Could not find the
+           * 'postop_review_weeks' column of 'surgeon_orders' in the schema
+           * cache)". Her details and the file saved; the whole plan did not.
+           *
+           * It went unnoticed because the reader hardly ever found the review
+           * weeks. Now that they are read straight off the form every time,
+           * it failed on every drop. (Amy, 14 Aug 2026.)
+           *
+           * They go to the two places that actually read them: order_ui for
+           * the Surgery tab, and the recovery block for the plan screen. */
+          if (oPatch.postop_review_weeks) {
+            var rvIn = Array.isArray(oPatch.postop_review_weeks)
+              ? oPatch.postop_review_weeks
+              : String(oPatch.postop_review_weeks).split(/[|,]/);
+            var rvWeeks = rvIn
+              .map(function (x) { return parseInt(String(x).replace(/\D+/g, ""), 10); })
+              .filter(function (n) { return Number.isFinite(n) && n >= 1 && n <= 104; });
+            // Keep his order, drop a repeat.
+            var rvSeen = {}, rvKeep = [];
+            rvWeeks.forEach(function (n) { if (!rvSeen[n]) { rvSeen[n] = 1; rvKeep.push(n); } });
+            if (rvKeep.length) {
+              // The plan's own line offers them as "Week 1", "Week 2" and so
+              // on, so they are written that way and land on its buttons. A
+              // week it does not offer, such as Week 14, is added as its own
+              // button, lit, and can be unticked like any other.
+              recAdd.post_op_reviews = rvKeep.map(function (n) { return "Week " + n; }).join("|");
+              // Merge into whatever order_ui already holds. Replacing the whole
+              // object would take the mobility answers with it.
+              var uiPrior = (state.order && state.order.order_ui &&
+                             typeof state.order.order_ui === "object") ? state.order.order_ui : {};
+              var uiNext = {};
+              Object.keys(uiPrior).forEach(function (k) { uiNext[k] = uiPrior[k]; });
+              // Fill blanks only: never overwrite reviews somebody has set.
+              if (!(uiNext.postop_review_weeks || []).length) uiNext.postop_review_weeks = rvKeep;
+              oPatch.order_ui = uiNext;
             }
+            // Not a column, so it must never reach the update.
+            delete oPatch.postop_review_weeks;
+          }
           if (oPatch.supplements) {
             recAdd.supplements = Array.isArray(oPatch.supplements)
               ? oPatch.supplements.join("|") : String(oPatch.supplements);
@@ -3548,17 +4054,56 @@
             Object.keys(recAdd).forEach(function (k) {
               if (merged[k] == null || merged[k] === "") merged[k] = recAdd[k];
             });
+            /* The showering answer is the exception, and only because she was
+             * shown the one already on the plan next to his phrase and chose
+             * his. Filling blanks only would have left "14 days" sitting there
+             * after she had just accepted "2+ weeks", which is the whole thing
+             * she asked about. Everything else still fills blanks only. */
+            if (typeof showerSaid === "string" && showerSaid) merged.shower = showerSaid;
             oPatch.recovery_plan = merged;
+          }
+          /* ONE UNKNOWN FIELD MUST NOT LOSE THE WHOLE PLAN.
+           *
+           * The database refuses the ENTIRE write if the patch names a column
+           * that does not exist, so a single stale field threw away every other
+           * answer she had just ticked. That is exactly what happened with the
+           * review weeks: "NOT saved: the surgery plan (Could not find the
+           * 'postop_review_weeks' column of 'surgeon_orders' in the schema
+           * cache)", and her whole plan was lost while her details and the file
+           * saved. (Amy, 14 Aug 2026.)
+           *
+           * So a refusal that names a column now drops THAT field and tries
+           * again, and says which one it dropped. Everything else lands.
+           * Nothing is silently discarded: rule 1. Any other kind of refusal is
+           * still a straight failure, because we do not know what it means.
+           */
+          var droppedCols = [];
+          async function writeOrder(run) {
+            var patch = oPatch, guard = 0;
+            for (;;) {
+              var res = await run(patch);
+              var err = res && res.error;
+              if (!err) return res;
+              var m = String(err.message || "").match(/could not find the '([a-z0-9_]+)' column/i);
+              if (!m || !(m[1] in patch) || ++guard > 12) throw err;
+              droppedCols.push(m[1]);
+              var next = {};
+              Object.keys(patch).forEach(function (k) { if (k !== m[1]) next[k] = patch[k]; });
+              patch = next;
+              if (!Object.keys(patch).length) throw err;   // nothing left to write
+            }
           }
           if (Object.keys(oPatch).length) {
             try {
               if (state.orderId) {
-                var ur = await client.from("surgeon_orders").update(oPatch).eq("id", state.orderId);
-                if (ur && ur.error) throw ur.error;
+                var ur = await writeOrder(function (patch) {
+                  return client.from("surgeon_orders").update(patch).eq("id", state.orderId);
+                });
                 if (state.order) Object.assign(state.order, oPatch);
               } else {
-                var ins = await client.from("surgeon_orders").insert(Object.assign({ patient_id: pid, status: "draft" }, oPatch)).select().single();
-                if (ins && ins.error) throw ins.error;
+                var ins = await writeOrder(function (patch) {
+                  return client.from("surgeon_orders").insert(Object.assign({ patient_id: pid, status: "draft" }, patch)).select().single();
+                });
                 if (!ins || !ins.data) throw new Error("the database did not return the new surgery");
                 state.order = ins.data; state.orderId = ins.data.id;
                 /* Put it in the LIST the picker reads, not only in "the current
@@ -3575,6 +4120,13 @@
               }
               planChanged = true; recordChanged = true;
               savedBits.push("the surgery plan");
+              /* Say what was dropped. A field the database will not accept is
+               * not the same as a field she chose not to keep, and she is the
+               * only one who can tell somebody about it. */
+              if (droppedCols.length) {
+                failBits.push("these parts of the plan, because her database has no place for them yet: " +
+                  droppedCols.join(", ").replace(/_/g, " ") + ". Everything else on the plan saved. Tell Claude");
+              }
             } catch (e) { failBits.push("the surgery plan (" + pfWhy(e) + ")"); }
           }
           var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -3611,6 +4163,20 @@
            * (Amy, 14 Aug 2026: "dont make me have to refresh".) */
           if (planChanged) planGen++;
           if (recordChanged || docFiled) renderAll();
+          /* Then read it all back, so what is on screen is what is STORED and
+           * not what this page hoped it had written. The lines above patch
+           * memory from the patch that was sent, which leaves out anything the
+           * database settled for itself and leaves out every row this page has
+           * not read since. Re-reading is also what puts the newly filed
+           * document in the Documents list, and what lets the Pre-op and
+           * Operative tabs see the plan that was just made.
+           * (Amy, 14 Aug 2026: "i have to keep refreshing".)
+           *
+           * "now" skips the moving-between-tabs throttle: she is watching this
+           * one. It reads our own tables and asks PracSuite nothing. */
+          if (recordChanged || docFiled) {
+            try { pfReloadRecord({ now: true }); } catch (e) {}
+          }
           if (docFiled) refreshDocs();
           var who = P.full_name || "patient";
           if (!failBits.length) {
@@ -3634,7 +4200,7 @@
             toast("Nothing saved. See the drop box.");
             dzFail("Nothing was saved: " + dzWhich(idx, total) + file.name,
                    ["Failed on " + pfList(failBits) + ".",
-                    "Her record is unchanged. Nothing was half-written."]);
+                    "Their record is unchanged. Nothing was half-written."]);
           }
           return { handled: true };
         }
@@ -3696,7 +4262,7 @@
               }
               status("Filed ✓");
               dzSet('<span class="pf-dz-strong pf-dz-good">&#10003; Filed ' + esc(dzWhich(n, total)) + esc(file.name) + "</span>" +
-                    '<span class="pf-dz-line">Not read: ' + esc(why) + ". Nothing was changed on her record.</span>", "done");
+                    '<span class="pf-dz-line">Not read: ' + esc(why) + ". Nothing was changed on their record.</span>", "done");
               dzHold(9000);
             } catch (e) {
               status("Not filed");

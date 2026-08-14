@@ -4090,6 +4090,43 @@
            * and the message names exactly what saved and what did not.
            * (Amy, 14 Aug 2026: told "not saved" for things that were saved,
            * and "saved" for things that were not, both in one day.) */
+          /* "UNCHANGED" ON ONE RECORD IS NOT "PRESENT" ON THE OTHER.
+           *
+           * A row like Procedure writes to TWO places: the patient's record
+           * and the surgery plan. It decided "unchanged" by comparing against
+           * `oa.procedure_name || P.surgery_procedure`, so once the PATIENT's
+           * record held the operation, the row read unchanged and the PLAN's
+           * own column was never written. The plan therefore stayed blank
+           * however many times the note was dropped. Same for the venue, which
+           * compared against the patient record only.
+           *
+           * Amy, 14 August 2026, after ten attempts: "Why isnt Jessica marks
+           * surgical plan not bringing over the procedure name and location
+           * still ive done this one about 10 times!!"
+           *
+           * So: anything the file states, that the PLAN is blank on, is
+           * written to the plan even when the dialog called the row unchanged.
+           * It only ever fills a blank, so nothing anybody decided is touched,
+           * and it cannot put a value on the plan that the document did not
+           * state. */
+          var planBlank = function (col) {
+            var v = (state.order || {})[col];
+            return v == null || String(v).trim() === "" ||
+                   (Array.isArray(v) && !v.length);
+          };
+          [["procedure_name", ex.surgery_procedure || (ce && ce.procedure_name)],
+           ["surgery_venue",  ex.surgery_venue]].forEach(function (r) {
+            var val = r[1];
+            if (val == null || String(val).trim() === "") return;
+            if (!planBlank(r[0])) return;
+            if (oPatch[r[0]] == null || oPatch[r[0]] === "") oPatch[r[0]] = val;
+          });
+          // And the venue the plan reads for clinic-or-hospital, from whichever
+          // of the two just settled it.
+          var venueForType = oPatch.surgery_venue || ex.surgery_venue;
+          if (venueForType && planBlank("venue_type")) {
+            oPatch.venue_type = String(venueForType).toLowerCase() === "clinic" ? "clinic" : "hospital";
+          }
           var savedBits = [], failBits = [], planChanged = false, docFiled = false, recordChanged = false;
           if (Object.keys(pPatch).length) {
             try {

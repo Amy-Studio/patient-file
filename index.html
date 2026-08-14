@@ -4124,8 +4124,15 @@
                * not the same as a field she chose not to keep, and she is the
                * only one who can tell somebody about it. */
               if (droppedCols.length) {
-                failBits.push("these parts of the plan, because her database has no place for them yet: " +
-                  droppedCols.join(", ").replace(/_/g, " ") + ". Everything else on the plan saved. Tell Claude");
+                // Named the way she would say it. She is the practice manager,
+                // not a programmer, and a database column name tells her
+                // nothing she can act on. (Amy, 14 Aug 2026.)
+                var SP = window.ClinicSurgeonPlan;
+                var saidCols = (SP && SP.fieldLabels)
+                  ? SP.fieldLabels(droppedCols)
+                  : droppedCols.join(", ").replace(/_/g, " ");
+                failBits.push(saidCols + ", because there is nowhere on her file to keep " +
+                  (droppedCols.length === 1 ? "it" : "them") + " yet. Everything else on the plan saved. Tell Claude");
               }
             } catch (e) { failBits.push("the surgery plan (" + pfWhy(e) + ")"); }
           }

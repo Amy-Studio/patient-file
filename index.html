@@ -3214,13 +3214,25 @@
            * "yes_5d" and "[object Object]" are not answers a person can check.
            * (Amy, 13 Aug 2026, looking at the dialog: "not sure if we want it
            * noted the way its extracting".) */
+          /* The cover, in words, whatever shape it arrives in.
+           *
+           * This only understood "yes_5d", the shape the schema asks for. The
+           * reader also returns "5_days", "5 days" and "5d", and those fell
+           * straight through and printed the raw code at Amy: "it was reading
+           * the forms as 5_days". Any of them is the same answer.
+           * (13 Aug 2026.) */
           var sayCover = function (v) {
             var t = String(v == null ? "" : v).trim().toLowerCase();
             if (!t) return "";
-            if (t === "no" || t === "none" || t === "nil") return "No";
-            var m = t.match(/^yes[_\s]*(\d+)\s*d/);
+            if (/^(no|none|nil|n\/a|false)$/.test(t)) return "No";
+            // A number of days, however it is written and whether or not a
+            // "yes" is in front of it.
+            var m = t.match(/^(?:yes[_\s-]*)?(\d+)\s*[_\s-]*d(?:ays?)?$/);
             if (m) return "Yes, " + m[1] + " days";
-            if (t === "yes") return "Yes";
+            if (/^(yes|y|true)$/.test(t)) return "Yes";
+            // A bare number is a count of days: that is the only thing this
+            // column ever counts.
+            if (/^\d+$/.test(t)) return "Yes, " + t + " days";
             return String(v);
           };
           var sayList = function (v) {

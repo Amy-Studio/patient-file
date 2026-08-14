@@ -4464,18 +4464,17 @@
             var planChoices = livePlans.map(function (o) {
               var isNow = !!priorOrderId && o.id === priorOrderId;
               return { id: "plan:" + o.id, primary: isNow,
-                       head: pfSurgeryName(o) + (isNow ? "   (the one open now)" : ""),
+                       head: pfSurgeryName(o) + (isNow ? "   (open now)" : ""),
                        line: pfSurgeryWhen(o) };
             });
-            planChoices.push({ id: "new", head: "A different surgery, not one of these",
-              line: "Starts a new surgery plan from this file. The ones above are left exactly as they are." });
+            planChoices.push({ id: "new", head: "None of these. Start a new surgery",
+              line: "A new surgery plan is made from this file. The ones above are left exactly as they are." });
             var pickedPlan = await pfAskBox({
               title: "Which surgery is this file for?",
               sub: (P.full_name || "This patient") + " · " + file.name,
-              intro: "What you keep from this file goes onto the surgery you pick here. " +
-                     "Two operations must not end up on one plan.",
+              intro: "Whatever you keep from this file goes onto the surgery you pick.",
               choices: planChoices,
-              cancelLabel: "Cancel, do not use this file" });
+              cancelLabel: "Cancel this file" });
             if (!pickedPlan) return dropAbandoned();
             if (pickedPlan === "new") {
               newPlanWanted = true;
@@ -4500,15 +4499,15 @@
             var makePlan = await pfAskBox({
               title: (P.full_name || "This patient") + " has no surgery plan yet",
               sub: file.name,
-              intro: "This file has surgery details in it. Shall we start a surgery plan from them?",
+              intro: "This file has surgery details in it. Start a surgery plan from it?",
               choices: [
-                { id: "make", primary: true, head: "Yes, make one",
+                { id: "make", primary: true, head: "Yes, start one",
                   line: "You still choose, line by line, what goes on it." },
                 { id: "none", head: "No, just file the document",
-                  line: "The file is still saved into Documents, and their own details such as phone " +
-                        "number and Medicare still update. Only the surgery plan is skipped." }
+                  line: "The file is still saved under Documents, and their phone number, Medicare and " +
+                        "so on still update. Only the surgery plan is skipped." }
               ],
-              cancelLabel: "Cancel, do not use this file" });
+              cancelLabel: "Cancel this file" });
             if (!makePlan) return dropAbandoned();
             planAllowed = (makePlan === "make");
           }

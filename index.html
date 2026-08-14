@@ -1453,9 +1453,21 @@
               // again. Two options' booklets and quotes are separate rows with
               // their own labels, so each is ticked and sent on its own.
               var filed = !!d.pracsuite_filed_at;
-              var tickCell = filed
-                ? '<span title="Already on their PracSuite record" style="font-size:12px;color:var(--good-ink,#2d7a55);margin-right:10px;flex-shrink:0">✓ PracSuite</span>'
-                : '<label style="margin-right:10px;flex-shrink:0;cursor:pointer" title="Tick to send this to their PracSuite record"><input type="checkbox" class="pf-doc-tick" data-doc-tick="' + i + '"></label>';
+              // Every row is tickable now, the ones already on PracSuite
+              // included. The tick used to mean only "send this to PracSuite",
+              // so it was withheld from anything already sent; it now also
+              // means "download a copy of this", and a document already on
+              // their record is exactly the one most likely to be wanted
+              // again. (Amy, 15 Aug 2026.) Re-sending is stopped by the
+              // filter in pracSuiteTickedDocs, not by there being no box.
+              var tickCell = '<label style="margin-right:10px;flex-shrink:0;cursor:pointer" title="' +
+                (filed
+                  ? "Tick to download a copy. It is already on their PracSuite record, so Send skips it."
+                  : "Tick to download a copy, or to send it to their PracSuite record") +
+                '"><input type="checkbox" class="pf-doc-tick" data-doc-tick="' + i + '"></label>' +
+                (filed
+                  ? '<span title="Already on their PracSuite record" style="font-size:12px;color:var(--good-ink,#2d7a55);margin-right:10px;flex-shrink:0">✓ PracSuite</span>'
+                  : '');
               return '<div class="doc" data-doc-i="' + i + '">' + tickCell +
                 '<div style="flex:1;min-width:0;cursor:pointer" data-doc-open="' + i + '"><div class="dname">' + docTypePill(d) + esc(name) + '</div><div class="dmeta">' + esc(meta.join(" · ")) + '</div></div><span style="font-size:13px;color:var(--accent-ink);cursor:pointer" data-doc-open="' + i + '">Preview</span><span data-doc-rename="' + i + '" title="Rename it. This is the name it carries on their PracSuite record." style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Rename</span><span class="doc-remove" data-doc-del="' + i + '" title="Remove this document from the file. It is archived, not destroyed, so it can be brought back." style="font-size:12px;color:#a3402d;cursor:pointer;margin-left:14px;flex-shrink:0">Remove</span></div>';
             }).join("");
@@ -1466,7 +1478,7 @@
             el.addEventListener("click", function () { previewDoc(state.docsView[parseInt(el.getAttribute("data-doc-open"), 10)]); });
           });
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-tick]"), function (el) {
-            el.addEventListener("change", updatePracSuiteSendCount);
+            el.addEventListener("change", updateDocTickButtons);
           });
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-rename]"), function (el) {
             el.addEventListener("click", function (ev) { ev.stopPropagation(); renameDoc(parseInt(el.getAttribute("data-doc-rename"), 10)); });
@@ -1488,20 +1500,38 @@
          * PracSuite link, or a connection that was refusing, looked exactly
          * like a success and the documents were quietly never there.
          */
-        function pracSuiteTickedDocs() {
+        // Everything ticked, whatever state it is in. This is the list for
+        // downloading, which does nothing to anybody's record.
+        function tickedDocs() {
           var out = [];
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-tick]"), function (el) {
             if (el.checked) out.push(state.docsView[parseInt(el.getAttribute("data-doc-tick"), 10)]);
           });
           return out.filter(Boolean);
         }
-        function updatePracSuiteSendCount() {
-          var n = pracSuiteTickedDocs().length;
-          var b = qs("pf-ps-send");
-          if (!b) return;
-          b.disabled = !n;
-          b.textContent = n ? ("Send " + n + " to PracSuite") : "Send to PracSuite";
-          b.style.opacity = n ? "1" : ".55";
+        // What may be SENT: ticked, minus anything already on their PracSuite
+        // record. Filed rows used to have no tick box at all, and that absence
+        // was the only thing stopping a second send of a file PracSuite cannot
+        // delete. Now that the box is there so it can be downloaded, the guard
+        // has to be here instead, in the list itself. (15 Aug 2026.)
+        function pracSuiteTickedDocs() {
+          return tickedDocs().filter(function (d) { return !d.pracsuite_filed_at; });
+        }
+        function updateDocTickButtons() {
+          var send = qs("pf-ps-send");
+          if (send) {
+            var n = pracSuiteTickedDocs().length;
+            send.disabled = !n;
+            send.textContent = n ? ("Send " + n + " to PracSuite") : "Send to PracSuite";
+            send.style.opacity = n ? "1" : ".55";
+          }
+          var dl = qs("pf-dl-ticked");
+          if (dl) {
+            var m = tickedDocs().length;
+            dl.disabled = !m;
+            dl.textContent = m ? ("Download " + m) : "Download ticked";
+            dl.style.opacity = m ? "1" : ".55";
+          }
         }
         function renderPracSuiteSendBar() {
           var host = qs("pf-docs");
@@ -1512,15 +1542,21 @@
             bar.id = "pf-ps-bar";
             bar.style.cssText = "display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:0 0 12px;" +
               "padding:10px 13px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius)";
+            // Two things one set of ticks can do. The note says which one
+            // cannot be undone, because that is the only difference that
+            // matters at the moment of pressing.
             bar.innerHTML =
-              '<button type="button" id="pf-ps-send" class="btn" style="opacity:.55">Send to PracSuite</button>' +
+              '<button type="button" id="pf-ps-send" class="np-btn" style="opacity:.55">Send to PracSuite</button>' +
+              '<button type="button" id="pf-dl-ticked" class="np-btn" style="opacity:.55" ' +
+              'title="Save a copy of everything ticked onto this computer. Nothing on their record changes.">Download ticked</button>' +
               '<span id="pf-ps-note" style="font-size:12.5px;color:var(--muted)">' +
-              'Tick what you want on their PracSuite record. Nothing goes across until you press Send, ' +
-              'and PracSuite has no way to take a file back.</span>';
+              'Tick what you want. <b>Send to PracSuite</b> puts it on their record and PracSuite has no way ' +
+              'to take a file back. <b>Download ticked</b> only saves a copy here.</span>';
             host.parentNode.insertBefore(bar, host);
             qs("pf-ps-send").addEventListener("click", sendTickedToPracSuite);
+            qs("pf-dl-ticked").addEventListener("click", downloadTickedDocs);
           }
-          updatePracSuiteSendCount();
+          updateDocTickButtons();
         }
         /* What the file is CALLED on her PracSuite record.
          *
@@ -1702,6 +1738,124 @@
           btn.disabled = false;
           renderDocs();
           if (note) note.innerHTML = parts.join(" ");
+        }
+
+        /* Downloading ticked documents onto this computer.
+         *
+         * The Documents tab had no download of any kind. Ticking meant one
+         * thing, sending to PracSuite, and getting a patient's pack onto the
+         * Mac meant going back to the Quote Builder and pressing "Download
+         * everything (ZIP)", which rebuilds documents from the form rather
+         * than handing over the ones actually filed. (Amy, 15 Aug 2026.)
+         *
+         * These are the filed documents themselves, byte for byte, so what
+         * lands in Downloads is what is on the record and what the patient
+         * was sent, not a fresh render that may have moved on since.
+         *
+         * Reading is not sending: this touches nothing on the patient's file
+         * and nothing on PracSuite.
+         */
+        function saveBlobAs(blob, filename) {
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        }
+        // Fetched only when a multi-document download actually happens, so
+        // every patient file does not carry a zip library on every load for
+        // the sake of a button pressed now and then.
+        function ensureJsZip() {
+          if (window.JSZip) return Promise.resolve(true);
+          if (window.__pfJsZip) return window.__pfJsZip;
+          window.__pfJsZip = new Promise(function (resolve) {
+            var s = document.createElement("script");
+            s.src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+            s.onload = function () { resolve(!!window.JSZip); };
+            s.onerror = function () { resolve(false); };
+            document.head.appendChild(s);
+          });
+          return window.__pfJsZip;
+        }
+        async function downloadTickedDocs() {
+          var docs = tickedDocs();
+          if (!docs.length) return;
+          var note = qs("pf-ps-note"), btn = qs("pf-dl-ticked");
+          var say = function (t) { if (note) note.innerHTML = t; };
+          if (window.__pfPreview) { toast("Preview - nothing to download"); return; }
+          var client = sb();
+          if (!client) {
+            say('<b style="color:#a3402d">Not signed in</b>, so the files cannot be read. Reload the page and log in.');
+            return;
+          }
+          if (btn) btn.disabled = true;
+          var got = [], failed = [], used = {};
+          for (var i = 0; i < docs.length; i++) {
+            var d = docs[i];
+            say("Fetching " + (i + 1) + " of " + docs.length + "…");
+            try {
+              var blob = null;
+              if (d.bucket && d.path && client.storage) {
+                var dl = await client.storage.from(d.bucket).download(d.path);
+                if (dl.error || !dl.data) throw new Error(dl.error ? dl.error.message : "the file could not be read");
+                blob = dl.data;
+              } else {
+                // Older rows carry a plain URL and no bucket or path.
+                var u = await resolveDocUrl(d);
+                if (!u) throw new Error("there is no stored file behind this row");
+                var resp = await fetch(u);
+                if (!resp.ok) throw new Error("the file could not be fetched (" + resp.status + ")");
+                blob = await resp.blob();
+              }
+              // Two documents can legitimately end up with the same name and
+              // the same date, and a zip keeps only the last of them. Losing
+              // one silently is worse than an ugly name, so the second gets
+              // numbered instead of quietly replacing the first.
+              var name = pracSuiteFileName(d);
+              if (used[name]) {
+                var dot = name.lastIndexOf(".");
+                var stem = dot > 0 ? name.slice(0, dot) : name;
+                var ext = dot > 0 ? name.slice(dot) : "";
+                name = stem + " (" + (++used[stem + ext]) + ")" + ext;
+              } else { used[name] = 1; }
+              got.push({ name: name, blob: blob });
+            } catch (e) {
+              failed.push({ d: d, why: (e && e.message) || "unknown" });
+            }
+          }
+          var parts = [];
+          if (got.length === 1) {
+            saveBlobAs(got[0].blob, got[0].name);
+            parts.push('<b style="color:#2d7a55">1 downloaded.</b>');
+          } else if (got.length > 1) {
+            say("Zipping " + got.length + " documents…");
+            var zipped = await ensureJsZip();
+            if (zipped) {
+              var zip = new JSZip();
+              got.forEach(function (g) { zip.file(g.name, g.blob); });
+              var who = String((state.patient && state.patient.full_name) || "Patient").replace(/[\/\\:*?"<>|]/g, "-").trim();
+              saveBlobAs(await zip.generateAsync({ type: "blob" }), who + " - documents.zip");
+              parts.push('<b style="color:#2d7a55">' + got.length + ' downloaded as a zip.</b>');
+            } else {
+              // No zip library, so hand over the files one at a time rather
+              // than nothing at all. The browser asks once about multiple
+              // downloads; say so, or it reads as the button failing.
+              got.forEach(function (g) { saveBlobAs(g.blob, g.name); });
+              parts.push('<b style="color:#2d7a55">' + got.length + ' downloaded</b> one file at a time ' +
+                '(the zip library did not load, so allow multiple downloads if the browser asks).');
+            }
+          }
+          if (failed.length) {
+            parts.push('<b style="color:#a3402d">' + failed.length + ' could not be downloaded:</b> ' +
+              failed.map(function (f) {
+                return esc(pracSuiteDocName(f.d)) + " (" + esc(f.why) + ")";
+              }).join("; "));
+          }
+          say(parts.join(" "));
+          updateDocTickButtons();
         }
 
         // Take a document off the patient's file. ARCHIVED, never destroyed:
@@ -3790,6 +3944,86 @@
           client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false })
             .then(function (r) { if (r && !r.error) { state.docs = r.data || []; renderDocs(); } });
         }
+        /* ---- One plain question, asked before the file is used --------------
+         *
+         * Built here rather than in the shared popup module because the shared
+         * one is a field-by-field comparison and this is the single question
+         * that has to be settled BEFORE the comparison can mean anything:
+         * which surgery are we comparing against. Same look, so the two boxes
+         * read as one conversation.
+         *
+         * Every choice is a named button that says what it will do. Cancel is
+         * always available and always means the whole drop is abandoned.
+         */
+        function pfAskBox(o) {
+          return new Promise(function (resolve) {
+            var wrap = document.createElement("div");
+            wrap.setAttribute("style",
+              "position:fixed;inset:0;z-index:100000;background:rgba(20,30,50,.45);" +
+              "display:flex;align-items:center;justify-content:center;padding:18px;" +
+              'font-family:"Montserrat",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;');
+            var btns = (o.choices || []).map(function (c, i) {
+              return '<button type="button" data-pick="' + i + '" style="' +
+                "display:block;width:100%;text-align:left;font:inherit;cursor:pointer;" +
+                "border-radius:12px;padding:12px 14px;margin-bottom:9px;" +
+                (c.primary ? "border:1.5px solid transparent;background:#234e7d;color:#fff;"
+                           : "border:1.5px solid #d6deea;background:#fff;color:#1f3a5f;") + '">' +
+                '<span style="display:block;font-size:14.5px;font-weight:600">' + esc(c.head) + "</span>" +
+                (c.line ? '<span style="display:block;font-size:12.5px;margin-top:3px;opacity:' +
+                          (c.primary ? ".85" : ".7") + '">' + esc(c.line) + "</span>" : "") +
+                "</button>";
+            }).join("");
+            wrap.innerHTML =
+              '<div role="dialog" aria-modal="true" style="width:100%;max-width:560px;max-height:88vh;' +
+              "display:flex;flex-direction:column;background:#fff;border-radius:16px;" +
+              'box-shadow:0 24px 70px rgba(20,30,50,.35);overflow:hidden;color:#1f3a5f">' +
+                '<div style="padding:16px 22px;border-bottom:1px solid #e3e9f2">' +
+                  '<div style="font-size:17px;font-weight:600">' + esc(o.title || "") + "</div>" +
+                  (o.sub ? '<div style="font-size:13px;color:#6b7a90;margin-top:3px">' + esc(o.sub) + "</div>" : "") +
+                "</div>" +
+                (o.intro ? '<div style="padding:9px 22px;font-size:12.5px;color:#52617a;' +
+                           'background:#eef4fb;border-bottom:1px solid #e3e9f2">' + esc(o.intro) + "</div>" : "") +
+                '<div style="padding:14px 22px 5px;overflow:auto">' + btns + "</div>" +
+                '<div style="display:flex;justify-content:flex-end;padding:12px 22px;' +
+                'border-top:1px solid #e3e9f2">' +
+                  '<button type="button" id="pf-ask-cancel" style="font:inherit;font-size:14px;' +
+                  "font-weight:600;border-radius:999px;padding:9px 18px;cursor:pointer;" +
+                  'border:1.5px solid #d6deea;background:#fff;color:#1f3a5f">' +
+                  esc(o.cancelLabel || "Cancel") + "</button>" +
+                "</div>" +
+              "</div>";
+            document.body.appendChild(wrap);
+            function done(v) { wrap.remove(); document.removeEventListener("keydown", onKey); resolve(v); }
+            function onKey(e) { if (e.key === "Escape") done(null); }
+            document.addEventListener("keydown", onKey);
+            wrap.addEventListener("mousedown", function (e) { if (e.target === wrap) done(null); });
+            wrap.querySelector("#pf-ask-cancel").addEventListener("click", function () { done(null); });
+            Array.prototype.forEach.call(wrap.querySelectorAll("[data-pick]"), function (b) {
+              b.addEventListener("click", function () {
+                done(((o.choices || [])[parseInt(b.getAttribute("data-pick"), 10)] || {}).id || null);
+              });
+            });
+          });
+        }
+        /* How to name one surgery so she can tell it from the others: the
+         * operation, and the date if it has one. A row id would tell her
+         * nothing, and two plans with the same operation are told apart by
+         * their dates. */
+        function pfSurgeryName(o) {
+          var n = o && (o.procedure_name || o.plan_name);
+          return n ? String(n).trim() : "Surgery with no operation named yet";
+        }
+        function pfSurgeryWhen(o) {
+          if (!o) return "No date yet";
+          // The real surgery date lives on the patient record for the current
+          // surgery, which is where the pills at the top of the page read it
+          // from. Same answer in both places or they look like two surgeries.
+          var d = o.session_date;
+          if (!d && state.patient && state.patient.surgery_date &&
+              (state.orders || [])[0] === o) d = state.patient.surgery_date;
+          if (d) return "Surgery " + isoToDmy(d);
+          return o.created_at ? "No date yet, started " + isoToDmy(o.created_at) : "No date yet";
+        }
         async function pfProcessNote(file, idx, total) {
           idx = idx || 1; total = total || 1;
           var client = sb(); var P = state.patient; var pid = P && P.id;
@@ -3807,8 +4041,51 @@
           if (readErr) return { handled: false, reason: "the read failed (" + readErr + ")" };
           if (!ex) return { handled: false, reason: "there was no readable text in it" };
           var ce = ex.clinical_extract || {};
-          var oa = state.order || {};
+          /* WHICH surgery this file belongs to is asked further down, before
+           * anything is compared. Until that is answered there is no such
+           * thing as "what the plan already says", so this stays empty and is
+           * filled in once she has told us. (15 Aug 2026.) */
+          var oa = {};
+          // Set to false only if she is asked whether to start a surgery plan
+          // and says no. Everything that would write to one then stands down.
+          var planAllowed = true;
           var intOf = function (v) { var n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
+          /* ONE ROW, TWO PLACES FOR IT TO LAND.
+           *
+           * Procedure, venue, date and duration are each written to the
+           * patient's own record AND to the surgery plan. The row worked out
+           * "unchanged" by looking at ONE of them, so once the patient's
+           * record held the operation the row went quiet and the PLAN was
+           * never written, however many times the note was dropped.
+           * (Amy, 14 Aug 2026, after ten attempts on one patient.)
+           *
+           * A row is now quiet only when EVERY place it writes to already says
+           * what the file says. Whichever one disagrees is what she is shown,
+           * so a second file can correct a first instead of being hidden
+           * because something else already filled the blank.
+           * (Amy, 15 Aug 2026: the order the files are dropped in must not
+           * decide what the record ends up saying.) */
+          var sameText = function (a, b) {
+            var n = function (v) {
+              var s = String(v == null ? "" : v).trim().toLowerCase();
+              // The same list the review popup treats as "no answer", so a row
+              // called unchanged here is a row it calls unchanged too. The long
+              // dash is written as its code because no long dash may appear in
+              // anything of Amy's.
+              if (s === "" || s === "-" || s === "\u2014" || s === "n/a" ||
+                  s === "na" || s === "nil" || s === "none") return "";
+              return s.replace(/\s+/g, " ");
+            };
+            return n(a) === n(b);
+          };
+          var onFile = function (planVal, patVal, inc) {
+            // She said no to a surgery plan, so the plan half of this row does
+            // not exist and only their own record is compared.
+            if (!planAllowed) return patVal == null ? "" : patVal;
+            if (!sameText(planVal, inc)) return planVal == null ? "" : planVal;
+            if (!sameText(patVal, inc)) return patVal == null ? "" : patVal;
+            return (planVal == null || String(planVal).trim() === "") ? patVal : planVal;
+          };
           /* Plain English for a value the database stores as a code, and a
            * readable form for a list. The STORED value is what gets written;
            * these only change what Amy reads in the dialog, because
@@ -3904,6 +4181,12 @@
               return out;
             });
           };
+          // One item number, in the one shape everything can be compared on.
+          // "f414s", " F414s " and { code: "F414s" } are all the same item.
+          var codeKey = function (c) {
+            var v = (c && typeof c === "object") ? c.code : c;
+            return String(v == null ? "" : v).trim().toUpperCase();
+          };
           // The banding rule is the numbers. Everything from "when:" onwards is
           // the form explaining itself to the surgeon.
           var bandingOnly = function (v) {
@@ -3930,11 +4213,100 @@
             if (!w && !drug && !dose) return "";
             return [w || "Status not recorded", drug || "", dose || ""].filter(Boolean).join(", ");
           };
-          var defs = [
-            ["Procedure", oa.procedure_name || P.surgery_procedure, ex.surgery_procedure, [["patients", "surgery_procedure"], ["order", "procedure_name"]]],
-            ["Estimated duration (min)", (oa.est_duration_min != null ? oa.est_duration_min : P.surgery_duration_min), intOf(ce.est_duration_min), [["patients", "surgery_duration_min"], ["order", "est_duration_min"]]],
-            ["Surgery date", P.surgery_date, ex.surgery_date, [["patients", "surgery_date"], ["order", "session_date"]]],
-            ["Venue", P.surgery_venue, ex.surgery_venue, [["patients", "surgery_venue"], ["order", "surgery_venue"]]],
+          /* Every row this file could offer, measured against ONE surgery.
+           *
+           * It used to be a plain list built against whichever surgery
+           * happened to be selected when the file landed. It is a function now
+           * because which surgery this file is for is a question Amy answers
+           * first, and because the same list, measured against an empty plan,
+           * is how we know whether the file has anything to do with a surgery
+           * plan at all. (15 Aug 2026.) */
+          var buildDefs = function (oa) {
+            /* WHAT THE PLAN ACTUALLY SAYS about a recovery answer.
+             *
+             * Every recovery answer is kept twice on a plan: a number in its
+             * own column, and the surgeon's own wording in the recovery block.
+             * Only the number was ever compared, so a plan that says "once the
+             * swelling has settled" looked BLANK to this box and a dropped file
+             * could replace it without Amy ever being shown what was there.
+             * And the other way round: a plan that says "6-8 weeks" was shown
+             * to her as "6 weeks".
+             *
+             * The number is what is compared, because the number is what is
+             * stored. His wording is what she is shown, and it stands in for
+             * the number when he never gave one. (15 Aug 2026.) */
+            var recSaid = function (k) {
+              var rp = (oa.recovery_plan && typeof oa.recovery_plan === "object") ? oa.recovery_plan : {};
+              var t = k ? rp[k] : "";
+              return (t == null || t === "") ? "" : String(t);
+            };
+            var weeksRow = function (label, col, recKey, inc, say) {
+              say = say || sayWeeks;
+              var num = oa[col], said = recSaid(recKey);
+              var has = num != null && num !== "";
+              return [label, has ? num : said, inc, [["order", col]],
+                      said || (has ? say(num) : ""), say(inc)];
+            };
+            /* The review weeks as one readable line, whatever shape they
+             * arrive in. They are compared as text so [1,2,4] on the plan and
+             * "1|2|4" off a note are recognised as the same answer, instead of
+             * the row being offered again on every single drop. */
+            var weeksList = function (v) {
+              if (v == null || v === "") return "";
+              var arr = Array.isArray(v) ? v : String(v).split(/[|,]/);
+              var seen = {}, out = [];
+              arr.forEach(function (x) {
+                var n = parseInt(String(x).replace(/\D+/g, ""), 10);
+                if (!Number.isFinite(n) || n < 1 || n > 104 || seen[n]) return;
+                seen[n] = 1; out.push(n);
+              });
+              return out.join(", ");
+            };
+            var uiReviews = weeksList(oa.order_ui && oa.order_ui.postop_review_weeks);
+            /* ONE ROW PER ITEM NUMBER.
+             *
+             * The whole list arrived as a single row, so three item numbers off
+             * one draft quote were all or nothing. A note can name three
+             * (49833, 48403, 49851) when only two of them are being done, and
+             * there was no way to say so. (Amy, 15 Aug 2026: "with the draft
+             * quote its grabbing all item numbers as one. they need to all have
+             * their own field i can select ... multiple rows if multiple item
+             * numbers.")
+             *
+             * The number IS the row. A description sits beside it only when it
+             * says something the number does not: the reader has no description
+             * for an item number and fills one in with the operation name,
+             * which codesOnly and cleanCodes strip at the door.
+             *
+             * One that is already on this surgery reads "already on this
+             * surgery plan" and sits in the quiet Unchanged list, so ticking
+             * cannot add it twice. */
+            var codeDefs = function () {
+              var inc = cleanCodes(ce.procedure_codes, ce.procedure_name || ex.surgery_procedure);
+              if (!Array.isArray(inc) || !inc.length) return [];
+              var have = {};
+              (Array.isArray(oa.procedure_codes) ? oa.procedure_codes : []).forEach(function (x) {
+                var k = codeKey(x); if (k) have[k] = true;
+              });
+              var seen = {}, out = [];
+              inc.forEach(function (x) {
+                var k = codeKey(x);
+                // The same number listed twice is one item, not two rows.
+                if (!k || seen[k]) return;
+                seen[k] = true;
+                out.push(["Item number " + k, have[k] ? k : "", k,
+                          [["order", "procedure_codes"]],
+                          have[k] ? "Already on this surgery plan" : "",
+                          codesOnly([x], ce.procedure_name || ex.surgery_procedure) || k,
+                          { codeObj: x }]);
+              });
+              return out;
+            };
+            return [
+            ["Procedure", onFile(oa.procedure_name, P.surgery_procedure, ex.surgery_procedure), ex.surgery_procedure, [["patients", "surgery_procedure"], ["order", "procedure_name"]]],
+            ["Estimated duration (min)", onFile(oa.est_duration_min, P.surgery_duration_min, intOf(ce.est_duration_min)), intOf(ce.est_duration_min), [["patients", "surgery_duration_min"], ["order", "est_duration_min"]]],
+            ["Surgery date", onFile(oa.session_date, P.surgery_date, ex.surgery_date), ex.surgery_date, [["patients", "surgery_date"], ["order", "session_date"]]],
+            ["Venue", onFile(oa.surgery_venue, P.surgery_venue, ex.surgery_venue), ex.surgery_venue, [["patients", "surgery_venue"], ["order", "surgery_venue"]]],
             ["Anaesthetist", oa.anaesthetist, ex.surgery_anaesthetist, [["order", "anaesthetist"]]],
             ["Date of birth", P.dob, ex.dob, [["patients", "dob"]]],
             ["Phone", P.phone, ex.phone, [["patients", "phone"]]],
@@ -3945,18 +4317,16 @@
             ["GLP-1 / SGLT2 meds", oa.glp1_sglt2, ce.glp1_sglt2, [["order", "glp1_sglt2"]]],
             ["Antibiotic cover", oa.ab_cover, ce.ab_cover, [["order", "ab_cover"]], sayCover(oa.ab_cover), sayCover(ce.ab_cover)],
             ["Antithrombotic cover", oa.at_cover, ce.at_cover, [["order", "at_cover"]], sayCover(oa.at_cover), sayCover(ce.at_cover)],
-            ["Weight-bearing", oa.weight_bearing, ce.weight_bearing, [["order", "weight_bearing"]]],
-            ["Driving off (weeks)", oa.driving_weeks_off, intOf(ce.driving_weeks_off), [["order", "driving_weeks_off"]]],
+            ["Weight-bearing", oa.weight_bearing || recSaid("starting_wb"), ce.weight_bearing, [["order", "weight_bearing"]]],
+            weeksRow("Driving off (weeks)", "driving_weeks_off", "driving", intOf(ce.driving_weeks_off)),
 
             /* Everything else the reader finds. It extracts 48 fields and this
              * list offered 16, so most of a plan and the whole recovery guide
              * were being read and then dropped on the floor, leaving Amy to
              * retype them per patient. Each line shows a human form and stores
              * the real value. (13 Aug 2026.) */
-            ["Item numbers", oa.procedure_codes, cleanCodes(ce.procedure_codes, ce.procedure_name || ex.surgery_procedure),
-              [["order", "procedure_codes"]],
-              codesOnly(oa.procedure_codes, oa.procedure_name),
-              codesOnly(ce.procedure_codes, ce.procedure_name || ex.surgery_procedure)],
+            // The item numbers go in here, one row each. See codeDefs above.
+            ].concat(codeDefs(), [
             ["Prosthesis / implants", oa.prosthesis_details, ce.prosthesis_details, [["order", "prosthesis_details"]]],
             ["Theatre equipment", oa.theatre_equipment, ce.theatre_equipment, [["order", "theatre_equipment"]]],
             ["Theatre alerts", oa.theatre_alerts, ce.theatre_alerts, [["order", "theatre_alerts"]]],
@@ -3975,23 +4345,23 @@
             ["PracSuite quote number", oa.pracsuite_quote_number, ce.pracsuite_quote_number, [["order", "pracsuite_quote_number"]]],
             ["Supplements", oa.supplements, ce.supplements, [["order", "supplements"]], sayList(oa.supplements), sayList(ce.supplements)],
             ["Mobility aid", oa.mobility_aid, ce.mobility_aid, [["order", "mobility_aid"]]],
-            ["Crutches (weeks)", oa.crutches_weeks, intOf(ce.crutches_weeks), [["order", "crutches_weeks"]], sayWeeks(oa.crutches_weeks), sayWeeks(ce.crutches_weeks)],
-            ["Knee scooter (weeks)", oa.knee_scooter_weeks, intOf(ce.knee_scooter_weeks), [["order", "knee_scooter_weeks"]], sayWeeks(oa.knee_scooter_weeks), sayWeeks(ce.knee_scooter_weeks)],
-            ["Footwear", oa.footwear, ce.footwear, [["order", "footwear"]]],
-            ["Footwear (weeks)", oa.footwear_weeks, intOf(ce.footwear_weeks), [["order", "footwear_weeks"]], sayWeeks(oa.footwear_weeks), sayWeeks(ce.footwear_weeks)],
-            ["Partial weight-bearing at (weeks)", oa.partial_wb_at_weeks, intOf(ce.partial_wb_at_weeks), [["order", "partial_wb_at_weeks"]], sayWeeks(oa.partial_wb_at_weeks), sayWeeks(ce.partial_wb_at_weeks)],
-            ["Full weight-bearing at (weeks)", oa.full_wb_at_weeks, intOf(ce.full_wb_at_weeks), [["order", "full_wb_at_weeks"]], sayWeeks(oa.full_wb_at_weeks), sayWeeks(ce.full_wb_at_weeks)],
+            weeksRow("Crutches (weeks)", "crutches_weeks", null, intOf(ce.crutches_weeks)),
+            weeksRow("Knee scooter (weeks)", "knee_scooter_weeks", null, intOf(ce.knee_scooter_weeks)),
+            ["Footwear", oa.footwear || recSaid("footwear"), ce.footwear, [["order", "footwear"]]],
+            weeksRow("Footwear (weeks)", "footwear_weeks", null, intOf(ce.footwear_weeks)),
+            weeksRow("Partial weight-bearing at (weeks)", "partial_wb_at_weeks", "partial_wb", intOf(ce.partial_wb_at_weeks)),
+            weeksRow("Full weight-bearing at (weeks)", "full_wb_at_weeks", "full_wb", intOf(ce.full_wb_at_weeks)),
             ["Pain plan", oa.pain_plan, ce.pain_plan, [["order", "pain_plan"]]],
             /* The recovery guide's own answers. These are what the patient's
              * booklet prints, so reading them off the note is most of the
              * booklet already written. */
-            ["Desk work (weeks)", oa.work_desk_weeks, intOf(ce.work_desk_weeks), [["order", "work_desk_weeks"]], sayWeeks(oa.work_desk_weeks), sayWeeks(ce.work_desk_weeks)],
-            ["Active work (weeks)", oa.work_active_weeks, intOf(ce.work_active_weeks), [["order", "work_active_weeks"]], sayWeeks(oa.work_active_weeks), sayWeeks(ce.work_active_weeks)],
-            ["Sport (weeks)", oa.sport_weeks, intOf(ce.sport_weeks), [["order", "sport_weeks"]], sayWeeks(oa.sport_weeks), sayWeeks(ce.sport_weeks)],
-            ["Flying (weeks)", oa.flying_weeks_off, intOf(ce.flying_weeks_off), [["order", "flying_weeks_off"]], sayWeeks(oa.flying_weeks_off), sayWeeks(ce.flying_weeks_off)],
-            ["Swimming (weeks)", oa.swimming_weeks_off, intOf(ce.swimming_weeks_off), [["order", "swimming_weeks_off"]], sayWeeks(oa.swimming_weeks_off), sayWeeks(ce.swimming_weeks_off)],
-            ["Normal shoes (weeks)", oa.normal_shoes_weeks, intOf(ce.normal_shoes_weeks), [["order", "normal_shoes_weeks"]], sayWeeks(oa.normal_shoes_weeks), sayWeeks(ce.normal_shoes_weeks)],
-            ["Social events (weeks)", oa.social_event_weeks, intOf(ce.social_event_weeks), [["order", "social_event_weeks"]], sayWeeks(oa.social_event_weeks), sayWeeks(ce.social_event_weeks)],
+            weeksRow("Desk work (weeks)", "work_desk_weeks", "work_desk", intOf(ce.work_desk_weeks)),
+            weeksRow("Active work (weeks)", "work_active_weeks", "work_active", intOf(ce.work_active_weeks)),
+            weeksRow("Sport (weeks)", "sport_weeks", "sport", intOf(ce.sport_weeks)),
+            weeksRow("Flying (weeks)", "flying_weeks_off", "flying", intOf(ce.flying_weeks_off)),
+            weeksRow("Swimming (weeks)", "swimming_weeks_off", "water", intOf(ce.swimming_weeks_off)),
+            weeksRow("Normal shoes (weeks)", "normal_shoes_weeks", "normal_shoes", intOf(ce.normal_shoes_weeks)),
+            weeksRow("Social events (weeks)", "social_event_weeks", "travel", intOf(ce.social_event_weeks)),
             /* His own words about showering, offered as his own words.
              *
              * "2+ weeks" was being turned into 14 days, and 14 days is a
@@ -4015,13 +4385,21 @@
              * number of days. */
             // Elevation, in his words. Every note carries "Elevation for 72
             // hours" and nothing has ever offered it. (Amy, 14 Aug 2026.)
-            ["Keep the foot elevated for", (oa.recovery_plan && oa.recovery_plan.elevation) || "", ce.elevation, [["order", "elevation"]]],
-            ["Showering / getting wet", (oa.recovery_plan && oa.recovery_plan.shower) || "", ce.shower_wet_text, [["order", "shower_wet_text"]]],
-            ["Showering at (days)", oa.shower_wet_at_days,
-              (ce.shower_wet_text ? null : intOf(ce.shower_wet_at_days)),
-              [["order", "shower_wet_at_days"]], sayDays(oa.shower_wet_at_days), sayDays(ce.shower_wet_at_days)],
+            ["Keep the foot elevated for", recSaid("elevation"), ce.elevation, [["order", "elevation"]]],
+            ["Showering / getting wet", recSaid("shower"), ce.shower_wet_text, [["order", "shower_wet_text"]]],
+            weeksRow("Showering at (days)", "shower_wet_at_days", "shower",
+              (ce.shower_wet_text ? null : intOf(ce.shower_wet_at_days)), sayDays),
             ["Travel notes", oa.travel_notes, ce.travel_notes, [["order", "travel_notes"]]],
-            ["Reviews after surgery", oa.postop_review_weeks, ce.postop_review_weeks, [["order", "postop_review_weeks"]], sayList(oa.postop_review_weeks), sayList(ce.postop_review_weeks)],
+            /* The reviews are NOT a column on the surgery plan: they live
+             * inside order_ui, and in the plan's own wording in the recovery
+             * block. This row compared against a bare postop_review_weeks
+             * column, which does not exist, so it read blank on every single
+             * drop and offered reviews that were already booked.
+             * (15 Aug 2026.) */
+            ["Reviews after surgery", uiReviews || recSaid("post_op_reviews"),
+              weeksList(ce.postop_review_weeks), [["order", "postop_review_weeks"]],
+              uiReviews ? ("Week " + uiReviews.split(", ").join(", week ")) : recSaid("post_op_reviews"),
+              weeksList(ce.postop_review_weeks) ? ("Week " + weeksList(ce.postop_review_weeks).split(", ").join(", week ")) : ""],
             /* The non-service lines off a draft quote: the sandal, the brace,
              * the splint, the dressing. The reader finds them and nothing ever
              * offered them, so F414s sat in the extract and never reached the
@@ -4035,44 +4413,182 @@
             ["SGLT2", oa.sglt2_status, ce.sglt2_status, [["order", "sglt2_status"]], sayDrug(oa.sglt2_status, oa.sglt2_drug, oa.sglt2_last_dose), sayDrug(ce.sglt2_status, ce.sglt2_drug, ce.sglt2_last_dose)],
             ["SGLT2 drug", oa.sglt2_drug, ce.sglt2_drug, [["order", "sglt2_drug"]]],
             ["SGLT2 last dose", oa.sglt2_last_dose, ce.sglt2_last_dose, [["order", "sglt2_last_dose"]]],
-          ];
-          var rows = [], byKey = {};
-          defs.forEach(function (d) {
-            var label = d[0], cur = d[1], inc = d[2], writes = d[3];
-            // An empty array counts as nothing found, the same as a blank.
-            if (inc == null || inc === "" || (Array.isArray(inc) && !inc.length)) return;
-            rows.push({ key: label, label: label,
-              current: cur == null ? "" : cur, incoming: inc,
-              // Display only. The row still STORES what is in current/incoming.
-              showCurrent: d[4] || null, showIncoming: d[5] || null });
-            byKey[label] = { writes: writes };
-          });
+            ]);
+          };
           var kindMap = { clinical_notes: "Clinical notes", quote: "Fee quote", pamphlet: "Pamphlet", referral: "Referral", scan_report: "Scan / report" };
           var niceKind = kindMap[ex.document_kind] || "Document";
-          // The popup is now the thing that is happening, so the zone stops
-          // spinning and points at it. It stays on screen underneath.
-          dzSet('<span class="pf-dz-strong">Read ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
-                '<span class="pf-dz-line">Waiting for you to choose what to keep, in the box on screen.</span>', "busy");
-          var result = await window.ClinicMergeReview.open({ title: "Update patient from dropped file", patientName: P.full_name || "this patient", subtitle: "from " + niceKind.toLowerCase(), rows: rows, docName: niceKind + (ex.notes_drafted_date ? " — " + ex.notes_drafted_date : "") });
-          if (!result) {
+          /* Does this file hold anything at all that belongs on a surgery
+           * plan? Asked of an EMPTY plan, so every plan answer in the file
+           * shows up whatever the surgery on screen happens to hold already.
+           * Without this, a pamphlet with a phone number on it would put a
+           * question about surgery plans in front of her for no reason. */
+          var planStuff = buildDefs({}).some(function (d) {
+            var inc = d[2];
+            if (inc == null || inc === "" || (Array.isArray(inc) && !inc.length)) return false;
+            return (d[3] || []).some(function (t) { return t[0] === "order"; });
+          });
+          /* Whichever surgery she was on before this file landed. Cancelling
+           * anywhere below puts her back on it, because cancel has to mean
+           * nothing changed, including what is selected on screen. */
+          var priorOrder = state.order, priorOrderId = state.orderId;
+          var newPlanWanted = false;
+          function dropAbandoned() {
             /* Cancel means the whole drop is abandoned, and that includes the
              * file: it is NOT uploaded and NOT listed in Documents. The old
-             * wording ("Left as-is — nothing saved") was true about the record
+             * wording ("Left as-is, nothing saved") was true about the record
              * but left her believing the document had still been filed, which
              * is how a dropped letter disappears. Say both halves. */
+            state.order = priorOrder; state.orderId = priorOrderId;
+            try { renderSurgeryPicker(); } catch (e) {}
             status("Cancelled. Nothing saved.");
             dzFail("Cancelled: " + dzWhich(idx, total) + file.name,
                    ["Nothing was changed on this patient's record, and the file was NOT filed.",
                     "Drop it again if you want it kept."]);
             return { handled: true };
           }
+          /* WHICH SURGERY IS THIS FILE FOR? Asked before anything is compared,
+           * because the whole left-hand side of the review box is "what this
+           * surgery already says", and that has no answer until this one does.
+           *
+           * A file used to go, in silence, to whichever surgery happened to be
+           * selected. Drop the notes for one operation and the draft quote for
+           * another and the second one's answers filled the FIRST plan's
+           * blanks, so two operations became one record with nothing on screen
+           * to say it had happened.
+           * (Amy, 15 Aug 2026: "when dropping multiple files for one plan
+           * should it say is this for this surgery or for a new one?") */
+          var livePlans = (state.orders || []).filter(function (o) { return o && o.id; });
+          if (planStuff && livePlans.length) {
+            dzSet('<span class="pf-dz-strong">Read ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
+                  '<span class="pf-dz-line">Waiting for you to say which surgery it is for, in the box on screen.</span>', "busy");
+            var planChoices = livePlans.map(function (o) {
+              var isNow = !!priorOrderId && o.id === priorOrderId;
+              return { id: "plan:" + o.id, primary: isNow,
+                       head: pfSurgeryName(o) + (isNow ? "   (the one open now)" : ""),
+                       line: pfSurgeryWhen(o) };
+            });
+            planChoices.push({ id: "new", head: "A different surgery, not one of these",
+              line: "Starts a new surgery plan from this file. The ones above are left exactly as they are." });
+            var pickedPlan = await pfAskBox({
+              title: "Which surgery is this file for?",
+              sub: (P.full_name || "This patient") + " · " + file.name,
+              intro: "What you keep from this file goes onto the surgery you pick here. " +
+                     "Two operations must not end up on one plan.",
+              choices: planChoices,
+              cancelLabel: "Cancel, do not use this file" });
+            if (!pickedPlan) return dropAbandoned();
+            if (pickedPlan === "new") {
+              newPlanWanted = true;
+              state.order = null; state.orderId = null;
+              try { renderSurgeryPicker(); } catch (e) {}
+            } else {
+              var wantIdx = -1;
+              (state.orders || []).forEach(function (o, i) {
+                if (o && o.id && ("plan:" + o.id) === pickedPlan) wantIdx = i;
+              });
+              if (wantIdx >= 0) { try { setSurgery(wantIdx); } catch (e) {} }
+            }
+          } else if (planStuff) {
+            /* No surgery plan at all yet, so making one is a real thing to do
+             * and she is asked first. Saying no still files the document and
+             * still updates their own details, and the box says so in as many
+             * words, because "no" must never be a way of throwing a letter
+             * away. (Amy, 15 Aug 2026: "should it say for the first file, are
+             * we creating a surgical plan yes/no etc?") */
+            dzSet('<span class="pf-dz-strong">Read ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
+                  '<span class="pf-dz-line">Waiting for you to answer, in the box on screen.</span>', "busy");
+            var makePlan = await pfAskBox({
+              title: (P.full_name || "This patient") + " has no surgery plan yet",
+              sub: file.name,
+              intro: "This file has surgery details in it. Shall we start a surgery plan from them?",
+              choices: [
+                { id: "make", primary: true, head: "Yes, make one",
+                  line: "You still choose, line by line, what goes on it." },
+                { id: "none", head: "No, just file the document",
+                  line: "The file is still saved into Documents, and their own details such as phone " +
+                        "number and Medicare still update. Only the surgery plan is skipped." }
+              ],
+              cancelLabel: "Cancel, do not use this file" });
+            if (!makePlan) return dropAbandoned();
+            planAllowed = (makePlan === "make");
+          }
+          // Settled. NOW we know which surgery "what is on file" means.
+          oa = state.order || {};
+          var defs = buildDefs(oa);
+          var rows = [], byKey = {};
+          defs.forEach(function (d) {
+            var label = d[0], cur = d[1], inc = d[2], writes = d[3] || [];
+            // An empty array counts as nothing found, the same as a blank.
+            if (inc == null || inc === "" || (Array.isArray(inc) && !inc.length)) return;
+            /* She said no to a surgery plan, so the surgery-plan half of every
+             * row goes away BEFORE she is asked about it. Offering her a value
+             * that would then be dropped on the floor is exactly how a
+             * clinical answer disappears without anybody noticing. */
+            if (!planAllowed) writes = writes.filter(function (t) { return t[0] !== "order"; });
+            if (!writes.length) return;
+            rows.push({ key: label, label: label,
+              current: cur == null ? "" : cur, incoming: inc,
+              // Display only. The row still STORES what is in current/incoming.
+              showCurrent: d[4] || null, showIncoming: d[5] || null });
+            byKey[label] = { writes: writes, codeObj: (d[6] && d[6].codeObj) || null };
+          });
+          // The popup is now the thing that is happening, so the zone stops
+          // spinning and points at it. It stays on screen underneath.
+          dzSet('<span class="pf-dz-strong">Read ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
+                '<span class="pf-dz-line">Waiting for you to choose what to keep, in the box on screen.</span>', "busy");
+          var result = await window.ClinicMergeReview.open({ title: "Update patient from dropped file", patientName: P.full_name || "this patient", subtitle: "from " + niceKind.toLowerCase(), rows: rows, docName: niceKind + (ex.notes_drafted_date ? " — " + ex.notes_drafted_date : "") });
+          if (!result) return dropAbandoned();
           status("Saving…");
           dzBusy("Saving", idx, total, file.name, "Writing what you kept, then filing the file.");
-          var pPatch = {}, oPatch = {};
+          var pPatch = {}, oPatch = {}, codePicks = [];
           (result.changes || []).forEach(function (ch) {
-            var w = (byKey[ch.label] || {}).writes || [];
-            w.forEach(function (t) { var table = t[0], col = t[1]; var v = ch.value; if (/(_min|_weeks|_days)$/.test(col)) { var n = parseInt(v, 10); if (Number.isFinite(n)) v = n; } (table === "patients" ? pPatch : oPatch)[col] = v; });
+            var b = byKey[ch.label] || {};
+            // An item number is a row of its own but not a column of its own.
+            // The ticked ones are gathered here and added to the list below.
+            if (b.codeObj) { codePicks.push(b.codeObj); return; }
+            var w = b.writes || [];
+            w.forEach(function (t) {
+              var table = t[0], col = t[1], v = ch.value;
+              /* A number of weeks is stored as a number. A LIST of weeks is
+               * not, and this turned one into the other: the reviews at weeks
+               * 1, 2 and 6 went through parseInt and came out as the single
+               * number 1, so two of the three reviews disappeared between the
+               * box she ticked and the record. Only a single value is made a
+               * number. (15 Aug 2026, found by the drop tests.) */
+              if (/(_min|_weeks|_days)$/.test(col) && !Array.isArray(v) && !/[,|]/.test(String(v))) {
+                var n = parseInt(v, 10);
+                if (Number.isFinite(n)) v = n;
+              }
+              (table === "patients" ? pPatch : oPatch)[col] = v;
+            });
           });
+          /* The item numbers she ticked, and only those.
+           *
+           * Ticking two of three writes exactly those two. Whatever is already
+           * on this surgery stays: a number nobody unticked is not a number
+           * anybody asked to remove, and item numbers come off on the surgery
+           * screen, never by dropping a file. A number already there is not
+           * added a second time. */
+          if (codePicks.length) {
+            var codeList = Array.isArray(oa.procedure_codes) ? oa.procedure_codes.slice() : [];
+            var codeSeen = {}, codeAdded = 0;
+            codeList.forEach(function (x) { var k = codeKey(x); if (k) codeSeen[k] = true; });
+            codePicks.forEach(function (c) {
+              var k = codeKey(c);
+              if (!k || codeSeen[k]) return;
+              codeSeen[k] = true; codeList.push(c); codeAdded++;
+            });
+            if (codeAdded) oPatch.procedure_codes = codeList;
+          }
+          /* What she was OFFERED and did not take.
+           *
+           * A row only reaches the box when the file's answer differs from
+           * what is on file, so a row that is not in the changes is a row she
+           * looked at and said no to. Nothing below may quietly put it back.
+           * (15 Aug 2026: she decides, the program does not.) */
+          var declined = {};
+          rows.forEach(function (r) { declined[r.label] = true; });
+          (result.changes || []).forEach(function (ch) { delete declined[ch.label]; });
           /* What ACTUALLY landed, and what actually did not, each with the
            * reason the thing that failed gave.
            *
@@ -4108,24 +4624,42 @@
            * written to the plan even when the dialog called the row unchanged.
            * It only ever fills a blank, so nothing anybody decided is touched,
            * and it cannot put a value on the plan that the document did not
-           * state. */
+           * state.
+           *
+           * Still here, and still needed: the file can name the operation in a
+           * place the row does not read from (procedure_name off the clinical
+           * extract rather than the headline), and the venue TYPE is not a row
+           * at all. What is new is that it now keeps its hands off a row she
+           * was shown and said no to, and stands down entirely when she has
+           * said not to make a plan. (15 Aug 2026.) */
           var planBlank = function (col) {
             var v = (state.order || {})[col];
             return v == null || String(v).trim() === "" ||
                    (Array.isArray(v) && !v.length);
           };
-          [["procedure_name", ex.surgery_procedure || (ce && ce.procedure_name)],
-           ["surgery_venue",  ex.surgery_venue]].forEach(function (r) {
-            var val = r[1];
-            if (val == null || String(val).trim() === "") return;
-            if (!planBlank(r[0])) return;
-            if (oPatch[r[0]] == null || oPatch[r[0]] === "") oPatch[r[0]] = val;
-          });
-          // And the venue the plan reads for clinic-or-hospital, from whichever
-          // of the two just settled it.
-          var venueForType = oPatch.surgery_venue || ex.surgery_venue;
-          if (venueForType && planBlank("venue_type")) {
-            oPatch.venue_type = String(venueForType).toLowerCase() === "clinic" ? "clinic" : "hospital";
+          if (planAllowed) {
+            [["procedure_name", ex.surgery_procedure || (ce && ce.procedure_name), "Procedure"],
+             ["surgery_venue",  ex.surgery_venue, "Venue"]].forEach(function (r) {
+              var val = r[1];
+              if (val == null || String(val).trim() === "") return;
+              // She was shown this row and left it alone. Her answer stands.
+              if (declined[r[2]]) return;
+              if (!planBlank(r[0])) return;
+              if (oPatch[r[0]] == null || oPatch[r[0]] === "") oPatch[r[0]] = val;
+            });
+            /* And the venue the plan reads for clinic-or-hospital.
+             *
+             * Taken from the venue that is going ONTO the plan, or failing
+             * that from the venue the plan already holds. Not from the file:
+             * if she has just looked at the venue row and left it alone, the
+             * file's answer is not the plan's answer and must not decide this
+             * either. A plan that already names the hospital but has never had
+             * its clinic-or-hospital line filled in is still put right, since
+             * that is reading the plan's own answer, not overruling hers. */
+            var venueForType = oPatch.surgery_venue || (state.order && state.order.surgery_venue) || "";
+            if (venueForType && planBlank("venue_type")) {
+              oPatch.venue_type = String(venueForType).toLowerCase() === "clinic" ? "clinic" : "hospital";
+            }
           }
           var savedBits = [], failBits = [], planChanged = false, docFiled = false, recordChanged = false;
           if (Object.keys(pPatch).length) {
@@ -4262,8 +4796,13 @@
                              typeof state.order.order_ui === "object") ? state.order.order_ui : {};
               var uiNext = {};
               Object.keys(uiPrior).forEach(function (k) { uiNext[k] = uiPrior[k]; });
-              // Fill blanks only: never overwrite reviews somebody has set.
-              if (!(uiNext.postop_review_weeks || []).length) uiNext.postop_review_weeks = rvKeep;
+              /* What she ticked wins. This filled blanks only, and the row it
+               * fed compared against a column that does not exist, so the
+               * reviews already booked were invisible to her AND could not be
+               * corrected. The row now shows her the reviews the plan really
+               * holds, so a change here is a change she looked at and chose.
+               * (15 Aug 2026.) */
+              uiNext.postop_review_weeks = rvKeep;
               oPatch.order_ui = uiNext;
             }
             // Not a column, so it must never reach the update.
@@ -4274,21 +4813,29 @@
               ? oPatch.supplements.join("|") : String(oPatch.supplements);
           }
           if (Object.keys(recAdd).length) {
-            // Never overwrite an answer already on the plan: fill blanks only.
             var priorRec = (state.order && state.order.recovery_plan &&
                             typeof state.order.recovery_plan === "object")
               ? state.order.recovery_plan : {};
             var merged = {};
             Object.keys(priorRec).forEach(function (k) { merged[k] = priorRec[k]; });
-            Object.keys(recAdd).forEach(function (k) {
-              if (merged[k] == null || merged[k] === "") merged[k] = recAdd[k];
-            });
-            /* The showering answer is the exception, and only because she was
-             * shown the one already on the plan next to his phrase and chose
-             * his. Filling blanks only would have left "14 days" sitting there
-             * after she had just accepted "2+ weeks", which is the whole thing
-             * she asked about. Everything else still fills blanks only. */
-            if (typeof showerSaid === "string" && showerSaid) merged.shower = showerSaid;
+            /* WHAT SHE TICKED WINS, even where the plan already had an answer.
+             *
+             * This filled blanks only, so whichever file landed FIRST owned
+             * every answer the two files share and a later file carrying
+             * better detail could not correct it. The showering line had to be
+             * carved out as a one-off exception for exactly that reason.
+             *
+             * Everything in here came from a row she was shown, with the
+             * plan's own answer beside it, and ticked. Filling blanks only
+             * meant showing her a choice and then quietly keeping the other
+             * one. (Amy, 15 Aug 2026: the order the files are dropped in must
+             * not decide what the record ends up saying.)
+             *
+             * Nothing reaches here that she did not tick: recAdd is built only
+             * from the patch, and the only things added to the patch behind
+             * the box are the plan's own procedure name and venue, which are
+             * not recovery answers. */
+            Object.keys(recAdd).forEach(function (k) { merged[k] = recAdd[k]; });
             oPatch.recovery_plan = merged;
           }
           /* ONE UNKNOWN FIELD MUST NOT LOSE THE WHOLE PLAN.
@@ -4322,7 +4869,10 @@
               if (!Object.keys(patch).length) throw err;   // nothing left to write
             }
           }
-          if (Object.keys(oPatch).length) {
+          // planAllowed is the answer to "shall we start a surgery plan?".
+          // A no there has to reach all the way here, or the plan is made
+          // anyway and the question was for show.
+          if (planAllowed && Object.keys(oPatch).length) {
             try {
               if (state.orderId) {
                 var ur = await writeOrder(function (patch) {
@@ -4364,6 +4914,14 @@
                   (droppedCols.length === 1 ? "it" : "them") + " yet. Everything else on the plan saved. Tell Claude");
               }
             } catch (e) { failBits.push("the surgery plan (" + pfWhy(e) + ")"); }
+          }
+          /* She asked for a NEW surgery and it was never made, because the
+           * write failed or because there was nothing to put on it. Put her
+           * back on the surgery she was looking at: a screen showing no
+           * surgery at all, after she just picked one, reads as "the plan I
+           * was on has gone". */
+          if (newPlanWanted && !planChanged) {
+            state.order = priorOrder; state.orderId = priorOrderId;
           }
           var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
           var safe = file.name.replace(/[^\w.\- ]/g, "_");
@@ -4415,13 +4973,20 @@
           }
           if (docFiled) refreshDocs();
           var who = P.full_name || "patient";
+          /* She was asked whether to start a surgery plan and said no. Saying
+           * so back to her, every time, is the whole point of asking: "no"
+           * must never look the same as a file that quietly went nowhere. */
+          var noPlanLine = planAllowed ? "" :
+            '<span class="pf-dz-line">No surgery plan was made, because you said not to. ' +
+            'The file is filed under Documents and can be dropped again if you change your mind.</span>';
           if (!failBits.length) {
             status("Saved ✓");
             toast("File read + saved to " + who);
             dzSet('<span class="pf-dz-strong pf-dz-good">&#10003; Saved ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
                   '<span class="pf-dz-line">Saved ' + esc(pfList(savedBits) || "nothing to change") + "." +
-                  (planChanged ? " The Surgery plan below is already showing it, no refresh needed." : "") + "</span>", "done");
-            dzHold(9000);
+                  (planChanged ? " The Surgery plan below is already showing it, no refresh needed." : "") + "</span>" +
+                  noPlanLine, "done");
+            dzHold(planAllowed ? 9000 : 14000);
           } else if (savedBits.length) {
             // Half-saved is its own answer. Saying "couldn't save" here is what
             // made her retype values that were already in the record.
@@ -4429,7 +4994,8 @@
             toast("Part saved. See the drop box.");
             dzSet('<span class="pf-dz-strong">Part saved: ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
                   '<span class="pf-dz-line pf-dz-good">Saved: ' + esc(pfList(savedBits)) + ".</span>" +
-                  '<span class="pf-dz-line pf-dz-bad">NOT saved: ' + esc(pfList(failBits)) + ".</span>", "fail");
+                  '<span class="pf-dz-line pf-dz-bad">NOT saved: ' + esc(pfList(failBits)) + ".</span>" +
+                  noPlanLine, "fail");
             dzHold(30000);
           } else {
             status("Nothing saved. See the drop box.");

@@ -3093,25 +3093,73 @@
                    " still in the list because this file still does not match PracSuite. " +
                    "Nothing has been hidden. Try again, or type it in by hand.</div>";
           }
+          /* A ROW SHE DID NOT TICK IS A DECISION, NOT AN OUTSTANDING JOB.
+           *
+           * Amy, 14 Aug 2026: "i dont need the ones i didnt tick just close
+           * it? or i would have ticked them?" She is right, and it is what any
+           * ordinary program does: the question was asked, she answered it by
+           * leaving those rows alone, so the panel closes.
+           *
+           * Two things it must still do. It says WHICH ones were left, because
+           * a difference that quietly disappears is rule 1. And the table is
+           * hidden rather than destroyed, with a link to show it again, so
+           * changing her mind costs a click and asks PracSuite nothing.
+           *
+           * A row that FAILED to save is not a decision and does not close.
+           * It stays on screen until it is dealt with.
+           */
+          var declined = [];
+          if (!stuck.length) {
+            Array.prototype.forEach.call(table.querySelectorAll("tr"), function (tr) {
+              var cb = tr.querySelector("input[type=checkbox][data-i]");
+              if (!cb) return;
+              var lab = tr.querySelector(".lab");
+              declined.push((lab && lab.textContent) ? lab.textContent.trim() : "one detail");
+            });
+          }
+          var apply = out.querySelector("#pslApply");
           if (!left) {
             if (table.parentNode) table.parentNode.removeChild(table);
             say += '<p class="psl-note">Nothing is left to bring over. Everything PracSuite ' +
                    "holds for this patient is on this file.</p>";
             // Nothing to apply, so the button stays out of the way.
-            var noneBtn = out.querySelector("#pslApply");
-            if (noneBtn) noneBtn.disabled = true;
+            if (apply) apply.disabled = true;
+          } else if (!stuck.length) {
+            // Everything either landed or she chose to keep ours. Close it.
+            table.style.display = "none";
+            table.setAttribute("data-psl-hidden", "1");
+            if (apply) apply.style.display = "none";
+            say += '<p class="psl-note">' +
+              (declined.length
+                ? esc(pfList(declined)) + (declined.length === 1 ? " was" : " were") +
+                  " left as " + (declined.length === 1 ? "it is" : "they are") + " on this file. "
+                : "") +
+              '<a href="#" id="pslShowAgain" style="color:var(--navy)">Show the differences again</a>' +
+              " if you want another look.</p>";
           } else {
-            /* Rows are still listed, so the button has to work again. It was
-             * disabled by the press that got us here and only ever came back
-             * on an error, which left her unable to bring the rest across
-             * without leaving the tab and coming back. Pressing it writes to
-             * this program only; it asks PracSuite nothing. */
-            var apply = out.querySelector("#pslApply");
+            /* Something did not save, so the rows have to stay and the button
+             * has to work again. It was disabled by the press that got us here
+             * and only ever came back on an error, which left her unable to
+             * bring the rest across without leaving the tab and coming back.
+             * Pressing it writes to this program only; it asks PracSuite
+             * nothing. */
             if (apply) apply.disabled = false;
           }
           if (!say) return;
           if (done) done.innerHTML += say;
           else out.insertAdjacentHTML("beforeend", say);
+          // Changing her mind is a click, and it asks PracSuite nothing: the
+          // table was hidden, not thrown away.
+          var again2 = out.querySelector("#pslShowAgain");
+          if (again2) again2.addEventListener("click", function (e) {
+            e.preventDefault();
+            var t = out.querySelector('table[data-psl-hidden]');
+            if (t) { t.style.display = ""; t.removeAttribute("data-psl-hidden"); }
+            var ap = out.querySelector("#pslApply");
+            if (ap) { ap.style.display = ""; ap.disabled = false; }
+            var self = out.querySelector("#pslShowAgain");
+            if (self && self.parentNode) self.parentNode.removeChild(self);
+          });
         }
 
         /* The panel, mounted when she opens the PracSuite tab and not before.
@@ -3867,8 +3915,20 @@
              * The reader now sends his phrase as shower_wet_text and only
              * fills the day count when he actually wrote days, so the row
              * below is offered only in that case and the two never compete. */
+            /* ONE ROW FOR ONE FACT.
+             *
+             * These two both answer "when can the wound get wet", and both
+             * were offered at once: "2+ weeks" and "14 days", the second one
+             * a conversion of the first that Steve never wrote. (Amy, 14 Aug
+             * 2026: "why is this still here.")
+             *
+             * His words win. The day count is only offered when there is no
+             * phrase to offer, which is the case where he really did write a
+             * number of days. */
             ["Showering / getting wet", (oa.recovery_plan && oa.recovery_plan.shower) || "", ce.shower_wet_text, [["order", "shower_wet_text"]]],
-            ["Showering at (days)", oa.shower_wet_at_days, intOf(ce.shower_wet_at_days), [["order", "shower_wet_at_days"]], sayDays(oa.shower_wet_at_days), sayDays(ce.shower_wet_at_days)],
+            ["Showering at (days)", oa.shower_wet_at_days,
+              (ce.shower_wet_text ? null : intOf(ce.shower_wet_at_days)),
+              [["order", "shower_wet_at_days"]], sayDays(oa.shower_wet_at_days), sayDays(ce.shower_wet_at_days)],
             ["Travel notes", oa.travel_notes, ce.travel_notes, [["order", "travel_notes"]]],
             ["Reviews after surgery", oa.postop_review_weeks, ce.postop_review_weeks, [["order", "postop_review_weeks"]], sayList(oa.postop_review_weeks), sayList(ce.postop_review_weeks)],
             /* The non-service lines off a draft quote: the sandal, the brace,

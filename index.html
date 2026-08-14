@@ -1985,10 +1985,23 @@
              * counter bumped by the handlers that change the surgeries makes
              * the frame reload exactly then, and never on an ordinary redraw.
              */
-            var want = String(id) + "#" + planGen;
+            /* Tell it WHICH surgery, not just which patient.
+             *
+             * The frame was opened with the patient alone, and the plan screen
+             * then loaded that patient's NEWEST plan. So a patient with more
+             * than one plan showed the wrong one, and everything accepted off
+             * a dropped note looked like it had gone nowhere. The selected
+             * surgery is part of the key as well, so picking a different one
+             * reloads the frame. (Amy, 14 Aug 2026: "for jessica is picked up
+             * the surgery name and everything but its not in the plan
+             * still!!!")
+             */
+            var oid = state.orderId || "";
+            var want = String(id) + "#" + planGen + "#" + oid;
             if (planFrame.getAttribute("data-patient") !== want) {
               planFrame.setAttribute("data-patient", want);
               planFrame.src = APPS.plan + "?patient=" + encodeURIComponent(id) +
+                              (oid ? "&order=" + encodeURIComponent(oid) : "") +
                               "&v=" + Math.floor(Date.now() / 60000);
             }
           }
@@ -4052,6 +4065,18 @@
             var elevSaid = String(oPatch.elevation).trim();
             if (elevSaid) recAdd.elevation = elevSaid;
             delete oPatch.elevation;
+          }
+          /* "MOBILITY AIDS: Not Required" is a real answer, so it lands on the
+           * plan's own "No mobility aids needed" tick. Without this the plan
+           * showed three empty aid rows, which cannot be told apart from a
+           * plan nobody has filled in yet. (Amy, 14 Aug 2026.)
+           *
+           * ONLY when he has genuinely said none. A blank stays a blank, and
+           * an aid that IS named never raises it. */
+          if (/^(none|not\s*required|nil|no)$/i.test(String(oPatch.mobility_aid || "").trim()) &&
+              !oPatch.crutches_weeks && !oPatch.knee_scooter_weeks && !oPatch.wheelchair_weeks &&
+              oPatch.crutches_required !== true) {
+            recAdd.aids_none = "No mobility aids needed";
           }
           /* WHICH hospital is not the same fact as WHETHER it is a hospital.
            *

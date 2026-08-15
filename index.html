@@ -1771,9 +1771,14 @@
           // quote_uploaded is the Smart Inbox's name for a quote document
           // dropped in rather than built here. It is still the quote reaching
           // their record, which is the only thing this tag claims.
+          // "quote" is what a PDF dropped straight onto this page is filed as,
+          // and "quote_uploaded" is the Smart Inbox's name for the same thing.
+          // Both ARE the quote reaching their record, which is all this tag
+          // claims, and leaving them out meant a quote sent by hand raised
+          // nothing at all and said nothing about it either.
           if (done.some(function (x) {
                 var t = String(x.doc_type || "");
-                return t === "quote_main" || t === "quote_uploaded";
+                return t === "quote_main" || t === "quote_uploaded" || t === "quote";
               })) {
             await raiseTag("quote.uploaded");
           }
@@ -1786,14 +1791,16 @@
           // as our outstanding request tells the team to prepare a request
           // for a hospital that has already answered. PracSuite cannot remove
           // a tag, so it has to be right the first time.
-          // quote_vsc_selffund is the VSC self-funded estimate from the fee
-          // estimate screen: the same kind of document, and it was left with
-          // no tag at all when this was narrowed. (15 Aug 2026.)
+          // NOT quote_vsc_selffund. That screen produces the estimate a
+          // self-funded patient is given directly, so there is no request
+          // waiting to go to a hospital and this tag, whose companion is
+          // "Fee Est Sent - Hosp", would put a job on the record that does
+          // not exist. It carries no tag, which is what it did before, rather
+          // than a wrong one that PracSuite cannot take off. (15 Aug 2026.)
           if (done.some(function (x) {
                 var t = String(x.doc_type || "");
                 var ours = String(x.bucket || "") === "patient-quotes";
-                return ours && (t === "quote_vsc" || t === "quote_sjm" ||
-                                t === "quote_masada" || t === "quote_vsc_selffund");
+                return ours && (t === "quote_vsc" || t === "quote_sjm" || t === "quote_masada");
               })) {
             await raiseTag("feeest.req_uploaded");
           }
@@ -4505,6 +4512,28 @@
                 [/ice\s*(pack|therapy)/i,                      "Ice packs (two or three, for rotation)"],
                 [/bed\s*wedge|elevation\s*pillow/i,            "Elevation pillow or bed wedge"]
               ];
+              /* THE SAME THING, NAMED TWO WAYS, IS ONE THING.
+               *
+               * One note said both "Post-op sandal (Darco)" and "DARCO
+               * sandal", so the same sandal was offered twice. These are the
+               * clinic's actual goods, so they are recognised by name and
+               * reduced to one wording. Anything not on this list is left
+               * exactly as Dr Edwards wrote it. (Amy, 15 Aug 2026.)
+               */
+              var GOODS = [
+                [/\bcam\s*walker\b/i,                          "CAM walker"],
+                [/\bvacuum\s*walker\b/i,                       "Vacuum walker"],
+                [/\b(nwb|non[\s-]?weight[\s-]?bearing)\s*cast\b/i, "Non-weight bearing cast"],
+                [/\bsandal\b/i,                                "Post-operative sandal (Darco)"],
+                [/\btoe\s*(alignment\s*)?splint\b/i,          "Toe alignment splint"],
+                [/\bankle\s*brace\b/i,                         "Ankle brace"],
+                [/\bdressing\b/i,                              "Post-operative dressing"],
+                [/\bcompression\s*(sock|stocking)\b/i,         "Compression sock"]
+              ];
+              var goodsName = function (t) {
+                var hit = GOODS.filter(function (r) { return r[0].test(String(t || "")); })[0];
+                return hit ? hit[1] : null;
+              };
               var homeName = function (t) {
                 var hit = HOME_KIT.filter(function (r) { return r[0].test(String(t || "")); })[0];
                 return hit ? hit[1] : null;
@@ -4518,11 +4547,14 @@
               inc.forEach(function (x) {
                 var name = quotedText(x);
                 var home = homeName(name);
+                var goods = home ? null : goodsName(name);
+                if (goods) name = goods;
                 /* Deduplicate on what it RESOLVES to, not on how it was
                  * written. "Shower cover (below-knee)" and "shower cover" are
-                 * one thing, and offering both would have her tick the same
-                 * item twice. */
-                var k = home ? quotedKey(home) : quotedKey(x);
+                 * one thing, and so are "Post-op sandal (Darco)" and "DARCO
+                 * sandal". Offering both would have her tick the same item
+                 * twice. */
+                var k = home ? quotedKey(home) : quotedKey(name);
                 if (!k || seen[k]) return;
                 seen[k] = true;
                 if (home) {
@@ -4535,12 +4567,12 @@
                             { homeItem: home }]);
                   return;
                 }
-                out.push(["Items to add to the quote: " + name,
+                out.push(["Dr Edwards asked for: " + name,
                           have[k] ? name : "", name,
                           [["order", "quote_items"]],
-                          have[k] ? "Already on this surgery plan" : "",
-                          name,
-                          { quoteItem: x }]);
+                          have[k] ? "Already noted on this surgery plan" : "",
+                          name + "  (check it is on the quote)",
+                          { quoteItem: name }]);
               });
               return out;
             };

@@ -5216,42 +5216,76 @@
           } catch (e) { failBits.push("uploading the file (" + pfWhy(e) + "), so it is not filed"); }
           if (uploaded) {
             try {
-              /* DROPPING THE SAME FILE AGAIN USED TO STACK IT, INVISIBLY.
+              /* THE SAME NAME AGAIN: ASK, DO NOT DECIDE.
                *
                * Every clinical note is named from the date Dr Edwards drafted
-               * it, so every re-drop of one file got the SAME name. The
-               * Documents list shows only the newest of each name, so ten
-               * drops left ten copies in storage and showed one. It looked
-               * like replacing and it was not. (Amy, 15 Aug 2026: "everytime
-               * i drop the clinical notes it replaces the other ones".)
+               * it, so every re-drop of one file gets the SAME name, and the
+               * Documents list shows only the newest of each name. Ten drops
+               * left ten copies in storage and showed one. It looked like
+               * replacing and it was not.
                *
-               * The older copy of that exact name is archived now, so the list
-               * shows what is really there. Archived, not deleted: it can be
-               * brought back, and nothing clinical disappears. Only an EXACT
-               * name match is touched, so a note from a different date, which
-               * carries that date in its name, is left alone.
+               * Amy, 15 Aug 2026: "or have like a - this file name already
+               * exists, replace or keep as copy?" So it asks. Replacing
+               * archives the older ones, which can be undone; keeping numbers
+               * the new one and stamps the time it went on, so every copy is
+               * its own row.
+               *
+               * Dismissing it KEEPS BOTH. This box appears after she has
+               * already accepted the values, so the safe answer is the one
+               * that files the document and destroys nothing.
                */
-              var newLabel = (result.docName || file.name.replace(/\.[^.]+$/, ""));
-              var supersededCount = 0;
+              var baseLabel = (result.docName || file.name.replace(/\.[^.]+$/, ""));
+              var newLabel = baseLabel, replaced = 0;
               try {
-                var older = (state.docs || []).filter(function (d) {
-                  return d && !d.archived_at &&
-                         String(d.label || "").trim().toLowerCase() === String(newLabel).trim().toLowerCase();
+                var stem = String(baseLabel).replace(/\s*\(\d+\)\s*(?:\u00b7.*)?$/, "").trim();
+                var stemKey = stem.toLowerCase();
+                var sameName = (state.docs || []).filter(function (d) {
+                  if (!d || d.archived_at) return false;
+                  var l = String(d.label || "").replace(/\s*\(\d+\)\s*(?:\u00b7.*)?$/, "").trim().toLowerCase();
+                  return l === stemKey;
                 });
-                for (var oi = 0; oi < older.length; oi++) {
-                  var ar = await client.from("patient_documents")
-                    .update({ archived_at: new Date().toISOString() }).eq("id", older[oi].id);
-                  if (!(ar && ar.error)) supersededCount++;
+                if (sameName.length) {
+                  dzSet('<span class="pf-dz-strong">Read ' + esc(dzWhich(idx, total)) + esc(file.name) + "</span>" +
+                        '<span class="pf-dz-line">Waiting for your answer about the file name.</span>', "busy");
+                  var pick = await pfAskBox({
+                    title: "This name is already on their file",
+                    sub: stem,
+                    intro: sameName.length === 1
+                      ? "There is already one document with this name."
+                      : "There are already " + sameName.length + " documents with this name.",
+                    choices: [
+                      { id: "copy", primary: true, head: "Keep both",
+                        line: "The new one is filed as \u201c" + stem + " (" + (sameName.length + 1) +
+                              ")\u201d with the time it went on, and the older ones stay exactly as they are." },
+                      { id: "replace", head: "Replace",
+                        line: "The older " + (sameName.length === 1 ? "one is" : sameName.length + " are") +
+                              " moved out of the list. Nothing is deleted, so this can be undone." }
+                    ],
+                    cancelLabel: "Cancel" });
+                  if (pick === "replace") {
+                    for (var oi = 0; oi < sameName.length; oi++) {
+                      var ar = await client.from("patient_documents")
+                        .update({ archived_at: new Date().toISOString() }).eq("id", sameName[oi].id);
+                      if (!(ar && ar.error)) replaced++;
+                    }
+                  } else {
+                    // "Keep both", and also what dismissing gives, because the
+                    // answer that destroys nothing is the safe default.
+                    var when = new Date().toLocaleString("en-AU", {
+                      day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+                    newLabel = stem + " (" + (sameName.length + 1) + ") \u00b7 " + when;
+                  }
                 }
-              } catch (e) { /* tidying is never allowed to stop the filing */ }
-              var di = await client.from("patient_documents").insert({ patient_id: pid, doc_type: (ex.document_kind || "other"), bucket: "shared-docs", path: path, label: newLabel, generated_at: new Date().toISOString() });
+              } catch (e) { /* naming is never allowed to stop the filing */ }              var di = await client.from("patient_documents").insert({ patient_id: pid, doc_type: (ex.document_kind || "other"), bucket: "shared-docs", path: path, label: newLabel, generated_at: new Date().toISOString() });
               if (di && di.error) throw di.error;
-              if (supersededCount) {
-                savedBits.push("the file, replacing " + supersededCount + " earlier cop" +
-                               (supersededCount === 1 ? "y" : "ies") + " of the same name");
+              if (replaced) {
+                savedBits.push("the file, replacing " + replaced + " older cop" +
+                               (replaced === 1 ? "y" : "ies") + " of the same name");
+              } else if (newLabel !== baseLabel) {
+                savedBits.push("the file, kept alongside the earlier one as \u201c" + newLabel + "\u201d");
               }
               docFiled = true;
-              if (!supersededCount) savedBits.push("the file");
+              if (!replaced && newLabel === baseLabel) savedBits.push("the file");
             } catch (e) { failBits.push("listing the file in Documents (" + pfWhy(e) + "), though the file itself DID upload"); }
           }
           /* Everything on screen catches up now, without a reload.

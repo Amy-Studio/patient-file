@@ -1578,20 +1578,37 @@
          * Estimate Request" on screen, which is not what that document is.
          * A name a person gave a document is never overwritten by one of ours.
          */
+        /* Every key here must match a label some app ACTUALLY writes, checked
+         * against the Quote Builder's own list (quote-v18.html qbGetPdfCatalogue)
+         * on 15 Aug 2026. Four keys below had drifted out of date and three
+         * documents had none at all, so seven of the eleven the Quote Builder
+         * files fell through and would have reached a patient's permanent
+         * PracSuite record under our internal staff shorthand, names like
+         * "Staff - if needed - Informed Financial Consent". The old keys are
+         * kept alongside the current ones: documents filed under the previous
+         * wording are still sitting in patient files today, and they should
+         * read properly too. */
         var PS_DOC_NAME = {
           "main quote":                                        "Surgical Fee Quote",
           "untitled draft":                                    "Surgical Fee Quote",
-          "staff - if needed - invoice notes":                 "Invoice Notes (practice use)",
-          "staff - if needed - invoice notes (word - for copying)": "Invoice Notes (practice use, Word)",
+          "admin - invoice notes":                             "Invoice Notes (practice use)",
+          "admin - invoice notes (word)":                      "Invoice Notes (practice use, Word)",
           "sjm fee estimate request":                          "Sir John Monash Fee Estimate Request",
-          "staff - if needed - masada fee estimate request":   "Masada Fee Estimate Request",
-          "staff - if needed - vsc fee estimate request":      "VSC Fee Estimate Request",
+          "masada fee estimate request":                       "Masada Fee Estimate Request",
+          "vsc fee estimate request":                          "VSC Fee Estimate Request",
+          "staff - if needed - informed financial consent":    "Informed Financial Consent",
+          "staff - if needed - cover letter":                  "Cover Letter",
           "paper version - surgery payment authority":         "Surgery Payment Authority",
           "paper version - procedure payment authority":       "Procedure Payment Authority",
           "paper version - pre-surgery screening form":        "Pre-Surgery Screening Form",
           "full pamphlet":                                     "Surgical Recovery Guide",
           "personalised summary":                              "Personalised Recovery Summary",
-          "reception cheat sheet":                             "Reception Summary (practice use)"
+          "reception cheat sheet":                             "Reception Summary (practice use)",
+          // Superseded labels, kept so older filed documents still read right.
+          "staff - if needed - invoice notes":                 "Invoice Notes (practice use)",
+          "staff - if needed - invoice notes (word - for copying)": "Invoice Notes (practice use, Word)",
+          "staff - if needed - masada fee estimate request":   "Masada Fee Estimate Request",
+          "staff - if needed - vsc fee estimate request":      "VSC Fee Estimate Request"
         };
         // Two options for one patient file side by side as "… (Clinic)" and
         // "… (Hospital)". The option rides the label as a trailing em dash
@@ -1728,21 +1745,57 @@
           // the screening form, so sending a cover letter on its own told
           // PracSuite a quote had been uploaded when none had. (Amy, 15 Aug
           // 2026: the tag is only for the Surgical Fee Quote.)
-          if (done.some(function (x) { return String(x.doc_type || "") === "quote_main"; }) &&
-              window.ClinicPracSuiteTags) {
-            try { await window.ClinicPracSuiteTags.tag(cid, "quote.uploaded"); } catch (e) {}
+          // A tag says what is true of the record, so a tag that fails has to
+          // be said out loud. tag() NEVER throws: it returns { ok:false,
+          // reason } when the patient has no PracSuite id, when the backend is
+          // unreachable, or when nobody in PracSuite has a tag by that name
+          // any more. The old try/catch could therefore never fire, and a
+          // renamed tag finished as a silent "3 sent." while the workflow Amy
+          // runs her day off never moved. (15 Aug 2026.)
+          var tagNotes = [];
+          async function raiseTag(action) {
+            if (!window.ClinicPracSuiteTags) return;
+            var res;
+            try { res = await window.ClinicPracSuiteTags.tag(cid, action); }
+            catch (e) { res = { ok: false, reason: (e && e.message) || "unknown" }; }
+            if (res && !res.ok) {
+              tagNotes.push(esc(res.label || action) + " (" + esc(res.reason || "refused") + ")");
+            }
           }
-          // Same idea for the hospital fee estimate requests: "Fee Est Request
-          // Uploaded" says it is ON their record, still to be sent on to the
-          // hospital, which is exactly what has just happened. It is a tag Amy
-          // already made for this (13 Aug 2026) and asked to have raised here
-          // (15 Aug 2026), so nothing new is invented. The separate "Fee Est
-          // Sent - Hosp" is a different fact and stays a person's to set.
+          // Only the Surgical Fee Quote itself earns it. The old test was any
+          // doc_type starting with "quote", which is also true of the cover
+          // letter, the informed financial consent, the payment authority and
+          // the screening form, so sending a cover letter on its own told
+          // PracSuite a quote had been uploaded when none had. (Amy, 15 Aug
+          // 2026: the tag is only for the Surgical Fee Quote.)
+          // quote_uploaded is the Smart Inbox's name for a quote document
+          // dropped in rather than built here. It is still the quote reaching
+          // their record, which is the only thing this tag claims.
           if (done.some(function (x) {
                 var t = String(x.doc_type || "");
-                return t === "quote_vsc" || t === "quote_sjm" || t === "quote_masada";
-              }) && window.ClinicPracSuiteTags) {
-            try { await window.ClinicPracSuiteTags.tag(cid, "feeest.req_uploaded"); } catch (e) {}
+                return t === "quote_main" || t === "quote_uploaded";
+              })) {
+            await raiseTag("quote.uploaded");
+          }
+          // "Fee Est Request Uploaded" says OUR request is on their record,
+          // still to be sent on to the hospital. So it must only count
+          // requests we produced: documents in the patient-quotes bucket,
+          // which is where the Quote Builder and the fee estimate screen
+          // write. The hospital's emailed REPLY comes in through Smart Inbox
+          // into shared-docs and carries the same doc_type, and tagging that
+          // as our outstanding request tells the team to prepare a request
+          // for a hospital that has already answered. PracSuite cannot remove
+          // a tag, so it has to be right the first time.
+          // quote_vsc_selffund is the VSC self-funded estimate from the fee
+          // estimate screen: the same kind of document, and it was left with
+          // no tag at all when this was narrowed. (15 Aug 2026.)
+          if (done.some(function (x) {
+                var t = String(x.doc_type || "");
+                var ours = String(x.bucket || "") === "patient-quotes";
+                return ours && (t === "quote_vsc" || t === "quote_sjm" ||
+                                t === "quote_masada" || t === "quote_vsc_selffund");
+              })) {
+            await raiseTag("feeest.req_uploaded");
           }
           var parts = [];
           if (done.length) parts.push('<b style="color:#2d7a55">' + done.length + ' sent.</b>');
@@ -1751,6 +1804,13 @@
               failed.map(function (f) {
                 return esc(f.d.label || f.d.doc_type) + " (" + esc(f.why) + ")";
               }).join("; "));
+          }
+          // The documents went but the tag did not: say which, because the
+          // fix (add or rename the tag in PracSuite) is hers to make and she
+          // cannot make it if nothing says a tag is missing.
+          if (tagNotes.length) {
+            parts.push('<b style="color:#a3402d">Tag not set:</b> ' + tagNotes.join("; ") +
+              '. The documents are on their record, only the tag is missing.');
           }
           say(parts.join(" "));
           btn.disabled = false;
@@ -5156,10 +5216,42 @@
           } catch (e) { failBits.push("uploading the file (" + pfWhy(e) + "), so it is not filed"); }
           if (uploaded) {
             try {
-              var di = await client.from("patient_documents").insert({ patient_id: pid, doc_type: (ex.document_kind || "other"), bucket: "shared-docs", path: path, label: (result.docName || file.name.replace(/\.[^.]+$/, "")), generated_at: new Date().toISOString() });
+              /* DROPPING THE SAME FILE AGAIN USED TO STACK IT, INVISIBLY.
+               *
+               * Every clinical note is named from the date Dr Edwards drafted
+               * it, so every re-drop of one file got the SAME name. The
+               * Documents list shows only the newest of each name, so ten
+               * drops left ten copies in storage and showed one. It looked
+               * like replacing and it was not. (Amy, 15 Aug 2026: "everytime
+               * i drop the clinical notes it replaces the other ones".)
+               *
+               * The older copy of that exact name is archived now, so the list
+               * shows what is really there. Archived, not deleted: it can be
+               * brought back, and nothing clinical disappears. Only an EXACT
+               * name match is touched, so a note from a different date, which
+               * carries that date in its name, is left alone.
+               */
+              var newLabel = (result.docName || file.name.replace(/\.[^.]+$/, ""));
+              var supersededCount = 0;
+              try {
+                var older = (state.docs || []).filter(function (d) {
+                  return d && !d.archived_at &&
+                         String(d.label || "").trim().toLowerCase() === String(newLabel).trim().toLowerCase();
+                });
+                for (var oi = 0; oi < older.length; oi++) {
+                  var ar = await client.from("patient_documents")
+                    .update({ archived_at: new Date().toISOString() }).eq("id", older[oi].id);
+                  if (!(ar && ar.error)) supersededCount++;
+                }
+              } catch (e) { /* tidying is never allowed to stop the filing */ }
+              var di = await client.from("patient_documents").insert({ patient_id: pid, doc_type: (ex.document_kind || "other"), bucket: "shared-docs", path: path, label: newLabel, generated_at: new Date().toISOString() });
               if (di && di.error) throw di.error;
+              if (supersededCount) {
+                savedBits.push("the file, replacing " + supersededCount + " earlier cop" +
+                               (supersededCount === 1 ? "y" : "ies") + " of the same name");
+              }
               docFiled = true;
-              savedBits.push("the file");
+              if (!supersededCount) savedBits.push("the file");
             } catch (e) { failBits.push("listing the file in Documents (" + pfWhy(e) + "), though the file itself DID upload"); }
           }
           /* Everything on screen catches up now, without a reload.

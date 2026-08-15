@@ -4487,31 +4487,6 @@
               var inc = Array.isArray(ce.quote_items) ? ce.quote_items
                       : (ce.quote_items ? [ce.quote_items] : []);
               if (!inc.length) return [];
-              var have = {};
-              (Array.isArray(oa.quote_items) ? oa.quote_items : []).forEach(function (x) {
-                var k = quotedKey(x); if (k) have[k] = true;
-              });
-              /* SOME OF THESE ARE NOT QUOTE ITEMS AT ALL.
-               *
-               * Dr Edwards lists the shower cover under his "we provide to the
-               * quote" heading, but the clinic does not sell one. It belongs
-               * in the plan's "Things to get ready at home" list, which says
-               * in as many words that nothing there goes on the quote, and
-               * which is what ticks the booklet's own page telling her to buy
-               * one. The booklet reads it from home_equipment
-               * (patient-info-builder/index.html:3457), never from the quote.
-               *
-               * So an item that is one of those five is offered as a home item
-               * and written there. Amy, 15 Aug 2026: "i want it on the notes
-               * oib - the shower coever so make it clear what i do here and
-               * whether this is a fault to correct?" It was a fault. */
-              var HOME_KIT = [
-                [/shower\s*cover|waterproof/i,                 "Waterproof shower cover"],
-                [/shower\s*(seat|stool|chair)/i,               "Shower seat or stool"],
-                [/toilet\s*(aid|seat|frame|raiser)|over[\s-]?toilet/i, "Over-toilet aid or raised toilet seat"],
-                [/ice\s*(pack|therapy)/i,                      "Ice packs (two or three, for rotation)"],
-                [/bed\s*wedge|elevation\s*pillow/i,            "Elevation pillow or bed wedge"]
-              ];
               /* THE SAME THING, NAMED TWO WAYS, IS ONE THING.
                *
                * One note said both "Post-op sandal (Darco)" and "DARCO
@@ -4534,6 +4509,34 @@
                 var hit = GOODS.filter(function (r) { return r[0].test(String(t || "")); })[0];
                 return hit ? hit[1] : null;
               };
+              var have = {};
+              (Array.isArray(oa.quote_items) ? oa.quote_items : []).forEach(function (x) {
+                // Compared the SAME way as the incoming ones, or a sandal
+                // already on the plan under another wording is offered again
+                // and stored twice.
+                var k = quotedKey(goodsName(x) || x); if (k) have[k] = true;
+              });
+              /* SOME OF THESE ARE NOT QUOTE ITEMS AT ALL.
+               *
+               * Dr Edwards lists the shower cover under his "we provide to the
+               * quote" heading, but the clinic does not sell one. It belongs
+               * in the plan's "Things to get ready at home" list, which says
+               * in as many words that nothing there goes on the quote, and
+               * which is what ticks the booklet's own page telling her to buy
+               * one. The booklet reads it from home_equipment
+               * (patient-info-builder/index.html:3457), never from the quote.
+               *
+               * So an item that is one of those five is offered as a home item
+               * and written there. Amy, 15 Aug 2026: "i want it on the notes
+               * oib - the shower coever so make it clear what i do here and
+               * whether this is a fault to correct?" It was a fault. */
+              var HOME_KIT = [
+                [/shower\s*cover|waterproof/i,                 "Waterproof shower cover"],
+                [/shower\s*(seat|stool|chair)/i,               "Shower seat or stool"],
+                [/toilet\s*(aid|seat|frame|raiser)|over[\s-]?toilet/i, "Over-toilet aid or raised toilet seat"],
+                [/ice\s*(pack|therapy)/i,                      "Ice packs (two or three, for rotation)"],
+                [/bed\s*wedge|elevation\s*pillow/i,            "Elevation pillow or bed wedge"]
+              ];
               var homeName = function (t) {
                 var hit = HOME_KIT.filter(function (r) { return r[0].test(String(t || "")); })[0];
                 return hit ? hit[1] : null;
@@ -4547,14 +4550,19 @@
               inc.forEach(function (x) {
                 var name = quotedText(x);
                 var home = homeName(name);
+                /* His wording is kept. The canonical name is used ONLY to
+                 * decide whether two lines are the same thing, so "DARCO
+                 * sandal" and "Post-op sandal (Darco)" are one row without
+                 * either of them being rewritten. A HOME item is the
+                 * exception: it has to match the plan's own list word for
+                 * word or the booklet page will not tick. */
                 var goods = home ? null : goodsName(name);
-                if (goods) name = goods;
                 /* Deduplicate on what it RESOLVES to, not on how it was
                  * written. "Shower cover (below-knee)" and "shower cover" are
                  * one thing, and so are "Post-op sandal (Darco)" and "DARCO
                  * sandal". Offering both would have her tick the same item
                  * twice. */
-                var k = home ? quotedKey(home) : quotedKey(name);
+                var k = home ? quotedKey(home) : quotedKey(goods || name);
                 if (!k || seen[k]) return;
                 seen[k] = true;
                 if (home) {
@@ -4867,10 +4875,25 @@
            * as F414s, and adding it from here as well would quote it twice. */
           if (quotePicks.length) {
             var qList = Array.isArray(oa.quote_items) ? oa.quote_items.slice() : [];
+            /* Matched the same way the rows were offered. Two wordings of one
+             * sandal must not become two entries on the plan just because
+             * Dr Edwards wrote it differently in two places. */
+            var qGoods = function (t) {
+              var L = [[/\bcam\s*walker\b/i, "CAM walker"], [/\bvacuum\s*walker\b/i, "Vacuum walker"],
+                       [/\b(nwb|non[\s-]?weight[\s-]?bearing)\s*cast\b/i, "Non-weight bearing cast"],
+                       [/\bsandal\b/i, "Post-operative sandal (Darco)"],
+                       [/\btoe\s*(alignment\s*)?splint\b/i, "Toe alignment splint"],
+                       [/\bankle\s*brace\b/i, "Ankle brace"],
+                       [/\bdressing\b/i, "Post-operative dressing"],
+                       [/\bcompression\s*(sock|stocking)\b/i, "Compression sock"]];
+              var hit = L.filter(function (r) { return r[0].test(String(t || "")); })[0];
+              return hit ? hit[1] : null;
+            };
+            var qKey = function (x) { return quotedKey(qGoods(x) || x); };
             var qSeen = {}, qAdded = 0;
-            qList.forEach(function (x) { var k = quotedKey(x); if (k) qSeen[k] = true; });
+            qList.forEach(function (x) { var k = qKey(x); if (k) qSeen[k] = true; });
             quotePicks.forEach(function (x) {
-              var k = quotedKey(x);
+              var k = qKey(x);
               if (!k || qSeen[k]) return;
               qSeen[k] = true; qList.push(x); qAdded++;
             });

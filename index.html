@@ -1732,6 +1732,18 @@
               window.ClinicPracSuiteTags) {
             try { await window.ClinicPracSuiteTags.tag(cid, "quote.uploaded"); } catch (e) {}
           }
+          // Same idea for the hospital fee estimate requests: "Fee Est Request
+          // Uploaded" says it is ON their record, still to be sent on to the
+          // hospital, which is exactly what has just happened. It is a tag Amy
+          // already made for this (13 Aug 2026) and asked to have raised here
+          // (15 Aug 2026), so nothing new is invented. The separate "Fee Est
+          // Sent - Hosp" is a different fact and stays a person's to set.
+          if (done.some(function (x) {
+                var t = String(x.doc_type || "");
+                return t === "quote_vsc" || t === "quote_sjm" || t === "quote_masada";
+              }) && window.ClinicPracSuiteTags) {
+            try { await window.ClinicPracSuiteTags.tag(cid, "feeest.req_uploaded"); } catch (e) {}
+          }
           var parts = [];
           if (done.length) parts.push('<b style="color:#2d7a55">' + done.length + ' sent.</b>');
           if (failed.length) {
@@ -4412,11 +4424,57 @@
               (Array.isArray(oa.quote_items) ? oa.quote_items : []).forEach(function (x) {
                 var k = quotedKey(x); if (k) have[k] = true;
               });
+              /* SOME OF THESE ARE NOT QUOTE ITEMS AT ALL.
+               *
+               * Dr Edwards lists the shower cover under his "we provide to the
+               * quote" heading, but the clinic does not sell one. It belongs
+               * in the plan's "Things to get ready at home" list, which says
+               * in as many words that nothing there goes on the quote, and
+               * which is what ticks the booklet's own page telling her to buy
+               * one. The booklet reads it from home_equipment
+               * (patient-info-builder/index.html:3457), never from the quote.
+               *
+               * So an item that is one of those five is offered as a home item
+               * and written there. Amy, 15 Aug 2026: "i want it on the notes
+               * oib - the shower coever so make it clear what i do here and
+               * whether this is a fault to correct?" It was a fault. */
+              var HOME_KIT = [
+                [/shower\s*cover|waterproof/i,                 "Waterproof shower cover"],
+                [/shower\s*(seat|stool|chair)/i,               "Shower seat or stool"],
+                [/toilet\s*(aid|seat|frame|raiser)|over[\s-]?toilet/i, "Over-toilet aid or raised toilet seat"],
+                [/ice\s*(pack|therapy)/i,                      "Ice packs (two or three, for rotation)"],
+                [/bed\s*wedge|elevation\s*pillow/i,            "Elevation pillow or bed wedge"]
+              ];
+              var homeName = function (t) {
+                var hit = HOME_KIT.filter(function (r) { return r[0].test(String(t || "")); })[0];
+                return hit ? hit[1] : null;
+              };
+              var haveHome = {};
+              (Array.isArray(oa.home_equipment) ? oa.home_equipment : []).forEach(function (x) {
+                haveHome[String(x).trim().toLowerCase()] = true;
+              });
+
               var seen = {}, out = [];
               inc.forEach(function (x) {
-                var k = quotedKey(x); if (!k || seen[k]) return;
-                seen[k] = true;
                 var name = quotedText(x);
+                var home = homeName(name);
+                /* Deduplicate on what it RESOLVES to, not on how it was
+                 * written. "Shower cover (below-knee)" and "shower cover" are
+                 * one thing, and offering both would have her tick the same
+                 * item twice. */
+                var k = home ? quotedKey(home) : quotedKey(x);
+                if (!k || seen[k]) return;
+                seen[k] = true;
+                if (home) {
+                  var had = !!haveHome[home.toLowerCase()];
+                  out.push(["To get ready at home: " + home,
+                            had ? home : "", home,
+                            [["order", "home_equipment"]],
+                            had ? "Already on this surgery plan" : "",
+                            home + "  (the patient buys this, it is not on the quote)",
+                            { homeItem: home }]);
+                  return;
+                }
                 out.push(["Items to add to the quote: " + name,
                           have[k] ? name : "", name,
                           [["order", "quote_items"]],
@@ -4662,7 +4720,7 @@
           if (!result) return dropAbandoned();
           status("Saving…");
           dzBusy("Saving", idx, total, file.name, "Writing what you kept, then filing the file.");
-          var pPatch = {}, oPatch = {}, codePicks = [], quotePicks = [];
+          var pPatch = {}, oPatch = {}, codePicks = [], quotePicks = [], homePicks = [];
           (result.changes || []).forEach(function (ch) {
             var b = byKey[ch.label] || {};
             // An item number is a row of its own but not a column of its own.
@@ -4672,6 +4730,10 @@
             // straight from the row would let the last one ticked overwrite
             // every other one, so ticking three would save one.
             if (b.quoteItem) { quotePicks.push(b.quoteItem); return; }
+            // Not a quote item at all: the patient buys it. It goes on the
+            // plan's "Things to get ready at home" list, which is what ticks
+            // its page in the booklet.
+            if (b.homeItem) { homePicks.push(b.homeItem); return; }
             var w = b.writes || [];
             w.forEach(function (t) {
               var table = t[0], col = t[1], v = ch.value;
@@ -4721,6 +4783,19 @@
               qSeen[k] = true; qList.push(x); qAdded++;
             });
             if (qAdded) oPatch.quote_items = qList;
+          }
+          /* The home items, onto the plan's own list. Added, never replaced,
+           * and never twice, so anything already ticked there survives. */
+          if (homePicks.length) {
+            var hList = Array.isArray(oa.home_equipment) ? oa.home_equipment.slice() : [];
+            var hSeen = {}, hAdded = 0;
+            hList.forEach(function (x) { hSeen[String(x).trim().toLowerCase()] = true; });
+            homePicks.forEach(function (x) {
+              var k = String(x).trim().toLowerCase();
+              if (!k || hSeen[k]) return;
+              hSeen[k] = true; hList.push(x); hAdded++;
+            });
+            if (hAdded) oPatch.home_equipment = hList;
           }
           /* What she was OFFERED and did not take.
            *

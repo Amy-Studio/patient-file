@@ -399,7 +399,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v7</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v8</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -502,6 +502,15 @@
             <div class="panel-sub">Identity and contact details, shared across every app.</div>
             <div class="grid2">
               <div class="field"><label>Full name</label><input id="f-full_name"></div>
+              <!-- Kept SEPARATELY because no rule can split a full name reliably:
+                   "Van Der Berg" and "Smith Jones" have no algorithm, and a wrong
+                   surname on a hospital consent form is the worst place to find
+                   that out. PracSuite already stores these two apart, so the
+                   comparison panel can bring them across rather than anyone
+                   retyping them. Blank is fine: a document that needs them prints
+                   nothing rather than a guess. (Amy, 16 Aug 2026.) -->
+              <div class="field"><label>Given name(s)</label><input id="f-first_name" placeholder="for hospital forms"></div>
+              <div class="field"><label>Surname</label><input id="f-surname" placeholder="for hospital forms"></div>
               <div class="field"><label>Date of birth</label><input id="f-dob" type="date"></div>
               <div class="field"><label>Phone</label><input id="f-phone"></div>
               <div class="field"><label>Email</label><input id="f-email"></div>
@@ -853,7 +862,7 @@
         }
         function renderContact() {
           var p = state.patient || {};
-          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes"].forEach(function (k) { setVal("f-" + k, p[k]); });
+          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes"].forEach(function (k) { setVal("f-" + k, p[k]); });
           setVal("f-dob", p.dob ? String(p.dob).slice(0, 10) : "");
           wireExpiryField();
           sayAboutExpiry();
@@ -3050,7 +3059,7 @@
         // ---- save ----
         function collectPatientPatch() {
           var patch = {};
-          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
+          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
           // Saved without leaving the box (a keyboard save never fires blur),
           // so the one stored shape is settled here too. Tidies only — a value
           // the reader cannot understand is saved exactly as she typed it.
@@ -3214,7 +3223,7 @@
               }
               if (dropped.length && !(r && r.error)) {
                 // Named, never silent. She has to know which answer did not land.
-                var human = { phi_status: "the private health insurance answer" };
+                var human = { phi_status: "the private health insurance answer", first_name: "the given name", surname: "the surname" };
                 toast("Saved, except " + dropped.map(function (c) { return human[c] || c; }).join(" and ") +
                       ". That needs its column adding in Supabase.");
               }

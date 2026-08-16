@@ -495,6 +495,18 @@
               <div class="field"><label>Medicare expiry</label><input id="f-medicare_expiry"></div>
               <div class="field"><label>Health fund</label><input id="f-health_fund"></div>
               <div class="field"><label>Fund membership</label><input id="f-health_fund_membership"></div>
+              <!-- THREE answers, not two. A patient nobody has asked must never
+                   look the same as one who has told us she has no cover: the
+                   first still needs asking, the second never will. Left blank,
+                   a file behaves exactly as it does today. (Amy, 16 Aug 2026:
+                   "we need to have that yes or no for private health insurance
+                   as a toggle on the patients file".) -->
+              <div class="field"><label>Private health insurance</label>
+                <select id="f-phi_status">
+                  <option value="">Not asked yet</option>
+                  <option value="has">Yes, has cover</option>
+                  <option value="none">No private health insurance</option>
+                </select></div>
               <div class="field"><label>Next of kin</label><input id="f-nok_name"></div>
               <div class="field"><label>Next of kin phone</label><input id="f-nok_phone"></div>
               <div class="field"><label>Preferred name</label><input id="f-preferred_name"></div>
@@ -783,7 +795,7 @@
         }
         function renderContact() {
           var p = state.patient || {};
-          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes"].forEach(function (k) { setVal("f-" + k, p[k]); });
+          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes"].forEach(function (k) { setVal("f-" + k, p[k]); });
           setVal("f-dob", p.dob ? String(p.dob).slice(0, 10) : "");
           wireExpiryField();
           sayAboutExpiry();
@@ -2561,8 +2573,15 @@
         }
         function missingFor(key) {
           var pt = state.patient || {}, out = [];
+          /* A patient with no private health insurance is not missing a fund
+           * name and a membership number, and chasing her for them forever is
+           * how a real gap gets lost among the noise. Only an explicit "no"
+           * silences it: a blank still asks, because nobody having asked is
+           * not an answer. (Amy, 16 Aug 2026.) */
+          var noCover = String(pt.phi_status || "").trim().toLowerCase() === "none";
           (NEEDS[key] ? NEEDS[key].fields : []).forEach(function (f) {
             if (f[2] === "childOnly" && !isChild(pt)) return;
+            if (noCover && (f[0] === "health_fund" || f[0] === "health_fund_membership")) return;
             var v = pt[f[0]];
             if (v == null || String(v).trim() === "") out.push(f[1]);
           });
@@ -2665,7 +2684,7 @@
         // ---- save ----
         function collectPatientPatch() {
           var patch = {};
-          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
+          ["full_name", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
           // Saved without leaving the box (a keyboard save never fires blur),
           // so the one stored shape is settled here too. Tidies only — a value
           // the reader cannot understand is saved exactly as she typed it.
@@ -2772,8 +2791,38 @@
           var pPatch = collectPatientPatch();
           var oPatch = collectOrderPatch();
           var jobs = [];
-          if (window.ClinicPatients && ClinicPatients.update) jobs.push(ClinicPatients.update(id, pPatch));
-          else jobs.push(client.from("patients").update(pPatch).eq("id", id));
+          /* A COLUMN THIS DATABASE DOES NOT HAVE MUST NOT REFUSE THE WHOLE SAVE.
+           *
+           * The surgery plan has had this protection for days; the patient half
+           * never did, so one unknown column here would throw away her name,
+           * her Medicare number and everything else in the same patch. That is
+           * exactly what happened on the plan when a shower cover met a list
+           * column, and it is why phi_status can ship before the SQL is run:
+           * until then the answer simply does not save, and she is told so
+           * plainly, rather than every save failing. (16 Aug 2026.) */
+          function patientWrite(patch, dropped) {
+            dropped = dropped || [];
+            var go = (window.ClinicPatients && ClinicPatients.update)
+              ? ClinicPatients.update(id, patch)
+              : client.from("patients").update(patch).eq("id", id);
+            return Promise.resolve(go).then(function (r) {
+              var msg = (r && r.error && r.error.message) || "";
+              var m = msg.match(/could not find the '([a-z0-9_]+)' column/i);
+              if (m && (m[1] in patch) && dropped.length < 8) {
+                var next = {}; Object.keys(patch).forEach(function (k) { if (k !== m[1]) next[k] = patch[k]; });
+                if (!Object.keys(next).length) return r;
+                return patientWrite(next, dropped.concat(m[1]));
+              }
+              if (dropped.length && !(r && r.error)) {
+                // Named, never silent. She has to know which answer did not land.
+                var human = { phi_status: "the private health insurance answer" };
+                toast("Saved, except " + dropped.map(function (c) { return human[c] || c; }).join(" and ") +
+                      ". That needs its column adding in Supabase.");
+              }
+              return r;
+            });
+          }
+          jobs.push(patientWrite(pPatch));
           var hasOrderContent = Object.keys(oPatch).some(function (k) { return oPatch[k] != null && oPatch[k] !== ""; });
           // order_ui needs its column (one-line SQL). If it's missing, retry
           // the save without it so nothing else is lost, and say so.

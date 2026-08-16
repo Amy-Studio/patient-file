@@ -913,7 +913,7 @@
             { k: "preop_fasting", label: "Pre-op fasting", type: "text" },
             { k: "preop_considerations", label: "Pre-op considerations", type: "textarea", full: true }
           ]},
-          { title: "Recovery plan · feeds the pamphlet", fields: [
+          { title: "Recovery plan · feeds the Recovery Guide", fields: [
             { k: "weight_bearing", label: "Weight-bearing", type: "text", full: true },
             { k: "partial_wb_at_weeks", label: "Partial weight-bearing at", type: "wk" },
             { k: "full_wb_at_weeks", label: "Full weight-bearing at", type: "wk" },
@@ -1377,7 +1377,7 @@
         }
         function docCategory(t) {
           t = (t || "").toLowerCase();
-          if (t.indexOf("pamphlet") >= 0 || t === "pib") return "Pamphlets (PIB)";
+          if (t.indexOf("pamphlet") >= 0 || t === "pib") return "Recovery guides";
           if (t.indexOf("cheat") >= 0 || t.indexOf("reception") >= 0) return "Reception sheets";
           if (t.indexOf("fee") >= 0 || t.indexOf("estimate") >= 0) return "Fee estimates";
           // The pre-op pack's own documents, kept together so the set that one
@@ -1440,7 +1440,7 @@
           if (!docs.length) { qs("pf-docs").innerHTML = state.docsError ? ('<div class="empty">⚠ Couldn\'t load documents (' + esc(state.docsError) + '). Reload the page; if it keeps happening, log out and back in.</div>') : '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>'; return; }
           var groups = {};
           docs.forEach(function (d, i) { var c = docCategory(d.doc_type); (groups[c] = groups[c] || []).push(i); });
-          var order = ["Quotes", "Pamphlets (PIB)", "Fee estimates", "Reception sheets", "Consent", "Surgery pack", "Other"];
+          var order = ["Quotes", "Recovery guides", "Fee estimates", "Reception sheets", "Consent", "Surgery pack", "Other"];
           qs("pf-docs").innerHTML = order.filter(function (c) { return groups[c]; }).map(function (c) {
             var rows = groups[c].map(function (i) {
               var d = docs[i];
@@ -4705,7 +4705,7 @@
             ["SGLT2 last dose", oa.sglt2_last_dose, ce.sglt2_last_dose, [["order", "sglt2_last_dose"]]],
             ]);
           };
-          var kindMap = { clinical_notes: "Clinical notes", quote: "Fee quote", pamphlet: "Pamphlet", referral: "Referral", scan_report: "Scan / report" };
+          var kindMap = { clinical_notes: "Clinical notes", quote: "Fee quote", pamphlet: "Recovery guide", referral: "Referral", scan_report: "Scan / report" };
           var niceKind = kindMap[ex.document_kind] || "Document";
           /* Does this file hold anything at all that belongs on a surgery
            * plan? Asked of an EMPTY plan, so every plan answer in the file

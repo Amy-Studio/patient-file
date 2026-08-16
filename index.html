@@ -24,7 +24,11 @@
         // clinic-medicare-expiry.js is first on purpose: clinic-patients.js
         // reads it on every write, so the one shape for the card expiry has
         // to be in the room before anything can save a patient.
-        ["clinic-medicare-expiry.js", "clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-surgery-docs.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
+        // clinic-checklist-model.js goes in AFTER clinic-checklist.js and
+        // clinic-hire-state.js, which it reads: it is the one canon of the
+        // patient journey, so this page's tick list and the checklist board
+        // show the same steps in the same state. (Amy, 16 Aug 2026.)
+        ["clinic-medicare-expiry.js", "clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-checklist-model.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-surgery-docs.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
          // The PracSuite comparison. Loaded here, through the page's own
          // loader, so it gets the same cache-busting stamp as everything
          // else. Added as a plain tag at the foot of the page it never
@@ -388,7 +392,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file</div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v3</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -1387,11 +1391,38 @@
             });
           }
         }
-        // One source: clinic-checklist.js CHECKLIST_ITEMS (loaded above), plus
-        // this app's own extra first step for the surgeon order. venue comes
-        // through with each step so this list can match the dashboard.
-        var CHECK_ITEMS = [{ k: "surgeon_order_done", label: "Surgeon order complete", venue: "all" }]
-          .concat(((window.ClinicChecklist && window.ClinicChecklist.ITEMS) || []).map(function (c) { return { k: c.key, label: c.label, venue: c.venue }; }));
+        // ONE journey, shown the same on both screens. The list, the rules and
+        // the done-state all come from clinic-checklist-model.js, which is what
+        // the checklist board runs on. Before this, the two kept separate lists
+        // under separate key names and only four of them translated, one way,
+        // so a step ticked on the board still read "to do" here. (Amy, 16 Aug
+        // 2026: "match them all".)
+        //
+        // Nothing is renamed in the database. The model already reads this
+        // page's older names (surgeon_order_done, deposit_paid, postop_booked,
+        // hires_booked), so every tick anybody has already made still counts.
+        var CLM = window.ClinicChecklistModel || null;
+        var CHECK_ITEMS = CLM
+          ? CLM.ITEMS.map(function (c) { return { k: c.key, label: c.label, venue: c.venue, item: c }; })
+          // Model missing (offline, or the shared file failed to load): fall
+          // back to the old short list rather than showing an empty checklist.
+          : [{ k: "surgeon_order_done", label: "Surgeon order complete", venue: "all" }]
+              .concat(((window.ClinicChecklist && window.ClinicChecklist.ITEMS) || []).map(function (c) { return { k: c.key, label: c.label, venue: c.venue }; }));
+        // The model reads the hire rows and the surgeon order off the patient,
+        // the same way the board hands them over.
+        function ckPatient() {
+          var probe = Object.assign({}, state.patient || {});
+          probe._order = state.order || null;
+          probe._hires = state.hires || null;
+          return probe;
+        }
+        function ckToday() { var d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+        // A step with more than one part (deposit, balance, post-op reviews,
+        // hires, audit) cannot be told the truth by one tick box, and its parts
+        // are recorded on the checklist board. Those rows show their real
+        // progress here and send you there to change them, so a half-finished
+        // deposit can never be wiped by a stray click on this page.
+        function ckMulti(it) { return !!(it.item && it.item.type && it.item.type !== "single"); }
         // Which steps to show for THIS patient. All the rules live in
         // clinic-checklist.js so this page, the dashboard and the checklist
         // board can never disagree:
@@ -1406,24 +1437,55 @@
         function checkItemsFor(patient) {
           var C = window.ClinicChecklist;
           return CHECK_ITEMS.map(function (it) {
-            var sh = (C && C.shownFor)
-              ? C.shownFor({ key: it.k, venue: it.venue }, patient)
-              : { applies: true, show: true, note: "" };
-            return { k: it.k, label: it.label, applies: sh.applies, show: sh.show, note: sh.note };
+            var sh = (CLM && CLM.shown)
+              ? CLM.shown(it.item || { key: it.k, venue: it.venue }, patient)
+              : (C && C.shownFor)
+                ? C.shownFor({ key: it.k, venue: it.venue }, patient)
+                : { applies: true, show: true, note: "" };
+            return { k: it.k, label: it.label, item: it.item, applies: sh.applies, show: sh.show, note: sh.note };
           }).filter(function (it) { return it.show; });
         }
         function renderOverview() {
           var el = qs("pf-overview"); if (!el) return;
           var cl = (state.patient && state.patient.checklist) || {};
           var hs = hireState();
+          var probe = ckPatient(), today = ckToday();
           el.innerHTML = checkItemsFor(state.patient).map(function (it) {
-            var v = cl[it.k]; var done = !!v;
-            var when = (done && typeof v === "string" && /\d{4}-\d{2}-\d{2}/.test(v)) ? isoToDmy(v) : "";
+            var st = (CLM && it.item) ? CLM.state(it.item, probe, today) : null;
+            var v = cl[it.k];
+            // The model is the authority on "done": it knows the older key
+            // names this page used to write, the steps that auto-tick off a
+            // tab, and that a part-paid deposit is not a finished one.
+            var done = st ? st.done : !!v;
+            var stamp = (typeof v === "string" && /\d{4}-\d{2}-\d{2}/.test(v)) ? v
+                      : (typeof cl[it.k + "_done"] === "string" && /\d{4}-\d{2}-\d{2}/.test(cl[it.k + "_done"])) ? cl[it.k + "_done"] : "";
+            var when = (done && stamp) ? isoToDmy(stamp) : "";
+            // Post-op steps before the operation: shown, never tickable.
+            if (st && st.locked) {
+              return '<div style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);opacity:.55">'
+                   + '<span style="width:18px;flex-shrink:0"></span><span style="flex:1">' + esc(it.label) + '</span>'
+                   + '<span class="dmeta">After surgery</span></div>';
+            }
+            // More than one part: show the real count and send her to the
+            // board, which is where those parts are recorded. Never a tick box
+            // here, because one click cannot say "1 of 2 payments taken" and
+            // un-clicking it would throw that away.
+            if (ckMulti(it) && st) {
+              var frac = st.na ? "Not needed"
+                       : done ? "Done"
+                       : (st.total > 1 ? st.count + " of " + st.total : (st.count ? "Done" : "To do"));
+              var nxt = (!done && !st.na && st.next && st.next.label)
+                ? '<div class="dmeta" style="margin-top:3px;font-size:11px;line-height:1.4">Next: ' + esc(st.next.label) + (st.next.hint ? " · " + esc(st.next.hint) : "") + '</div>' : "";
+              return '<div style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink)' + (st.na ? ";opacity:.62" : "") + '">'
+                   + '<span style="width:18px;flex-shrink:0;text-align:center;color:' + (done ? "#1f3a5f" : "var(--muted,#8a94a6)") + '">' + (done ? "&#10003;" : "&#183;") + '</span>'
+                   + '<span style="flex:1">' + esc(it.label) + nxt + '</span>'
+                   + '<button type="button" data-ckopen="1" title="Open this patient on the checklist" style="background:none;border:0;padding:0;font:inherit;font-size:12px;color:#1f3a5f;text-decoration:underline;cursor:pointer">' + esc(frac) + ' &#8599;</button></div>';
+            }
             // "Hires booked" answers to the same three states as the Hire tab.
             // A recorded "no hire needed" dims it; nobody having decided leaves
             // it live with an amber prompt, because that is still an open job.
             var todo = "";
-            if (it.k === "hires_booked") {
+            if (it.k === "hires_booked" || it.k === "hires") {
               if (hs.state === "not_needed") { it.applies = false; it.note = "No hire needed for this patient."; }
               else if (hs.state === "undecided") { todo = '<div style="margin-top:3px;font-size:11px;line-height:1.4;color:var(--amber);font-weight:500">Hire needs not decided yet. Open the Hire tab to record it.</div>'; }
             }
@@ -1435,20 +1497,53 @@
           Array.prototype.forEach.call(el.querySelectorAll("[data-ck]"), function (c) {
             c.addEventListener("change", function () { toggleCheck(c.getAttribute("data-ck"), c.checked); });
           });
+          Array.prototype.forEach.call(el.querySelectorAll("[data-ckopen]"), function (b) {
+            b.addEventListener("click", function () { openChecklistFor(state.patient && state.patient.id); });
+          });
+        }
+        // Open the checklist board on this patient. Inside the suite it swaps
+        // the tab; on its own it opens one reusable window, so pressing it
+        // twice never leaves two behind.
+        function openChecklistFor(id) {
+          if (!id) return;
+          var opened = false;
+          try {
+            if (window.top && window.top !== window) {
+              window.top.postMessage({ type: "clinic-open-app", key: "checklist",
+                                       query: "patient_id=" + encodeURIComponent(id) }, "*");
+              opened = true;
+            }
+          } catch (e) { /* not in a suite we can talk to */ }
+          if (!opened) window.open("https://amy-studio.github.io/clinic-style/clinic-checklist.html?patient_id=" + encodeURIComponent(id), "clinicChecklist");
         }
         function toggleCheck(key, on) {
           if (!state.patient) return;
           var cl = state.patient.checklist = state.patient.checklist || {};
           var previous = cl[key];
+          // This page used to write "<step>_done" and the board writes "<step>".
+          // Both still count as ticked, so UNticking has to clear both or the
+          // older one keeps the step looking done and the click does nothing.
+          // Only ever cleared alongside a deliberate untick of the same step.
+          var legacy = key + "_done";
+          var legacyHad = Object.prototype.hasOwnProperty.call(cl, legacy) ? cl[legacy] : undefined;
+          var clearLegacy = !on && !!legacyHad;
           cl[key] = on ? new Date().toISOString() : null;
+          if (clearLegacy) delete cl[legacy];
           renderOverview();
           if (window.__pfPreview) { toast("Preview — not saved"); return; }
-          var client = sb(); if (!client) { cl[key] = previous; renderOverview(); toast("Not signed in — tick not saved"); return; }
-          var revert = function () { cl[key] = previous; renderOverview(); toast("Save failed — tick undone"); };
+          var undo = function () {
+            cl[key] = previous;
+            if (clearLegacy) cl[legacy] = legacyHad;
+          };
+          var client = sb(); if (!client) { undo(); renderOverview(); toast("Not signed in — tick not saved"); return; }
+          var revert = function () { undo(); renderOverview(); toast("Save failed — tick undone"); };
           if (window.ClinicChecklist && window.ClinicChecklist.setKey) {
             // Shared safe write: merges just this key into the LIVE checklist
             // (no wiping ticks made elsewhere) + the deposit-paid→confirmed rule.
             window.ClinicChecklist.setKey(state.patient.id, key, on).then(function (merged) {
+              if (!clearLegacy) return merged;
+              return window.ClinicChecklist.setKey(state.patient.id, legacy, null);
+            }).then(function (merged) {
               state.patient.checklist = merged; renderOverview();
               status("Checklist saved"); setTimeout(function () { status(""); }, 1500);
             }).catch(revert);
@@ -1558,6 +1653,30 @@
             }).join("");
             return '<div class="subhead">' + c + '</div>' + rows;
           }).join("");
+          // Removed documents: shown, greyed, with a way back.
+          //
+          // "Remove" archives a document and its own wording promises nothing
+          // is destroyed, which was true of the row and useless in practice:
+          // it disappeared from this list with no way to see it or bring it
+          // back. Surgeries had exactly this gap and now have a restore, so
+          // documents get the same. Ticking is deliberately not offered: a
+          // removed document should be put back first, then sent, so nothing
+          // reaches PracSuite from a list nobody meant to send from.
+          // (16 Aug 2026.)
+          var gone = (state.docs || []).filter(function (d) { return d && d.archived_at; });
+          if (gone.length) {
+            state.goneView = gone;
+            qs("pf-docs").innerHTML += '<div class="subhead" style="color:var(--muted)">Removed</div>' +
+              gone.map(function (d, i) {
+                return '<div class="doc" style="opacity:.72">' +
+                  '<div style="flex:1;min-width:0"><div class="dname" style="color:var(--muted)">' +
+                  docTypePill(d) + esc(pracSuiteDocName(d)) + '</div>' +
+                  '<div class="dmeta">Removed ' + esc(isoToDmy(d.archived_at) || "") +
+                  (d.pracsuite_filed_at ? ' · still on their PracSuite record' : '') + '</div></div>' +
+                  '<span data-doc-restore="' + i + '" title="Put this document back on the file" ' +
+                  'style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Restore</span></div>';
+              }).join("");
+          }
           renderPracSuiteSendBar();
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-open]"), function (el) {
             el.addEventListener("click", function () { previewDoc(state.docsView[parseInt(el.getAttribute("data-doc-open"), 10)]); });
@@ -1571,6 +1690,28 @@
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-del]"), function (el) {
             el.addEventListener("click", function (ev) { ev.stopPropagation(); removeDoc(parseInt(el.getAttribute("data-doc-del"), 10)); });
           });
+          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-restore]"), function (el) {
+            el.addEventListener("click", function (ev) { ev.stopPropagation(); restoreDoc(parseInt(el.getAttribute("data-doc-restore"), 10)); });
+          });
+        }
+        // The other half of Remove. Nothing about the file changes, it simply
+        // stops being hidden: same document, same name, same PracSuite state.
+        function restoreDoc(i) {
+          var d = (state.goneView || [])[i];
+          if (!d || !d.id) return;
+          var name = pracSuiteDocName(d);
+          if (!confirm('Put "' + name + '" back on this patient\'s file?')) return;
+          if (window.__pfPreview) { toast("Preview - not saved"); return; }
+          var client = sb(); if (!client) { toast("Not signed in."); return; }
+          status("Putting it back…");
+          client.from("patient_documents").update({ archived_at: null }).eq("id", d.id)
+            .then(function (r) {
+              if (r && r.error) { console.error("[PF] restore document", r.error); status(""); toast("Could not put it back: " + (r.error.message || "try again")); return; }
+              d.archived_at = null;
+              status(""); toast("Back on the file");
+              renderDocs(); renderOverview();
+            })
+            .catch(function (e) { console.error("[PF] restore document", e); status(""); toast("Could not put it back. Reload and try again."); });
         }
         /* Sending documents to her PracSuite record, when SHE says so.
          *

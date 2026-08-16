@@ -399,7 +399,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v5</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v6</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -3073,6 +3073,39 @@
         }
         function collectOrderPatch() {
           var patch = { procedure_name: val("o-procedure_name") || null };
+          /* THE VENUE BELONGS TO THE SURGERY, AND THE PACK READS THE ORDER'S COPY FIRST.
+           *
+           * decidePack in clinic-preop-plan.js does
+           *   (order && order.surgery_venue) || (patient && patient.surgery_venue)
+           * so a value on the ORDER outranks the one on the patient. Until now
+           * the only thing that ever wrote surgeon_orders.surgery_venue was a
+           * dropped file, and no screen displayed it for the current surgery.
+           * A wrong one therefore sat there invisibly, beat the venue Amy could
+           * see and change, and made the pre-surgery pack keep saying "the venue
+           * is not set yet, and only Sir John Monash use this form" no matter
+           * what she picked. Amy, 16 Aug 2026: "it wont let me edit the pre
+           * surgical plan to have it as SJM". One control now writes both, so
+           * they cannot disagree.
+           *
+           * Only for the surgery actually on screen. The venue select is not
+           * rendered while a PAST surgery is selected, so its value belongs to
+           * whatever was displayed last and must never be written onto an older
+           * order. */
+          var _ords = state.orders || [];
+          var _isCurrent = _ords.length === 0 || !state.order || state.order === _ords[0];
+          if (_isCurrent) {
+            var _v = (val("f-surgery_venue") || "").toLowerCase();
+            var _held = ((state.order || {}).surgery_venue || "").toLowerCase();
+            if (_v) {
+              patch.surgery_venue = _v;
+              patch.venue_type = _v === "clinic" ? "clinic" : "hospital";
+            } else if (!(_held && !(_held in VENUE))) {
+              // Cleared on purpose. A venue the dropdown cannot display is left
+              // alone rather than wiped, the same rule the patient half uses.
+              patch.surgery_venue = null;
+              patch.venue_type = null;
+            }
+          }
           if (state.order && Array.isArray(state.order.procedure_codes)) patch.procedure_codes = state.order.procedure_codes;
           // In summary (view) mode the form inputs don't exist; only patch the procedure name.
           if (!qs("o-fields").getAttribute("data-built")) return patch;
@@ -3188,17 +3221,32 @@
           var hasOrderContent = Object.keys(oPatch).some(function (k) { return oPatch[k] != null && oPatch[k] !== ""; });
           // order_ui needs its column (one-line SQL). If it's missing, retry
           // the save without it so nothing else is lost, and say so.
-          function orderWrite(patch) {
+          /* Same rule as the patient half above: a column this database does
+           * not have must not refuse the WHOLE save. venue_type in particular
+           * is newly written from here, and one missing column would otherwise
+           * throw away the procedure name and every week tick with it. */
+          function orderWrite(patch, dropped) {
+            dropped = dropped || [];
             var q = state.orderId
               ? client.from("surgeon_orders").update(patch).eq("id", state.orderId)
               : client.from("surgeon_orders").insert(Object.assign({ patient_id: id, status: "draft", procedure_codes: (state.order && state.order.procedure_codes) || [] }, patch)).select("id");
             return q.then(function (r) {
-              if (r && r.error && /order_ui/.test(r.error.message || "") && patch.order_ui !== undefined) {
-                var p2 = Object.assign({}, patch); delete p2.order_ui;
-                toast("Heads-up: run the order_ui SQL to save week ticks");
-                return state.orderId
-                  ? client.from("surgeon_orders").update(p2).eq("id", state.orderId)
-                  : client.from("surgeon_orders").insert(Object.assign({ patient_id: id, status: "draft", procedure_codes: (state.order && state.order.procedure_codes) || [] }, p2)).select("id");
+              var msg = (r && r.error && r.error.message) || "";
+              if (!msg) {
+                if (dropped.length) {
+                  var human = { order_ui: "the week ticks", venue_type: "the hospital-or-clinic flag" };
+                  toast("Saved, except " + dropped.map(function (c) { return human[c] || c; }).join(" and ") +
+                        ". That needs its column adding in Supabase.");
+                }
+                return r;
+              }
+              var m = msg.match(/could not find the '([a-z0-9_]+)' column/i);
+              // order_ui's error does not always name the column the same way.
+              var col = (m && m[1]) || (/order_ui/.test(msg) && patch.order_ui !== undefined ? "order_ui" : null);
+              if (col && (col in patch) && dropped.length < 8) {
+                var p2 = Object.assign({}, patch); delete p2[col];
+                if (!Object.keys(p2).length) return r;
+                return orderWrite(p2, dropped.concat(col));
               }
               return r;
             });

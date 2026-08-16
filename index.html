@@ -5954,8 +5954,12 @@
     };
     var el = document.createElement("div");
     el.id = "clinic-build-stamp";
-    el.style.cssText = "position:fixed;bottom:8px;" + (framed ? "left:8px" : "right:8px") +
-      ";z-index:2147483000;font:11px/1.4 Montserrat,system-ui,-apple-system,sans-serif;" +
+    /* AT THE TOP, not the bottom. At the bottom it sat over the Save button and
+     * the PracSuite tag list, and it is the first thing she checks before she
+     * trusts anything on the page. (Amy, 16 Aug 2026: "i want the version of
+     * the prgrams listed at the top not bottom of page".) */
+    el.style.cssText = "position:fixed;top:6px;right:10px;z-index:2147483000;" +
+      "font:11px/1.4 Montserrat,system-ui,-apple-system,sans-serif;" +
       "color:#7b869a;background:rgba(255,255,255,.94);border:1px solid #e6e9ee;" +
       "border-radius:999px;padding:3px 10px;user-select:text";
     el.textContent = NAME + " \u00b7 " + (trusted ? say(built) : "build date unknown");

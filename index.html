@@ -5561,5 +5561,65 @@
         if (window.__pfPreview && document.readyState !== "loading") window.__pfBoot();
       })();
     </script>
-  </body>
+  
+<!-- WHICH COPY OF THIS PAGE AM I RUNNING?
+     Amy, 16 Aug 2026: she spent a morning testing against a build from the
+     day before without knowing, because no screen in the suite said. A
+     hand-typed version number goes stale the first time somebody forgets, so
+     this uses the page's OWN last-modified date, which is the true age of the
+     copy in front of her, cache and all. It then asks the server whether a
+     newer one exists and says so. It never reloads by itself: she may be
+     typing into a plan. -->
+<style>@media print{#clinic-build-stamp{display:none!important}}</style>
+<script>
+(function () {
+  "use strict";
+  var NAME = "Patient file";
+  try {
+    var framed = false; try { framed = window.self !== window.top; } catch (e) { framed = true; }
+    var built = new Date(document.lastModified);
+    /* With no Last-Modified header the browser hands back the time the page
+     * loaded, which would read as a brand new build forever. Saying "unknown"
+     * is the only honest answer there. */
+    var trusted = isFinite(built.getTime()) && (Date.now() - built.getTime()) > 5000;
+    var say = function (d) {
+      return d.toLocaleString("en-AU", { day: "numeric", month: "short",
+                                         hour: "numeric", minute: "2-digit" });
+    };
+    var el = document.createElement("div");
+    el.id = "clinic-build-stamp";
+    el.style.cssText = "position:fixed;bottom:8px;" + (framed ? "left:8px" : "right:8px") +
+      ";z-index:2147483000;font:11px/1.4 Montserrat,system-ui,-apple-system,sans-serif;" +
+      "color:#7b869a;background:rgba(255,255,255,.94);border:1px solid #e6e9ee;" +
+      "border-radius:999px;padding:3px 10px;user-select:text";
+    el.textContent = NAME + " \u00b7 " + (trusted ? say(built) : "build date unknown");
+    el.title = trusted ? "The copy of " + NAME + " this tab is running." : "";
+    (document.body || document.documentElement).appendChild(el);
+    if (!trusted) return;
+
+    fetch(location.href, { method: "HEAD", cache: "no-store" }).then(function (r) {
+      var lm = r && r.headers && r.headers.get("last-modified");
+      if (!lm) return;
+      var server = new Date(lm);
+      // A minute of slack, so clock drift never cries wolf.
+      if (!isFinite(server.getTime()) || server.getTime() - built.getTime() < 60000) return;
+      el.style.background = "#fdf3dd"; el.style.borderColor = "#f0ddb0";
+      el.style.color = "#96660f"; el.style.cursor = "pointer";
+      el.textContent = NAME + " \u00b7 " + say(built) + " \u00b7 newer version ready, click to load it";
+      el.title = "This tab is running the " + say(built) + " copy. The server has " + say(server) + ".";
+      el.onclick = function () {
+        if (framed && !window.confirm("Reload " + NAME + "?\n\nAnything typed here and not saved will be lost."))
+          return;
+        el.textContent = NAME + " \u00b7 loading the new version\u2026";
+        // cache:"reload" forces the browser to refetch and REPLACE its stored
+        // copy. A plain reload inside the 10 minute cache window can hand back
+        // the very copy she is trying to get rid of.
+        fetch(location.href, { cache: "reload" }).catch(function () {})
+          .then(function () { location.reload(); });
+      };
+    }).catch(function () { /* offline is not a fault worth shouting about */ });
+  } catch (e) { /* a version label may never break the page */ }
+})();
+</script>
+</body>
 </html>

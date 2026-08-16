@@ -347,7 +347,14 @@
       #pf-surgery-switcher [style*="background:#1f3a5f"] { background: var(--navy) !important; }
       #pf-surgery-switcher [style*="border:1px solid #d8e4f4"] { border-color: var(--line) !important; }
       #pf-overview input[type="checkbox"] { accent-color: var(--navy) !important; }
-      #pf-overview label { font-size: 12.5px !important; }
+      /* .ckrow is a step with more than one part (deposit, balance, post-op
+         reviews, hires, audit). It is a div, not a label, because it has no
+         tick box of its own, so it has to be named here too or it sets its own
+         size and sits out of line with the rest. */
+      #pf-overview label, #pf-overview .ckrow { font-size: 12.5px !important; }
+      /* Pinned so the tick boxes and the spacer on a .ckrow line up. Left to
+         the browser's own checkbox margins the two columns drift apart. */
+      #pf-overview input[type=checkbox], #pf-overview .ckgap { margin: 3px 3px 3px 4px; }
       .note-save { background: var(--navy) !important; }
 
       /* The drop zone has to SHOW that it is working. An AI read takes several
@@ -1462,8 +1469,8 @@
             var when = (done && stamp) ? isoToDmy(stamp) : "";
             // Post-op steps before the operation: shown, never tickable.
             if (st && st.locked) {
-              return '<div style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);opacity:.55">'
-                   + '<span style="width:18px;flex-shrink:0"></span><span style="flex:1">' + esc(it.label) + '</span>'
+              return '<div class="ckrow" style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);color:var(--ink);opacity:.55">'
+                   + '<span class="ckgap" style="width:18px;flex-shrink:0"></span><span style="flex:1">' + esc(it.label) + '</span>'
                    + '<span class="dmeta">After surgery</span></div>';
             }
             // More than one part: show the real count and send her to the
@@ -1476,8 +1483,8 @@
                        : (st.total > 1 ? st.count + " of " + st.total : (st.count ? "Done" : "To do"));
               var nxt = (!done && !st.na && st.next && st.next.label)
                 ? '<div class="dmeta" style="margin-top:3px;font-size:11px;line-height:1.4">Next: ' + esc(st.next.label) + (st.next.hint ? " · " + esc(st.next.hint) : "") + '</div>' : "";
-              return '<div style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink)' + (st.na ? ";opacity:.62" : "") + '">'
-                   + '<span style="width:18px;flex-shrink:0;text-align:center;color:' + (done ? "#1f3a5f" : "var(--muted,#8a94a6)") + '">' + (done ? "&#10003;" : "&#183;") + '</span>'
+              return '<div class="ckrow" style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);color:var(--ink)' + (st.na ? ";opacity:.62" : "") + '">'
+                   + '<span class="ckgap" style="width:18px;flex-shrink:0;text-align:center;color:' + (done ? "#1f3a5f" : "var(--muted,#8a94a6)") + '">' + (done ? "&#10003;" : "&#183;") + '</span>'
                    + '<span style="flex:1">' + esc(it.label) + nxt + '</span>'
                    + '<button type="button" data-ckopen="1" title="Open this patient on the checklist" style="background:none;border:0;padding:0;font:inherit;font-size:12px;color:#1f3a5f;text-decoration:underline;cursor:pointer">' + esc(frac) + ' &#8599;</button></div>';
             }
@@ -1590,7 +1597,16 @@
           });
         }
         function renderDocs() {
-          var all = (state.docs || []).filter(function (d) { return !d.archived_at; });
+          // Removed documents live behind their OWN tab.
+          //
+          // They were listed under everything else, which is the wrong shape:
+          // the list is what she works from, and a patient with a few removed
+          // documents ends up scrolling past history to reach today's. A count
+          // on a tab says they exist without any of them being in the way.
+          // (Amy, 16 Aug 2026.)
+          var gone = (state.docs || []).filter(function (d) { return d && d.archived_at; });
+          var showingGone = !!state.docsShowRemoved && gone.length > 0;
+          var all = showingGone ? [] : (state.docs || []).filter(function (d) { return !d.archived_at; });
           // Newest per (doc_type + label): distinctly-labelled live rows of
           // one doc_type — e.g. two quote options filed side-by-side as
           // "Main quote — Hospital" / "Main quote — Clinic" — show together,
@@ -1617,7 +1633,15 @@
           state.docsView = docs;
           var b = qs("pf-doc-badge");
           if (docs.length) { b.textContent = docs.length; b.style.display = ""; } else { b.style.display = "none"; }
-          if (!docs.length) { qs("pf-docs").innerHTML = state.docsError ? ('<div class="empty">⚠ Couldn\'t load documents (' + esc(state.docsError) + '). Reload the page; if it keeps happening, log out and back in.</div>') : '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>'; return; }
+          // The removed tab renders its own list further down, so this
+          // shortcut must not fire there: it would say "no documents saved
+          // yet" on a tab full of them and take the tabs away with it,
+          // leaving no way back.
+          if (!showingGone && !docs.length) {
+            qs("pf-docs").innerHTML = state.docsError ? ('<div class="empty">⚠ Couldn\'t load documents (' + esc(state.docsError) + '). Reload the page; if it keeps happening, log out and back in.</div>') : '<div class="empty">No documents saved yet. Use the buttons up top to make a quote or pamphlet.</div>';
+            renderDocTabs(gone.length, showingGone);
+            return;
+          }
           var groups = {};
           docs.forEach(function (d, i) { var c = docCategory(d.doc_type); (groups[c] = groups[c] || []).push(i); });
           var order = ["Quotes", "Recovery guides", "Fee estimates", "Reception sheets", "Consent", "Surgery pack", "Other"];
@@ -1653,31 +1677,24 @@
             }).join("");
             return '<div class="subhead">' + c + '</div>' + rows;
           }).join("");
-          // Removed documents: shown, greyed, with a way back.
-          //
-          // "Remove" archives a document and its own wording promises nothing
-          // is destroyed, which was true of the row and useless in practice:
-          // it disappeared from this list with no way to see it or bring it
-          // back. Surgeries had exactly this gap and now have a restore, so
-          // documents get the same. Ticking is deliberately not offered: a
-          // removed document should be put back first, then sent, so nothing
-          // reaches PracSuite from a list nobody meant to send from.
-          // (16 Aug 2026.)
-          var gone = (state.docs || []).filter(function (d) { return d && d.archived_at; });
-          if (gone.length) {
-            state.goneView = gone;
-            qs("pf-docs").innerHTML += '<div class="subhead" style="color:var(--muted)">Removed</div>' +
-              gone.map(function (d, i) {
-                return '<div class="doc" style="opacity:.72">' +
-                  '<div style="flex:1;min-width:0"><div class="dname" style="color:var(--muted)">' +
-                  docTypePill(d) + esc(pracSuiteDocName(d)) + '</div>' +
-                  '<div class="dmeta">Removed ' + esc(isoToDmy(d.archived_at) || "") +
-                  (d.pracsuite_filed_at ? ' · still on their PracSuite record' : '') + '</div></div>' +
-                  '<span data-doc-restore="' + i + '" title="Put this document back on the file" ' +
-                  'style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Restore</span></div>';
-              }).join("");
+          // The removed list, when its tab is the one showing. Ticking is
+          // deliberately not offered here: a removed document should be put
+          // back first and sent after, so nothing reaches a record that cannot
+          // delete it from a list nobody meant to send from.
+          state.goneView = gone;
+          if (showingGone) {
+            qs("pf-docs").innerHTML = gone.map(function (d, i) {
+              return '<div class="doc" style="opacity:.72">' +
+                '<div style="flex:1;min-width:0"><div class="dname" style="color:var(--muted)">' +
+                docTypePill(d) + esc(pracSuiteDocName(d)) + '</div>' +
+                '<div class="dmeta">Removed ' + esc(isoToDmy(d.archived_at) || "") +
+                (d.pracsuite_filed_at ? ' · still on their PracSuite record' : '') + '</div></div>' +
+                '<span data-doc-restore="' + i + '" title="Put this document back on the file" ' +
+                'style="font-size:13px;color:var(--accent-ink);cursor:pointer;margin-left:14px;flex-shrink:0">Restore</span></div>';
+            }).join("");
           }
-          renderPracSuiteSendBar();
+          renderDocTabs(gone.length, showingGone);
+          renderPracSuiteSendBar(showingGone);
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-open]"), function (el) {
             el.addEventListener("click", function () { previewDoc(state.docsView[parseInt(el.getAttribute("data-doc-open"), 10)]); });
           });
@@ -1696,6 +1713,35 @@
         }
         // The other half of Remove. Nothing about the file changes, it simply
         // stops being hidden: same document, same name, same PracSuite state.
+        // The two tabs above the document list. Only ever drawn when there is
+        // something removed to look at, so an ordinary patient's file gains
+        // nothing to read.
+        function renderDocTabs(goneCount, showingGone) {
+          var host = qs("pf-docs");
+          if (!host || !host.parentNode) return;
+          var bar = qs("pf-doc-tabs");
+          if (!goneCount) { if (bar) bar.remove(); return; }
+          if (!bar) {
+            bar = document.createElement("div");
+            bar.id = "pf-doc-tabs";
+            bar.style.cssText = "display:flex;gap:8px;align-items:center;margin:0 0 10px";
+            host.parentNode.insertBefore(bar, host);
+          }
+          var chip = function (on) {
+            return "font-size:12.5px;border-radius:999px;padding:5px 12px;cursor:pointer;border:1px solid " +
+              (on ? "var(--accent-ink);background:var(--accent-soft);color:var(--accent-ink);font-weight:600"
+                  : "var(--line);background:var(--card);color:var(--muted)");
+          };
+          bar.innerHTML =
+            '<span data-doctab="current" style="' + chip(!showingGone) + '">On the file</span>' +
+            '<span data-doctab="removed" style="' + chip(showingGone) + '">Removed (' + goneCount + ')</span>';
+          Array.prototype.forEach.call(bar.querySelectorAll("[data-doctab]"), function (el) {
+            el.addEventListener("click", function () {
+              state.docsShowRemoved = el.getAttribute("data-doctab") === "removed";
+              renderDocs();
+            });
+          });
+        }
         function restoreDoc(i) {
           var d = (state.goneView || [])[i];
           if (!d || !d.id) return;
@@ -1759,9 +1805,14 @@
             dl.style.opacity = m ? "1" : ".55";
           }
         }
-        function renderPracSuiteSendBar() {
+        function renderPracSuiteSendBar(hide) {
           var host = qs("pf-docs");
           if (!host || !host.parentNode) return;
+          // Nothing on the removed tab can be sent, so the Send bar is not
+          // offered there. A button that cannot act is a question you have to
+          // answer every time you look at it.
+          if (hide) { var b0 = qs("pf-ps-bar"); if (b0) b0.style.display = "none"; return; }
+          var shown = qs("pf-ps-bar"); if (shown) shown.style.display = "";
           var bar = qs("pf-ps-bar");
           if (!bar) {
             bar = document.createElement("div");

@@ -4809,8 +4809,23 @@
               current: cur == null ? "" : cur, incoming: inc,
               // Display only. The row still STORES what is in current/incoming.
               showCurrent: d[4] || null, showIncoming: d[5] || null });
+            /* EVERY kind of row has to be carried here, not just two of them.
+             *
+             * homeItem was left out, so the "To get ready at home" rows lost
+             * what made them special before anything looked at them. The test
+             * at :4846 could never fire, homePicks stayed empty, the list
+             * builder below never ran, and the row fell through to the plain
+             * writer, which put the bare words "Waterproof shower cover" into
+             * home_equipment. That column is text[] (clinic-style/
+             * db-setup-surgeon-plan.sql:53), so Postgres answered "malformed
+             * array literal" and REFUSED THE WHOLE PLAN WRITE: not one field
+             * of the surgery plan saved, on every drop where she ticked a
+             * shower cover, shower seat, toilet aid, ice packs or bed wedge.
+             * (Amy, 16 Aug 2026, on Jessica Marks: "NOT saved: the surgery
+             * plan (malformed array literal: "Waterproof shower cover")".) */
             byKey[label] = { writes: writes, codeObj: (d[6] && d[6].codeObj) || null,
-                             quoteItem: (d[6] && d[6].quoteItem) || null };
+                             quoteItem: (d[6] && d[6].quoteItem) || null,
+                             homeItem: (d[6] && d[6].homeItem) || null };
           });
           // The popup is now the thing that is happening, so the zone stops
           // spinning and points at it. It stays on screen underneath.

@@ -399,7 +399,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v3</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v4</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -1419,8 +1419,17 @@
         // the same way the board hands them over.
         function ckPatient() {
           var probe = Object.assign({}, state.patient || {});
-          probe._order = state.order || null;
+          // The NEWEST order, which is what the board reads. Handing over the
+          // surgery currently chosen in the switcher made a patient-level
+          // checklist change its answers depending on which tab was open.
+          probe._order = (state.orders && state.orders[0]) || state.order || null;
           probe._hires = state.hires || null;
+          // doc_type only, un-removed, gathered exactly as the board gathers
+          // it. This is what turns "the quote is made but not sent" into a half
+          // step instead of nothing at all.
+          probe._docs = (state.docs || [])
+            .filter(function (d) { return d && !d.archived_at; })
+            .map(function (d) { return (d && d.doc_type) || ""; });
           return probe;
         }
         function ckToday() { var d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
@@ -1467,6 +1476,17 @@
             var stamp = (typeof v === "string" && /\d{4}-\d{2}-\d{2}/.test(v)) ? v
                       : (typeof cl[it.k + "_done"] === "string" && /\d{4}-\d{2}-\d{2}/.test(cl[it.k + "_done"])) ? cl[it.k + "_done"] : "";
             var when = (done && stamp) ? isoToDmy(stamp) : "";
+            // Already answered by one of this patient's own tabs. A tick box
+            // over the top of that springs straight back when it is pressed,
+            // while the page says "Checklist saved", so it is written as a
+            // statement instead of offered as a control.
+            if (st && st.auto && st.done) {
+              return '<div class="ckrow" style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);color:var(--ink)">'
+                   + '<span class="ckgap" style="width:18px;flex-shrink:0;text-align:center;color:#1f3a5f">&#10003;</span>'
+                   + '<span style="flex:1">' + esc(it.label)
+                   + '<div class="dmeta" style="margin-top:3px;font-size:11px;line-height:1.4">Taken from this patient’s own tab, so there is nothing to tick here.</div></span>'
+                   + '<span class="dmeta">Done</span></div>';
+            }
             // Post-op steps before the operation: shown, never tickable.
             if (st && st.locked) {
               return '<div class="ckrow" style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);color:var(--ink);opacity:.55">'
@@ -1496,9 +1516,14 @@
               if (hs.state === "not_needed") { it.applies = false; it.note = "No hire needed for this patient."; }
               else if (hs.state === "undecided") { todo = '<div style="margin-top:3px;font-size:11px;line-height:1.4;color:var(--amber);font-weight:500">Hire needs not decided yet. Open the Hire tab to record it.</div>'; }
             }
+            // The document exists but nobody has said it was SENT. Half a step,
+            // never a whole one, and worded the same as the board: a filed PDF
+            // has not told the patient anything.
+            var made = (st && st.made && !done)
+              ? '<div class="dmeta" style="margin-top:3px;font-size:11px;line-height:1.4">Made, not sent</div>' : '';
             // Still ticked but no longer applies: keep it, dim it, say why.
             // The box stays live so the tick can be undone by hand.
-            var note = (it.applies ? '' : '<div class="dmeta" style="margin-top:3px;font-size:11px;line-height:1.4">' + esc(it.note) + '</div>') + todo;
+            var note = (it.applies ? '' : '<div class="dmeta" style="margin-top:3px;font-size:11px;line-height:1.4">' + esc(it.note) + '</div>') + made + todo;
             return '<label style="display:flex;align-items:flex-start;gap:11px;padding:10px 6px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px;color:var(--ink)' + (it.applies ? '' : ';opacity:.62') + '"><input type="checkbox" data-ck="' + it.k + '" ' + (done ? "checked" : "") + ' style="width:18px;height:18px;accent-color:#1f3a5f;cursor:pointer;flex-shrink:0"><span style="flex:1">' + esc(it.label) + note + '</span>' + (when ? '<span class="dmeta">' + esc(when) + '</span>' : '') + '</label>';
           }).join("");
           Array.prototype.forEach.call(el.querySelectorAll("[data-ck]"), function (c) {

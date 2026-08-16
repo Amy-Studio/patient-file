@@ -399,7 +399,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v4</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v5</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -692,6 +692,19 @@
               <input type="file" id="pf-dropz-input" multiple style="display:none">
             </label>
             <div id="pf-docs"></div>
+            <!-- The Cura consent master. Clinic-wide, not this patient's, and
+                 deliberately NOT behind the venue rule or a saved plan: it used
+                 to be reachable only by building a pack for an SJM patient and
+                 having that pack report the master missing. Amy, 16 Aug 2026:
+                 "i am sick of making plans to test it". Documents is where she
+                 already is when she is thinking about paperwork. -->
+            <div id="pf-cura" style="margin-top:18px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;display:none">
+              <div style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1f3a5f;margin-bottom:4px">Clinic-wide form</div>
+              <div style="font-size:13px;color:var(--ink);margin-bottom:3px">Cura Operation and Procedure Consent</div>
+              <div class="dmeta" style="font-size:11px;line-height:1.45;margin-bottom:7px">Sir John Monash's own form, CMR4.01 v3.00. Filed once for the whole clinic, then every SJM pre-surgery pack includes it. Nothing to do with this patient.</div>
+              <div class="dmeta" id="pf-cura-state" style="font-size:11px;line-height:1.45;margin-bottom:8px">Checking…</div>
+              <button type="button" id="pf-cura-btn" class="btn" disabled>Checking…</button>
+            </div>
             <div id="pf-preview" style="display:none; margin-top:16px"></div>
           </div>
 
@@ -2473,7 +2486,55 @@
          *
          * To pick up what another app or another tab has written, use
          * pfReloadRecord, which reads OUR OWN three tables and then calls this. */
-        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); }
+        /* The Cura consent master, on the Documents tab.
+         *
+         * Clinic-wide, not this patient's, and deliberately outside the venue
+         * rule and outside the plan: until now the ONLY way to reach the upload
+         * was to build a pre-surgery pack for an SJM patient and have that pack
+         * report the master missing. Amy, 16 Aug 2026: "i am sick of making
+         * plans to test it". Hidden entirely if the pre-op module has not
+         * loaded, rather than showing a button that cannot work. */
+        var _curaWired = false;
+        function wireCuraDocsPanel() {
+          var box = qs("pf-cura"), st = qs("pf-cura-state"), btn = qs("pf-cura-btn");
+          if (!box || !st || !btn) return;
+          var P = window.ClinicPreopPlan;
+          if (!P || !P.openCuraMasterUpload || !P.curaMasterBlob) return;
+          box.style.display = "";
+          async function show() {
+            btn.disabled = true;
+            var client = sb();
+            if (!client || !client.storage) {
+              st.textContent = "Not signed in, so whether it is filed cannot be checked from here.";
+              btn.style.display = "none";
+              return;
+            }
+            var m = null;
+            try { m = await P.curaMasterBlob(client); } catch (e) { m = { ok: false, reason: "(" + (e.message || e) + ")" }; }
+            if (m && m.ok) {
+              st.textContent = "Filed. Every Sir John Monash pre-surgery pack includes it.";
+              btn.textContent = "Replace it";
+            } else {
+              // "Nobody filed it" and "the check failed" look the same to the
+              // storage read, so when there is an underlying error, say it.
+              var why = String((m && m.reason) || "");
+              var detail = why.indexOf("(") >= 0 ? why.slice(why.indexOf("(") + 1).replace(/\)\s*$/, "") : "";
+              st.textContent = "Not filed yet, so it is being left out of every Sir John Monash pack."
+                + (detail ? " The check reported: " + detail : "");
+              btn.textContent = "Upload the master";
+            }
+            btn.disabled = false;
+          }
+          if (!_curaWired) {
+            _curaWired = true;
+            btn.addEventListener("click", function () {
+              var dlg = P.openCuraMasterUpload({ who: "the clinic", title: "Cura consent master" });
+              if (dlg && dlg.addEventListener) dlg.addEventListener("close", show, { once: true });
+            });
+          }
+          show();
+        }
+        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); wireCuraDocsPanel(); }
         function renderNotes() {
           var el = qs("pf-notes-list"); if (!el) return;
           var notes = (state.notes || []).filter(function (n) { return !n.deleted_at; });

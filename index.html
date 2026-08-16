@@ -1596,12 +1596,22 @@
           "sjm fee estimate request":                          "Sir John Monash Fee Estimate Request",
           "masada fee estimate request":                       "Masada Fee Estimate Request",
           "vsc fee estimate request":                          "VSC Fee Estimate Request",
-          "staff - if needed - informed financial consent":    "Informed Financial Consent",
+          // The forms a PATIENT signs or fills in say so on the record.
+          // What we file is the empty form we produced, not their answer, and
+          // on a PracSuite record "Informed Financial Consent" reads as though
+          // the patient has consented. Anyone opening the file later, in this
+          // practice or another one, has to be able to see the difference.
+          // (Amy, 15 Aug 2026.)
+          "staff - if needed - informed financial consent":    "Informed Financial Consent (unsigned paper copy)",
           "staff - if needed - cover letter":                  "Cover Letter",
-          "paper version - surgery payment authority":         "Surgery Payment Authority",
-          "paper version - procedure payment authority":       "Procedure Payment Authority",
-          "paper version - pre-surgery screening form":        "Pre-Surgery Screening Form",
-          "full pamphlet":                                     "Surgical Recovery Guide",
+          "paper version - surgery payment authority":         "Surgery Payment Authority (unsigned paper copy)",
+          "paper version - procedure payment authority":       "Procedure Payment Authority (unsigned paper copy)",
+          "paper version - pre-surgery screening form":        "Pre-Surgery Screening Form (blank paper copy)",
+          // Guides made before the venue naming went in carry this one label
+          // and nothing that says where the procedure was, so calling them all
+          // "Surgical" puts the wrong word on a clinic patient's permanent
+          // record. Neutral is the only honest reading of an old row.
+          "full pamphlet":                                     "Recovery Guide",
           "personalised summary":                              "Personalised Recovery Summary",
           "reception cheat sheet":                             "Reception Summary (practice use)",
           // Superseded labels, kept so older filed documents still read right.

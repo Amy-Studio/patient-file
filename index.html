@@ -122,7 +122,12 @@
       }
       h1, h2, h3 { font-weight: 600; color: var(--navy); margin: 0; }
       ::selection { background: var(--navy-soft); }
-      .wrap { max-width: 1080px; margin: 0 auto; padding: 22px 24px 60px; }
+      /* 1080 left a wide screen with a band of grey down each side, while
+       * the surgery plan sitting inside this page is already 1400. Matched
+       * to it, so the two stop disagreeing about how wide a patient is and
+       * the documents list gets the room. (Amy, 16 Aug 2026: "i want to
+       * know why there is so much empty grey space?") */
+      .wrap { max-width: 1400px; margin: 0 auto; padding: 22px 24px 60px; }
 
       /* Top bar */
       .topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
@@ -1125,6 +1130,24 @@
                     ' <span data-orm="' + i + '" title="Created by mistake: delete it" ' +
                       'style="opacity:.6;margin-left:5px;font-weight:700">&times;</span>' : '') + '</span>';
           }).join("");
+          // Archived surgeries: shown, greyed, not selectable, each with a way
+          // back. Not part of `items` above, so nothing downstream can pick one
+          // up by accident. (Amy, 16 Aug 2026: greyed out or gone? how do we
+          // view past surgeries?)
+          var archived = (state.archivedOrders || []).filter(function (o) { return o && o.id; });
+          var archivedHtml = !archived.length ? "" :
+            '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+            '<span style="font-size:11px;color:var(--muted);letter-spacing:.04em">NOT GOING AHEAD</span>' +
+            archived.map(function (o, i) {
+              var nm = o.procedure_name ? String(o.procedure_name).split("(")[0].trim().slice(0, 24) : "Surgery";
+              var dt = o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : "");
+              return '<span title="Archived ' + esc(isoToDmy(o.archived_at) || "") + '. It is kept, so what was offered and quoted is still on record." ' +
+                'style="font-size:12.5px;border-radius:999px;padding:5px 12px;white-space:nowrap;background:var(--card);' +
+                'color:var(--muted);border:1px dashed var(--line)">' + esc(nm) +
+                (dt ? ' <span style="opacity:.8">· ' + esc(dt) + '</span>' : '') +
+                ' <span data-oun="' + i + '" title="Put this surgery back" ' +
+                'style="margin-left:7px;color:var(--accent-ink);cursor:pointer;font-weight:600">restore</span></span>';
+            }).join("") + '</div>';
           // When there is genuinely a decision to make, say so plainly with
           // named buttons. A small tick on a pill is not findable, and this is
           // the decision everything downstream depends on.
@@ -1146,7 +1169,7 @@
                 esc(o.procedure_name || "Unnamed plan") + '</button>';
             }).join("") + '</div>';
           el.innerHTML = ask + '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery, Surgeon order &amp; Documents</div>' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:10px;padding:8px">' + (items || '<span style="font-size:13px;color:var(--muted)">No surgery yet</span>') + '<span data-newsurg="1" style="' + pill + 'color:var(--accent-ink);border:1px dashed #c7d6ea;margin-left:auto">+ new surgery</span></div>';
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:10px;padding:8px">' + (items || '<span style="font-size:13px;color:var(--muted)">No surgery yet</span>') + '<span data-newsurg="1" style="' + pill + 'color:var(--accent-ink);border:1px dashed #c7d6ea;margin-left:auto">+ new surgery</span></div>' + archivedHtml;
           // Removing a surgery CANCELS it, it does not delete it. The row is
           // clinical history, and a plan built by mistake still records what
           // somebody intended at the time. Cancelled orders are excluded by the
@@ -1189,6 +1212,27 @@
               .update({ archived_at: new Date().toISOString(), confirmed_at: null }).eq("id", o.id);
             if (r.error) { toast("Couldn't archive: " + r.error.message); return; }
             toast("Archived"); planGen++; if (typeof loadReal === "function") loadReal();
+          });
+          // Put an archived surgery back. The other half of a button that
+          // until now could only be pressed one way. It does NOT confirm it:
+          // if another plan is already going ahead, that one keeps the tick
+          // and this comes back as an alternative, so restoring can never
+          // quietly change which surgery the list prints.
+          Array.prototype.forEach.call(el.querySelectorAll("[data-oun]"), function (x) {
+            x.addEventListener("click", async function (ev) {
+              ev.stopPropagation();
+              var o = archived[parseInt(x.getAttribute("data-oun"), 10)];
+              if (!o || !o.id) return;
+              var label = o.procedure_name || "this surgery";
+              var goingAhead = (state.orders || []).some(function (r) { return r.confirmed_at; });
+              if (!confirm("Put " + label + " back?\n\nIt goes back on their file as a surgery." +
+                           (goingAhead ? " The one already marked as going ahead keeps that mark, so nothing printed changes until you say otherwise." : ""))) return;
+              var c = sb();
+              if (!c) { toast("Not signed in"); return; }
+              var r = await c.from("surgeon_orders").update({ archived_at: null }).eq("id", o.id);
+              if (r.error) { toast("Couldn't put it back: " + r.error.message); return; }
+              toast("Back on their file"); planGen++; if (typeof loadReal === "function") loadReal();
+            });
           });
           planAction("data-orm", async function (o, c) {
             var label = o.procedure_name || "this surgery";
@@ -3936,6 +3980,10 @@
               new Promise(function (res) { setTimeout(function () { res({ data: null, error: { message: (label || "request") + " timed out", __timeout: true } }); }, 10000); })
             ]);
           }
+          // Cleared before the new patient's rows arrive, or the archived
+          // surgeries of the LAST patient sit on this one's file until the
+          // second query lands.
+          state.archivedOrders = [];
           Promise.resolve(getP).then(function (p) {
             clearWatchdog();
             if (!p) { qs("pf-name").textContent = "Patient not found"; qs("pf-meta").textContent = "This patient id isn't in the register."; status(""); return; }
@@ -3943,6 +3991,19 @@
             // secondary table is slow; each section fills in as it arrives.
             state.patient = p; qs("pf-save").disabled = false; status(""); renderAll(); pfDirty = false;
             pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).is("archived_at", null).order("created_at", { ascending: false }), "surgeries").then(function (r) { if (r && !r.error) { state.orders = r.data || []; if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });
+            // Archived surgeries, kept in their OWN list.
+            //
+            // Archiving used to be nearly as final as deleting while sounding
+            // much safer: the row stayed in the database with its procedure,
+            // date and item numbers, and there was no way to see it again or
+            // bring it back without going into the database by hand. An
+            // alternative the patient turned down is exactly the thing you
+            // want to look at when they change their mind.
+            //
+            // Deliberately NOT merged into state.orders: everything else here
+            // treats that list as the surgeries that are happening, and
+            // state.order defaults to its first row. (Amy, 16 Aug 2026.)
+            pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).not("archived_at", "is", null).order("archived_at", { ascending: false }), "archived surgeries").then(function (r) { if (r && !r.error) { state.archivedOrders = r.data || []; renderSurgeryPicker(); } });
             pfQ(client.from("patient_documents").select("*").eq("patient_id", p.id).order("generated_at", { ascending: false }), "documents").then(function (r) { if (r && !r.error) { state.docs = r.data || []; state.docsError = null; renderAll(); } else { state.docsError = (r && r.error && (r.error.__timeout ? "timed out" : r.error.message)) || "failed"; console.warn("[PF] documents:", state.docsError); renderAll(); } });
             pfQ(client.from("hires").select("*,hire_items(name)").eq("patient_id", p.id).order("created_at", { ascending: false }).then(function (r) { return r.error ? client.from("hires").select("*").eq("patient_id", p.id).order("created_at", { ascending: false }) : r; }), "hires").then(function (r) { if (r && !r.error) { state.hires = r.data || []; renderAll(); } else { console.warn("[PF] hires:", r && r.error && r.error.message); } });
             pfQ(client.from("patient_notes").select("*").eq("patient_id", p.id).is("deleted_at", null).order("created_at", { ascending: false }), "notes").then(function (r) { if (r && !r.error) { state.notes = r.data || []; renderAll(); } else { console.warn("[PF] notes:", r && r.error && r.error.message); } });

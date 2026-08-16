@@ -28,7 +28,13 @@
         // clinic-hire-state.js, which it reads: it is the one canon of the
         // patient journey, so this page's tick list and the checklist board
         // show the same steps in the same state. (Amy, 16 Aug 2026.)
-        ["clinic-medicare-expiry.js", "clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-checklist-model.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-surgery-docs.js", "clinic-preop-plan.js", "clinic-surgery-audit.js", "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
+        ["clinic-medicare-expiry.js", "clinic-auth.js", "clinic-settings.js", "clinic-patients.js", "clinic-checklist.js", "clinic-hire-state.js", "clinic-checklist-model.js", "clinic-pdf.js", "clinic-supplements.js", "clinic-surgery-docs.js", "clinic-preop-plan.js", "clinic-surgery-audit.js",
+         // The Operative tab's second half: the operation report itself, and
+         // Dr Edwards' own 193 operative descriptions that its template picker
+         // offers. clinic-op-templates.js goes in first because it is only ever
+         // read, never a reader.
+         "clinic-op-templates.js", "clinic-operation-report.js",
+         "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
          // The PracSuite comparison. Loaded here, through the page's own
          // loader, so it gets the same cache-busting stamp as everything
          // else. Added as a plain tag at the foot of the page it never
@@ -149,6 +155,9 @@
       .pcard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; box-shadow: var(--shadow-sm); }
       .pcard h2 { font-size: 15px; }
       .panel-sub { font-size: 12px; font-weight: 400; color: var(--muted); margin: 2px 0 14px; }
+      /* Two forms live on the Operative tab now, so each one says what it is. */
+      .op-subhead { font-size: 13px; font-weight: 700; color: var(--navy); margin: 26px 0 10px; }
+      .op-subhead:first-of-type { margin-top: 4px; }
       .phead { display: flex; align-items: center; gap: 14px; }
       .avatar {
         width: 44px; height: 44px; border-radius: 50%; background: var(--navy-soft); color: var(--navy);
@@ -399,7 +408,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v8</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v9</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -620,15 +629,22 @@
           <!-- Pre-op planning -->
           <div class="section" id="sec-preop">
             <h2>Pre-op planning</h2>
-            <div class="panel-sub">Steve's pre-op plan for this patient. It produces the theatre staff sheet and the patient's post-op instructions.</div>
+            <div class="panel-sub">Steve's pre-op plan for this patient. It produces the theatre staff sheet. The
+              patient's post-op instructions are finished on the Operative tab after surgery, because the
+              anaesthetist often changes the antibiotic and the antithrombotic on the day.</div>
             <div id="pp-inline"></div>
           </div>
 
-          <!-- Operative (surgery audit) -->
+          <!-- Operative: the surgery audit, then the operation report and the
+               patient's post-op instructions (both after surgery). -->
           <div class="section" id="sec-operative">
             <h2>Operative</h2>
-            <div class="panel-sub">After surgery: the surgical audit for the ACPS database.</div>
+            <div class="panel-sub">After surgery: the surgical audit for the ACPS database, then the operation
+              report and the patient's post-operative instructions.</div>
+            <h3 class="op-subhead">Surgical audit (ACPS)</h3>
             <div id="op-inline"></div>
+            <h3 class="op-subhead">Operation report</h3>
+            <div id="op-report-inline"></div>
           </div>
 
           <!-- Documents -->
@@ -2643,7 +2659,18 @@
              * the surgery name and everything but its not in the plan
              * still!!!")
              */
-            var oid = state.orderId || "";
+            /* A SURGERY BEING STARTED IS NOT "NO SURGERY".
+             *
+             * "+ new surgery" sets state.orderId to null, and null meant no
+             * order on the address, which the plan screen reads as "show her
+             * newest". So the second surgery opened showing the FIRST one, was
+             * filled in, and Save wrote over it. Nothing appeared in the strip
+             * above, and the quote and booklet made afterwards superseded the
+             * originals, because downstream there was still only one surgery.
+             * Saying "new" out loud is the difference.
+             * (Amy, 16 Aug 2026.) */
+            var starting = !!(state.order && state.order._new);
+            var oid = state.orderId || (starting ? "new" : "");
             var want = String(id) + "#" + planGen + "#" + oid;
             if (planFrame.getAttribute("data-patient") !== want) {
               planFrame.setAttribute("data-patient", want);
@@ -3308,7 +3335,7 @@
          * rebuilding it would throw that typing away and nothing clinical may
          * disappear without her seeing it go.
          */
-        var _ppFor = null, _opFor = null;
+        var _ppFor = null, _opFor = null, _orFor = null;
         function formSig() { return String(state.orderId || "") + "#" + orderGen; }
         function mountSurgeonForm(host, modName, mount) {
           var el = qs(host); if (!el) return;
@@ -3350,7 +3377,17 @@
           if (mountSurgeonForm(host, modName)) setSig(sig);
         }
         function mountPreop() { mountSurgeonTab("pp-inline", "ClinicPreopPlan", _ppFor, function (s) { _ppFor = s; }); }
-        function mountOperative() { mountSurgeonTab("op-inline", "ClinicSurgeryAudit", _opFor, function (s) { _opFor = s; }); }
+        /* The Operative tab holds two separate forms with two separate Save
+         * buttons: the ACPS audit, and the operation report (which carries the
+         * patient's post-op instructions under it, since Amy chose on 16 Aug
+         * 2026 to finish those after surgery). They are mounted together
+         * because they are opened together, but each keeps its own record of
+         * which surgery it is showing, so typing in one can never stop the
+         * other one being offered a newer surgery. */
+        function mountOperative() {
+          mountSurgeonTab("op-inline", "ClinicSurgeryAudit", _opFor, function (s) { _opFor = s; });
+          mountSurgeonTab("op-report-inline", "ClinicOperationReport", _orFor, function (s) { _orFor = s; });
+        }
         (function () { var n = document.querySelector('.navitem[data-sec="preop"]'); if (n) n.addEventListener("click", mountPreop); })();
         (function () { var n = document.querySelector('.navitem[data-sec="operative"]'); if (n) n.addEventListener("click", mountOperative); })();
 

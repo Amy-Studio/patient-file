@@ -769,8 +769,32 @@
              * pfReloadRecord is defined further down; this handler only runs
              * on a click, by which time the whole script has loaded. */
             try { pfReloadRecord(); } catch (e) {}
+            /* Remember where she was. A refresh used to land on Checklist
+             * every time, so any reload cost her the tab she was working in
+             * and she navigated back by hand. Per browser, not per patient:
+             * she works down a list of people doing the same job on each.
+             * (Amy, 16 Aug 2026.) */
+            try { localStorage.setItem("pf.tab", n.getAttribute("data-sec")); } catch (e) {}
           });
         });
+        /* Put her back on that tab when the page loads.
+         *
+         * Only if the tab still exists and is not hidden: the Hire tab is
+         * hidden for patients with no hire, and landing on a tab that is not
+         * in the list would leave her looking at nothing. Anything unexpected
+         * falls back to Checklist, exactly as before. */
+        try {
+          var _want = localStorage.getItem("pf.tab");
+          if (_want) {
+            var _n = document.querySelector('.navitem[data-sec="' + _want.replace(/[^a-z]/g, "") + '"]');
+            var _s = qs("sec-" + _want.replace(/[^a-z]/g, ""));
+            if (_n && _s && _n.offsetParent !== null) {
+              document.querySelectorAll(".navitem").forEach(function (x) { x.classList.remove("active"); });
+              document.querySelectorAll(".section").forEach(function (x) { x.classList.remove("active"); });
+              _n.classList.add("active"); _s.classList.add("active");
+            }
+          }
+        } catch (e) { /* a remembered tab may never stop the page loading */ }
 
         // ---- render ----
         // "completed" when the booked surgery date has passed, "booked" when

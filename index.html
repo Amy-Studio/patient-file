@@ -1325,7 +1325,74 @@
         });
 
         function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); try { renderSurgeryRecord(); } catch (e) {}; renderSurgery(); renderOrder(); }
-        function newSurgery() { var o = { id: null, procedure_codes: [], _new: true }; state.orders = state.orders || []; state.orders.unshift(o); state.order = o; state.orderId = null; renderSurgeryPicker(); renderSurgery(); renderOrder(); }
+        /* "+ NEW SURGERY" ASKS WHICH SHE MEANS.
+         *
+         * A different operation and another way of doing the same one are two
+         * different things and this button did both without asking, so an
+         * option and a second surgery were indistinguishable afterwards.
+         *
+         * The plan opens BLANK either way. Amy chose that over copying the
+         * first one: a copied item number that nobody edited is a wrong fee,
+         * and blank is slower but cannot lie. ("2. blank", 17 Aug 2026.)
+         *
+         * The only difference an option makes is the name: the operation she
+         * is offering an alternative to gets named too, at the same moment, so
+         * there are never two unnamed halves and the chips never read alike.
+         * Nothing is written here - naming happens when she saves the plan.
+         */
+        async function newSurgery() {
+          var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
+          var sameOp = live[0];
+          if (sameOp) {
+            var opName = sameOp.plan_name || sameOp.procedure_name || "the surgery on file";
+            var pick = await pfAskBox({
+              title: "What are you adding for " + (state.patient && state.patient.full_name || "this patient") + "?",
+              sub: opName,
+              intro: "",
+              choices: [
+                { id: "option", primary: true, head: "Another way of doing " + opName,
+                  line: "An alternative she picks between. Its own item numbers, its own quote and " +
+                        "its own recovery guide. The other one is kept, not deleted." },
+                { id: "surgery", head: "A different operation",
+                  line: "A separate surgery on its own. Nothing is copied." }
+              ],
+              cancelLabel: "Cancel" });
+            if (!pick) return;
+            if (pick === "option") {
+              /* Name the FIRST one now if it has no name, so the two chips can
+               * be told apart the moment the second exists. Only the name is
+               * written; nothing else on that plan is touched. */
+              if (!sameOp.plan_name) {
+                var firstName = window.prompt(
+                  "Name the one she already has, so the two can be told apart:",
+                  sameOp.procedure_name ? String(sameOp.procedure_name).split("(")[0].trim() : "Option A");
+                if (firstName === null) return;
+                firstName = String(firstName).trim();
+                if (firstName) {
+                  try {
+                    var c0 = sb();
+                    if (c0) {
+                      var r0 = await c0.from("surgeon_orders").update({ plan_name: firstName }).eq("id", sameOp.id);
+                      if (r0 && r0.error) toast("Could not name it: " + r0.error.message);
+                      else sameOp.plan_name = firstName;
+                    }
+                  } catch (e) { toast("Could not name it: " + e.message); }
+                }
+              }
+              var newName = window.prompt("Name this new option:", "");
+              if (newName === null) return;
+              state.pendingPlanName = String(newName || "").trim() || null;
+            } else {
+              state.pendingPlanName = null;
+            }
+          } else {
+            state.pendingPlanName = null;
+          }
+          var o = { id: null, procedure_codes: [], _new: true };
+          state.orders = state.orders || [];
+          state.orders.unshift(o); state.order = o; state.orderId = null;
+          renderSurgeryPicker(); renderSurgery(); renderOrder();
+        }
         var orderEditing = false;
         function orderHasData(o) {
           var any = false;
@@ -2701,11 +2768,16 @@
              * (Amy, 16 Aug 2026.) */
             var starting = !!(state.order && state.order._new);
             var oid = state.orderId || (starting ? "new" : "");
-            var want = String(id) + "#" + planGen + "#" + oid;
+            // The name she typed when she said "another option". Carried on the
+            // address so the blank plan opens already named, otherwise she is
+            // asked for a name and it is thrown away before she can save it.
+            var wantName = (starting && state.pendingPlanName) ? state.pendingPlanName : "";
+            var want = String(id) + "#" + planGen + "#" + oid + "#" + wantName;
             if (planFrame.getAttribute("data-patient") !== want) {
               planFrame.setAttribute("data-patient", want);
               planFrame.src = APPS.plan + "?patient=" + encodeURIComponent(id) +
                               (oid ? "&order=" + encodeURIComponent(oid) : "") +
+                              (wantName ? "&plan_name=" + encodeURIComponent(wantName) : "") +
                               "&v=" + Math.floor(Date.now() / 60000);
             }
           }

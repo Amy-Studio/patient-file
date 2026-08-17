@@ -1982,14 +1982,28 @@
           // The option marker is an em dash, written by the Quote Builder and
           // PIB as " — <Option>". A plain hyphen is NOT it: "Staff - if needed
           // - Invoice notes" is one label, not a document with an option.
-          var opt = "", base = label;
-          var m = /^(.*?)\s+[—–]\s+([^—–]+)$/.exec(label);
-          if (m) { base = m[1].trim(); opt = m[2].trim(); }
+          /* A LABEL CAN CARRY SEVERAL OF THESE NOW, NOT JUST ONE.
+           *
+           * This took only the LAST em-dash piece, which was right while the
+           * only suffix was an option name. Quotes now carry the quote number
+           * and the place as well, so "Main quote — Q1641 — Clinic" left
+           * "Main quote — Q1641" as the base, matched nothing in the rename
+           * list, and the internal name "Main quote" was shown to Amy and
+           * filed to PracSuite instead of "Surgical Fee Quote".
+           * (Amy, 17 Aug 2026: "i did see someones quote for clinic called
+           * Main Quote and then the other information. this isnt correct".)
+           *
+           * Every em-dash piece is taken off to find the base, and they all
+           * come back after the proper name. A plain hyphen is still NOT a
+           * separator: "Staff - if needed - Invoice notes" is one label. */
+          var bits = label.split(/\s+[—–]\s+/);
+          var base = String(bits.shift() || "").trim();
+          var extras = bits.map(function (x) { return String(x).trim(); }).filter(Boolean);
           var nice = PS_DOC_NAME[base.toLowerCase()];
           // Not one of ours: it is somebody's own name for their own document,
           // and it is left exactly as they wrote it, em dash and all.
           if (!nice) return label || String(d.doc_type || "Document").replace(/_/g, " ");
-          return nice + (opt ? " (" + opt + ")" : "");
+          return nice + (extras.length ? " (" + extras.join(" \u00b7 ") + ")" : "");
         }
         /* Renaming a document.
          *

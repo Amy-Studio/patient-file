@@ -2295,6 +2295,27 @@
               })) {
             await raiseTag("feeest.req_uploaded");
           }
+          /* THE RECOVERY GUIDE EARNS ITS OWN TAG.
+           *
+           * "Recovery Guide Uploaded" has existed in the clinic's tag list all
+           * along and nothing ever raised it, so a booklet reaching a
+           * patient's PracSuite record left no mark on the workflow the team
+           * reads. (Amy, 17 Aug 2026: "when i send to pracsuite it should also
+           * send the 'Recovery Guide Uploaded' tag".)
+           *
+           * The full booklet AND the personalised-pages-only version both
+           * count: each is the guide reaching their record, which is all this
+           * tag claims. "pib" is what a booklet dropped straight onto this
+           * page is filed as. Nothing else that merely mentions a pamphlet
+           * qualifies, for the same reason the quote tag was narrowed on
+           * 15 Aug: a tag PracSuite cannot take off has to be right first time.
+           */
+          if (done.some(function (x) {
+                var t = String(x.doc_type || "");
+                return t === "pamphlet_full" || t === "pamphlet_personalised" || t === "pib";
+              })) {
+            await raiseTag("guide.uploaded");
+          }
           var parts = [];
           if (done.length) parts.push('<b style="color:#2d7a55">' + done.length + ' sent.</b>');
           if (failed.length) {

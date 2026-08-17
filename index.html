@@ -1161,7 +1161,15 @@
           var on = "background:#1f3a5f;color:#fff;";
           var off = "background:var(--card);color:var(--accent-ink);border:1px solid var(--line);";
           var items = orders.map(function (o, i) {
-            var name = o.procedure_name ? String(o.procedure_name).split("(")[0].trim().slice(0, 24) : ("Surgery " + (i + 1));
+            /* THE NAME HE GAVE IT WINS.
+             *
+             * Two plans for one operation have almost the same procedure name,
+             * so the chips read the same and Amy is choosing between identical
+             * buttons. A plan_name is only ever typed when there IS more than
+             * one, which is exactly when it is needed. (17 Aug 2026, stage 3.) */
+            var name = o.plan_name ? String(o.plan_name).trim().slice(0, 28)
+                     : (o.procedure_name ? String(o.procedure_name).split("(")[0].trim().slice(0, 24)
+                                         : ("Surgery " + (i + 1)));
             // Sync 5 (GAP A): nobody writes surgeon_orders.session_date, so the
             // real surgery date lives in patients.surgery_date. Show that for the
             // current surgery (orders[0]); past surgeries fall back to when the
@@ -1215,7 +1223,7 @@
               return '<button type="button" data-ocf="' + i + '" style="font-size:12.5px;' +
                 'background:#fff;border:1px solid #e2c98f;color:#7a5309;border-radius:8px;' +
                 'padding:6px 12px;margin:0 7px 6px 0;cursor:pointer">' +
-                esc(o.procedure_name || "Unnamed plan") + '</button>';
+                esc(o.plan_name || o.procedure_name || "Unnamed plan") + '</button>';
             }).join("") + '</div>';
           el.innerHTML = ask + '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery, Surgeon order &amp; Documents</div>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:10px;padding:8px">' + (items || '<span style="font-size:13px;color:var(--muted)">No surgery yet</span>') + '<span data-newsurg="1" style="' + pill + 'color:var(--accent-ink);border:1px dashed #c7d6ea;margin-left:auto">+ new surgery</span></div>' + archivedHtml;
@@ -1241,11 +1249,19 @@
             });
           }
           planAction("data-ocf", async function (o, c) {
-            var label = o.procedure_name || "this surgery";
-            if (!confirm("Confirm " + label + " as the one going ahead?\n\nAny other live " +
-                         "plan for this patient is archived, so the surgical list has one answer.")) return;
-            // Archive the others first: only one plan can be going ahead.
-            await c.from("surgeon_orders").update({ archived_at: new Date().toISOString() })
+            var label = o.plan_name || o.procedure_name || "this surgery";
+            if (!confirm("Confirm " + label + " as the one going ahead?\n\nHer other plans stay " +
+                         "on the file; only the tick moves.")) return;
+            /* THE TICK MOVES. NOTHING IS ARCHIVED.
+             *
+             * This archived every other live plan the patient had, so ticking
+             * the left foot removed the right foot that was booked for
+             * November, and an option she was still weighing up disappeared.
+             * "Going ahead" is one answer to one question, and clearing it from
+             * the others says so without deleting anything.
+             * (17 Aug 2026, stage 1 item that the theatre list got and this
+             * screen did not.) */
+            await c.from("surgeon_orders").update({ confirmed_at: null })
               .eq("patient_id", state.patient.id).is("archived_at", null).neq("id", o.id);
             var r = await c.from("surgeon_orders")
               .update({ confirmed_at: new Date().toISOString(), archived_at: null }).eq("id", o.id);

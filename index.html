@@ -1167,6 +1167,22 @@
              * so the chips read the same and Amy is choosing between identical
              * buttons. A plan_name is only ever typed when there IS more than
              * one, which is exactly when it is needed. (17 Aug 2026, stage 3.) */
+            /* AN UNSAVED SURGERY SAYS SO, AND NOTHING ELSE.
+             *
+             * A surgery being started has no id yet. It was drawn like any
+             * other chip - "Surgery 1 · current", with the date of a real
+             * booking beside it - so a blank that exists only in this browser
+             * looked exactly like a plan on her file, and there was nothing on
+             * it to say otherwise. (Amy, 17 Aug 2026: "it appears to not
+             * clear".) */
+            if (!o.id) {
+              return '<span data-oi="' + i + '" style="' + pill + (state.order === o ? on : off) +
+                'border:1px dashed #b9c6da">' +
+                (state.pendingIsOption ? "New option" : "New surgery") +
+                ' <span style="opacity:.75">\u00b7 not saved yet</span>' +
+                ' <span data-odrop="' + i + '" title="Discard it" style="margin-left:8px;' +
+                'opacity:.75;cursor:pointer;font-weight:700">&times;</span></span>';
+            }
             var name = o.plan_name ? String(o.plan_name).trim().slice(0, 28)
                      : (o.procedure_name ? String(o.procedure_name).split("(")[0].trim().slice(0, 24)
                                          : ("Surgery " + (i + 1)));
@@ -1309,6 +1325,23 @@
             toast("Deleted"); planGen++; if (typeof loadReal === "function") loadReal();
           });
           Array.prototype.forEach.call(el.querySelectorAll("[data-oi]"), function (c) { c.addEventListener("click", function () { setSurgery(parseInt(c.getAttribute("data-oi"), 10)); }); });
+          /* Discard a surgery that was started and not saved. It exists only
+           * in this browser, so nothing is written and nothing is archived:
+           * the placeholder is simply dropped and the previous surgery
+           * selected again. (17 Aug 2026.) */
+          Array.prototype.forEach.call(el.querySelectorAll("[data-odrop]"), function (x) {
+            x.addEventListener("click", function (ev) {
+              ev.stopPropagation();
+              var i = parseInt(x.getAttribute("data-odrop"), 10);
+              var o = (state.orders || [])[i];
+              if (!o || o.id) return;
+              state.orders.splice(i, 1);
+              state.pendingIsOption = false;
+              var next = (state.orders || []).filter(function (z) { return z && z.id; })[0] || null;
+              state.order = next; state.orderId = next ? next.id : null;
+              renderSurgeryPicker(); renderSurgery(); renderOrder();
+            });
+          });
           var ns = el.querySelector("[data-newsurg]"); if (ns) ns.addEventListener("click", newSurgery);
         }
         // The plan saves inside a frame. Without this the patient file still
@@ -1359,34 +1392,34 @@
               cancelLabel: "Cancel" });
             if (!pick) return;
             if (pick === "option") {
-              /* Name the FIRST one now if it has no name, so the two chips can
-               * be told apart the moment the second exists. Only the name is
-               * written; nothing else on that plan is touched. */
-              if (!sameOp.plan_name) {
-                var firstName = window.prompt(
-                  "Name the one she already has, so the two can be told apart:",
-                  sameOp.procedure_name ? String(sameOp.procedure_name).split("(")[0].trim() : "Option A");
-                if (firstName === null) return;
-                firstName = String(firstName).trim();
-                if (firstName) {
-                  try {
-                    var c0 = sb();
-                    if (c0) {
-                      var r0 = await c0.from("surgeon_orders").update({ plan_name: firstName }).eq("id", sameOp.id);
-                      if (r0 && r0.error) toast("Could not name it: " + r0.error.message);
-                      else sameOp.plan_name = firstName;
-                    }
-                  } catch (e) { toast("Could not name it: " + e.message); }
-                }
+              /* NO TYPING BOXES IN THE WAY.
+               *
+               * This asked twice with browser prompts: name the first one,
+               * then name the new one. Two grey boxes before she has seen
+               * anything, and neither is how the rest of the suite asks.
+               *
+               * The first plan already has a name in all but word - its
+               * procedure - so it is named from that, silently, and only when
+               * it has nothing. The new one is named on the plan screen, in
+               * the "Name this plan" box that is already there and now keeps
+               * what it is given. (Amy, 17 Aug 2026: "this prompt is strange".)
+               */
+              if (!sameOp.plan_name && sameOp.procedure_name) {
+                var auto = String(sameOp.procedure_name).split("(")[0].trim().slice(0, 40);
+                try {
+                  var c0 = sb();
+                  if (c0 && auto) {
+                    var r0 = await c0.from("surgeon_orders").update({ plan_name: auto }).eq("id", sameOp.id);
+                    if (!(r0 && r0.error)) sameOp.plan_name = auto;
+                  }
+                } catch (e) { /* a name is not worth blocking the new plan for */ }
               }
-              var newName = window.prompt("Name this new option:", "");
-              if (newName === null) return;
-              state.pendingPlanName = String(newName || "").trim() || null;
+              state.pendingIsOption = true;
             } else {
-              state.pendingPlanName = null;
+              state.pendingIsOption = false;
             }
           } else {
-            state.pendingPlanName = null;
+            state.pendingIsOption = false;
           }
           var o = { id: null, procedure_codes: [], _new: true };
           state.orders = state.orders || [];
@@ -2768,16 +2801,16 @@
              * (Amy, 16 Aug 2026.) */
             var starting = !!(state.order && state.order._new);
             var oid = state.orderId || (starting ? "new" : "");
-            // The name she typed when she said "another option". Carried on the
-            // address so the blank plan opens already named, otherwise she is
-            // asked for a name and it is thrown away before she can save it.
-            var wantName = (starting && state.pendingPlanName) ? state.pendingPlanName : "";
-            var want = String(id) + "#" + planGen + "#" + oid + "#" + wantName;
+            // Started as an alternative rather than a separate operation. The
+            // plan screen uses it to put the cursor in "Name this plan", which
+            // is the one thing that must not be left blank when there are two.
+            var asOption = (starting && state.pendingIsOption) ? "1" : "";
+            var want = String(id) + "#" + planGen + "#" + oid + "#" + asOption;
             if (planFrame.getAttribute("data-patient") !== want) {
               planFrame.setAttribute("data-patient", want);
               planFrame.src = APPS.plan + "?patient=" + encodeURIComponent(id) +
                               (oid ? "&order=" + encodeURIComponent(oid) : "") +
-                              (wantName ? "&plan_name=" + encodeURIComponent(wantName) : "") +
+                              (asOption ? "&option=1" : "") +
                               "&v=" + Math.floor(Date.now() / 60000);
             }
           }

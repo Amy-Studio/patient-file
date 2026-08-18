@@ -1227,92 +1227,140 @@
         function renderSurgeryPicker() {
           var el = qs("pf-surgery-switcher"); if (!el) return;
           var orders = state.orders || [];
-          var pill = "font-size:13px;border-radius:999px;padding:6px 14px;cursor:pointer;white-space:nowrap;";
-          var on = "background:#1f3a5f;color:#fff;";
-          var off = "background:var(--card);color:var(--accent-ink);border:1px solid var(--line);";
-          var items = orders.map(function (o, i) {
-            /* THE NAME HE GAVE IT WINS.
-             *
-             * Two plans for one operation have almost the same procedure name,
-             * so the chips read the same and Amy is choosing between identical
-             * buttons. A plan_name is only ever typed when there IS more than
-             * one, which is exactly when it is needed. (17 Aug 2026, stage 3.) */
-            /* AN UNSAVED SURGERY SAYS SO, AND NOTHING ELSE.
-             *
-             * A surgery being started has no id yet. It was drawn like any
-             * other chip - "Surgery 1 · current", with the date of a real
-             * booking beside it - so a blank that exists only in this browser
-             * looked exactly like a plan on her file, and there was nothing on
-             * it to say otherwise. (Amy, 17 Aug 2026: "it appears to not
-             * clear".) */
-            if (!o.id) {
-              return '<span data-oi="' + i + '" style="' + pill + (state.order === o ? on : off) +
-                'border:1px dashed #b9c6da">' +
-                (state.pendingIsOption ? "New option" : "New surgery") +
-                ' <span style="opacity:.75">\u00b7 not saved yet</span>' +
-                ' <span data-odrop="' + i + '" title="Discard it" style="margin-left:8px;' +
-                'opacity:.75;cursor:pointer;font-weight:700">&times;</span></span>';
-            }
-            var name = o.plan_name ? String(o.plan_name).trim().slice(0, 28)
-                     : (o.procedure_name ? String(o.procedure_name).split("(")[0].trim().slice(0, 24)
-                                         : ("Surgery " + (i + 1)));
-            // Sync 5 (GAP A): nobody writes surgeon_orders.session_date, so the
-            // real surgery date lives in patients.surgery_date. Show that for the
-            // current surgery (orders[0]); past surgeries fall back to when the
-            // order row was logged.
-            var d = (i === 0 && state.patient && state.patient.surgery_date)
-              ? isoToDmy(state.patient.surgery_date)
-              : (o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : ""));
-            var active = state.order === o;
-            return '<span data-oi="' + i + '" style="' + pill + (active ? on : off) + '">' + esc(name) + (d ? ' <span style="opacity:.7">· ' + esc(d) + '</span>' : '') + (i === 0 ? ' <span style="opacity:.7">· current</span>' : '') +
-            (o.confirmed_at ? ' <span style="opacity:.85">&#10003; going ahead</span>' : '') +
-            (o.id ? ' <span data-ocf="' + i + '" title="This is the one going ahead" ' +
-                      'style="opacity:.6;margin-left:7px">&#10003;</span>' +
-                    ' <span data-oar="' + i + '" title="Not chosen: archive it" ' +
-                      'style="opacity:.6;margin-left:5px">&#8681;</span>' +
-                    ' <span data-orm="' + i + '" title="Created by mistake: delete it" ' +
-                      'style="opacity:.6;margin-left:5px;font-weight:700">&times;</span>' : '') + '</span>';
-          }).join("");
-          // Archived surgeries: shown, greyed, not selectable, each with a way
-          // back. Not part of `items` above, so nothing downstream can pick one
-          // up by accident. (Amy, 16 Aug 2026: greyed out or gone? how do we
-          // view past surgeries?)
-          var archived = (state.archivedOrders || []).filter(function (o) { return o && o.id; });
-          var archivedHtml = !archived.length ? "" :
-            '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
-            '<span style="font-size:11px;color:var(--muted);letter-spacing:.04em">NOT GOING AHEAD</span>' +
-            archived.map(function (o, i) {
-              var nm = o.procedure_name ? String(o.procedure_name).split("(")[0].trim().slice(0, 24) : "Surgery";
-              var dt = o.session_date ? isoToDmy(o.session_date) : (o.created_at ? isoToDmy(o.created_at) : "");
-              return '<span title="Archived ' + esc(isoToDmy(o.archived_at) || "") + '. It is kept, so what was offered and quoted is still on record." ' +
-                'style="font-size:12.5px;border-radius:999px;padding:5px 12px;white-space:nowrap;background:var(--card);' +
-                'color:var(--muted);border:1px dashed var(--line)">' + esc(nm) +
-                (dt ? ' <span style="opacity:.8">· ' + esc(dt) + '</span>' : '') +
-                ' <span data-oun="' + i + '" title="Put this surgery back" ' +
-                'style="margin-left:7px;color:var(--accent-ink);cursor:pointer;font-weight:600">restore</span></span>';
-            }).join("") + '</div>';
-          // When there is genuinely a decision to make, say so plainly with
-          // named buttons. A small tick on a pill is not findable, and this is
-          // the decision everything downstream depends on.
+          /* ONE DROPDOWN, NOT A ROW OF CHIPS.
+           *
+           * The chips grew with every option: five plans wrapped onto two
+           * lines, cut the names mid-word at 24 characters, and put an
+           * unlabelled tick, arrow and cross five pixels apart on each one.
+           * The same five were also listed a second time, in full, in an amber
+           * banner directly above. Two pickers for one decision.
+           *
+           * A dropdown names the surgery you are on and nothing else, so the
+           * header is the same height with one surgery or forty, and the list
+           * opens OVER the page rather than pushing the tabs down.
+           * (Amy, 18 Aug 2026: "its not clear how you switch", "whether both
+           * options or all options will be stacked in left hand menu, if yes
+           * not practical".) */
           var live = orders.filter(function (o) { return o.id && !o.archived_at; });
-          var undecided = live.length > 1 && !live.some(function (o) { return o.confirmed_at; });
-          var ask = !undecided ? "" :
-            '<div style="background:#fdf3dd;border:1px solid #f0ddb0;border-radius:10px;' +
-            'padding:11px 13px;margin-bottom:10px">' +
-            '<div style="font-size:13px;font-weight:700;color:#96660f;margin-bottom:3px">' +
-            'They have ' + live.length + ' plans. Which one is going ahead?</div>' +
-            '<div style="font-size:12px;color:#96660f;opacity:.85;margin-bottom:9px">' +
-            'Until this is answered the surgical list and the booking screen will both ask, ' +
-            'and nothing can be printed for them.</div>' +
-            live.map(function (o) {
-              var i = orders.indexOf(o);
-              return '<button type="button" data-ocf="' + i + '" style="font-size:12.5px;' +
-                'background:#fff;border:1px solid #e2c98f;color:#7a5309;border-radius:8px;' +
-                'padding:6px 12px;margin:0 7px 6px 0;cursor:pointer">' +
-                esc(o.plan_name || o.procedure_name || "Unnamed plan") + '</button>';
-            }).join("") + '</div>';
-          el.innerHTML = ask + '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery and the Surgery plan. Documents are the whole file, whichever is picked</div>' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:10px;padding:8px">' + (items || '<span style="font-size:13px;color:var(--muted)">No surgery yet</span>') + '<span data-newsurg="1" style="' + pill + 'color:var(--accent-ink);border:1px dashed #c7d6ea;margin-left:auto">+ new surgery</span></div>' + archivedHtml;
+          var archived = (state.archivedOrders || []).filter(function (o) { return o && o.id; });
+          var going = live.filter(function (o) { return o.confirmed_at; })[0] || null;
+          var cur = state.order || live[0] || null;
+          var undecided = live.length > 1 && !going;
+
+          /* THE NAME HE GAVE IT WINS, and an unsaved one says so.
+           *
+           * Two plans for one operation have almost the same procedure name,
+           * so a plan_name is only ever typed when there IS more than one,
+           * which is exactly when it is needed. (17 Aug 2026, stage 3.)
+           * A surgery being started has no id yet and must never look like a
+           * plan on her file. (Amy, 17 Aug 2026: "it appears to not clear".) */
+          function nameOf(o) {
+            if (!o) return "No surgery yet";
+            if (!o.id) return "New surgery, not saved yet";
+            return o.plan_name || o.procedure_name || "Unnamed surgery";
+          }
+          /* THE BOOKING BELONGS TO ONE SURGERY, SO ONLY ONE MAY WEAR IT.
+           *
+           * There is one surgery_date on the patient, not one per surgery, so
+           * falling back to it for every row would print the same date beside
+           * four different options and read as four bookings. It is shown only
+           * where it can honestly belong: the surgery going ahead, or the only
+           * live one there is. Everything else says "no date yet", which is
+           * true. (House rule 2: a blank never prints as a positive statement.) */
+          function whenOf(o) {
+            if (!o || !o.id) return "";
+            var p = state.patient || {};
+            var ownsBooking = (o.confirmed_at) || (live.length === 1 && live[0] === o);
+            var d = o.session_date ? isoToDmy(o.session_date)
+                  : (ownsBooking && p.surgery_date ? isoToDmy(p.surgery_date) : "");
+            var vk = o.surgery_venue || o.venue || (ownsBooking ? p.surgery_venue : "") || "";
+            var v = VENUE[vk] || vk || "";
+            return [d || "no date yet", v].filter(Boolean).join(" · ");
+          }
+
+          var head =
+            '<div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">' +
+              '<span style="font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--muted)">SURGERY</span>' +
+              '<span id="pf-surg-btn" style="display:flex;align-items:center;gap:10px;cursor:pointer;' +
+                'border:1.5px solid ' + (undecided ? '#f0ddb0' : 'var(--accent-ink)') + ';' +
+                'background:' + (undecided ? '#fdf3dd' : 'var(--card)') + ';border-radius:9px;padding:7px 13px;max-width:min(560px,60vw)"' +
+                ' title="' + esc(nameOf(cur)) + (whenOf(cur) ? " \u00b7 " + esc(whenOf(cur)) : "") + '">' +
+                '<span style="font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.3;' +
+                  'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1">' + esc(nameOf(cur)) +
+                  (whenOf(cur) ? ' <span style="font-weight:500;color:var(--muted);font-size:12px">· ' + esc(whenOf(cur)) + '</span>' : '') +
+                '</span>' +
+                '<span style="font-size:11px;color:var(--accent-ink)">▾</span>' +
+              '</span>' +
+              (going && going === cur
+                ? '<span style="font-size:10px;font-weight:700;letter-spacing:.05em;padding:3px 9px;border-radius:999px;background:#e6f4ec;color:#2d8a5f">✓ GOING AHEAD</span>'
+                : '') +
+              (live.length > 1
+                ? '<span style="font-size:12px;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
+                  (live.indexOf(cur) >= 0 ? (live.indexOf(cur) + 1) + ' of ' + live.length : live.length + ' surgeries') +
+                  (undecided ? ' · none going ahead' : (going && going !== cur ? ' · you are not on the one going ahead' : '')) +
+                  '</span>'
+                : '') +
+            '</div>';
+
+          function rowHtml(o, i, opts) {
+            var isCur = (o === cur);
+            var acts = opts.archivedRow
+              ? '<span data-oun="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
+                'border:1px solid var(--line);color:var(--accent-ink);background:#fff;cursor:pointer">Put it back</span>'
+              : (o.id
+                ? '<span data-ocf="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
+                    'border:1px solid #a9d3bd;color:#2d8a5f;background:#fff;cursor:pointer">✓ This one is going ahead</span>' +
+                  '<span data-oar="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
+                    'border:1px solid var(--line);color:var(--muted);background:#fff;cursor:pointer;margin-left:6px">Not chosen</span>' +
+                  '<span data-orm="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
+                    'border:1px solid #e8b9ba;color:#b7484a;background:#fff;cursor:pointer;margin-left:6px">Delete</span>'
+                : '');
+            return '<div ' + (opts.archivedRow ? '' : 'data-oi="' + i + '" ') +
+              'style="padding:10px 14px;border-bottom:1px solid #f2f5f8;cursor:' + (opts.archivedRow ? 'default' : 'pointer') + ';' +
+              (isCur ? 'background:#f4f8fc;box-shadow:inset 3px 0 0 var(--accent-ink);' : '') + '">' +
+              '<div style="font-size:13px;font-weight:600;color:' + (opts.archivedRow ? 'var(--muted)' : 'var(--ink)') + ';line-height:1.35">' +
+                esc(nameOf(o)) +
+                (o.confirmed_at ? ' <span style="font-size:10px;font-weight:700;color:#2d8a5f">✓ GOING AHEAD</span>' : '') +
+              '</div>' +
+              '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' +
+                esc(opts.archivedRow ? ('Not chosen. Archived ' + (isoToDmy(o.archived_at) || "") + '. Kept, so what was offered and quoted is still on record.') : (whenOf(o) || "not saved yet")) +
+              '</div>' +
+              (acts ? '<div style="margin-top:7px">' + acts + '</div>' : '') +
+            '</div>';
+          }
+
+          var listRows = orders.map(function (o, i) {
+            return (o.archived_at) ? "" : rowHtml(o, i, {});
+          }).join("");
+          var archRows = archived.map(function (o, i) { return rowHtml(o, i, { archivedRow: true }); }).join("");
+
+          var panelHtml =
+            '<div id="pf-surg-list" style="display:none;position:absolute;z-index:40;margin-top:6px;width:min(520px,92vw);' +
+              'background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 44px rgba(31,58,95,.2);overflow:hidden">' +
+              '<div style="padding:8px 14px;background:#f7f9fb;border-bottom:1px solid var(--line);' +
+                'font-size:10px;font-weight:700;letter-spacing:.06em;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
+                (live.length ? (undecided ? live.length + ' SURGERIES · NONE GOING AHEAD YET' : 'SURGERIES') : 'NO SURGERY YET') +
+              '</div>' +
+              listRows +
+              (archRows ? '<div style="padding:8px 14px;background:#f7f9fb;border-top:1px solid var(--line);border-bottom:1px solid var(--line);' +
+                'font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--muted)">NOT CHOSEN, KEPT ON FILE</div>' + archRows : '') +
+              '<div data-newsurg="1" style="padding:11px 14px;font-size:12.5px;font-weight:700;color:var(--pink-deep,#b87f97);' +
+                'background:#fffafb;cursor:pointer">+ Add another surgery</div>' +
+            '</div>';
+
+          el.style.position = "relative";
+          el.innerHTML = head + panelHtml;
+          (function () {
+            var btn = qs("pf-surg-btn"), list = qs("pf-surg-list");
+            if (!btn || !list) return;
+            btn.addEventListener("click", function (ev) {
+              ev.stopPropagation();
+              list.style.display = (list.style.display === "none") ? "block" : "none";
+            });
+            document.addEventListener("click", function (ev) {
+              if (list.style.display !== "none" && !list.contains(ev.target)) list.style.display = "none";
+            });
+          })();
           // Removing a surgery CANCELS it, it does not delete it. The row is
           // clinical history, and a plan built by mistake still records what
           // somebody intended at the time. Cancelled orders are excluded by the
@@ -1455,53 +1503,38 @@
          * Nothing is written here - naming happens when she saves the plan.
          */
         async function newSurgery() {
+          /* NO QUESTION. IT IS JUST ANOTHER SURGERY.
+           *
+           * This asked "another way of doing X, or a different operation?"
+           * before she had seen anything. Amy, 18 Aug 2026: "i dont want
+           * another thing saying another way of doing? its not needed. instead
+           * say add another surgery?"
+           *
+           * She is right, and nothing downstream ever used the answer: it was
+           * thrown away on save. An option and a second operation are the same
+           * row in the same table either way, and what actually tells them
+           * apart is the NAME, which she gives on the plan screen.
+           *
+           * The one thing kept from the old flow is naming the FIRST surgery
+           * from its own procedure when it has no name, silently, and only
+           * when it has none. Otherwise a patient with two surgeries has one
+           * named and one not, and the dropdown reads alike.
+           * (17 Aug 2026, and it is still the reason.) */
           var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
           var sameOp = live[0];
-          if (sameOp) {
-            var opName = sameOp.plan_name || sameOp.procedure_name || "the surgery on file";
-            var pick = await pfAskBox({
-              title: "What are you adding for " + (state.patient && state.patient.full_name || "this patient") + "?",
-              sub: opName,
-              intro: "",
-              choices: [
-                { id: "option", primary: true, head: "Another way of doing " + opName,
-                  line: "An alternative she picks between. Its own item numbers, its own quote and " +
-                        "its own recovery guide. The other one is kept, not deleted." },
-                { id: "surgery", head: "A different operation",
-                  line: "A separate surgery on its own. Nothing is copied." }
-              ],
-              cancelLabel: "Cancel" });
-            if (!pick) return;
-            if (pick === "option") {
-              /* NO TYPING BOXES IN THE WAY.
-               *
-               * This asked twice with browser prompts: name the first one,
-               * then name the new one. Two grey boxes before she has seen
-               * anything, and neither is how the rest of the suite asks.
-               *
-               * The first plan already has a name in all but word - its
-               * procedure - so it is named from that, silently, and only when
-               * it has nothing. The new one is named on the plan screen, in
-               * the "Name this plan" box that is already there and now keeps
-               * what it is given. (Amy, 17 Aug 2026: "this prompt is strange".)
-               */
-              if (!sameOp.plan_name && sameOp.procedure_name) {
-                var auto = String(sameOp.procedure_name).split("(")[0].trim().slice(0, 40);
-                try {
-                  var c0 = sb();
-                  if (c0 && auto) {
-                    var r0 = await c0.from("surgeon_orders").update({ plan_name: auto }).eq("id", sameOp.id);
-                    if (!(r0 && r0.error)) sameOp.plan_name = auto;
-                  }
-                } catch (e) { /* a name is not worth blocking the new plan for */ }
+          if (sameOp && !sameOp.plan_name && sameOp.procedure_name) {
+            var auto = String(sameOp.procedure_name).split("(")[0].trim().slice(0, 40);
+            try {
+              var c0 = sb();
+              if (c0 && auto) {
+                var r0 = await c0.from("surgeon_orders").update({ plan_name: auto }).eq("id", sameOp.id);
+                if (!(r0 && r0.error)) sameOp.plan_name = auto;
               }
-              state.pendingIsOption = true;
-            } else {
-              state.pendingIsOption = false;
-            }
-          } else {
-            state.pendingIsOption = false;
+            } catch (e) { /* a name is not worth blocking the new surgery for */ }
           }
+          /* The cursor goes into "Name this plan" whenever there is already a
+           * surgery, because that is exactly when the two need telling apart. */
+          state.pendingIsOption = !!sameOp;
           var o = { id: null, procedure_codes: [], _new: true };
           state.orders = state.orders || [];
           state.orders.unshift(o); state.order = o; state.orderId = null;

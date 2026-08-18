@@ -4658,13 +4658,26 @@
             if (pr && !pr.error && pr.data && pr.data.id) { state.patient = pr.data; moved = true; }
             if (or && !or.error) {
               var was = JSON.stringify(state.order || null);
-              state.orders = or.data || [];
+              /* A SURGERY BEING STARTED SURVIVES A RE-READ.
+               *
+               * This replaced the whole list with what the database has, and a
+               * surgery she has just started has no id there yet - it exists
+               * only on screen. So switching to the Surgery plan tab, which
+               * re-reads the record, threw it away along with the date and
+               * anything else typed into it, and said nothing.
+               * (Amy, 17 Aug 2026: "when i click surgical plan that new
+               * surgery date deletes".) */
+              var pending = (state.orders || []).filter(function (o) { return o && !o.id; });
+              var wasOnPending = !!(state.order && !state.order.id);
+              state.orders = (or.data || []);
+              if (pending.length) state.orders = pending.concat(state.orders);
               /* Keep whichever surgery she was looking at selected. Falling
                * back to the newest would move her onto a different plan behind
                * her back, and a plan is not something to swap silently. */
               var keep = state.orders.filter(function (o) { return o && o.id === keepOrderId; })[0];
-              var pick = keep || state.orders[0] || null;
-              state.order = pick; state.orderId = pick ? pick.id : null;
+              var pick = wasOnPending ? pending[0]
+                       : (keep || state.orders.filter(function (o) { return o && o.id; })[0] || null);
+              state.order = pick; state.orderId = (pick && pick.id) ? pick.id : null;
               if (JSON.stringify(state.order || null) !== was) orderGen++;
               moved = true;
             }

@@ -1300,6 +1300,25 @@
                   (undecided ? ' · none going ahead' : (going && going !== cur ? ' · you are not on the one going ahead' : '')) +
                   '</span>'
                 : '') +
+              /* ADD SURGERY LIVES HERE, NOT IN THE DROPDOWN.
+               *
+               * Amy, 18 Aug 2026: "add a another surgery should be somewhere on
+               * the main part of the file just like how you add the first one?
+               * however the first one is added is how the second should be."
+               *
+               * She is right and it was worse than she knew: there was no way
+               * to add the FIRST one either. A surgery only came into being as
+               * a side effect of pressing Save on the Surgery plan, or of
+               * dropping a note in. So "how do I start a surgery" had no
+               * answer on this screen at all.
+               *
+               * One button, always here, whether the patient has none or four.
+               * Hiding it inside the dropdown made the second surgery work
+               * differently from the first, which is exactly what she objected
+               * to. */
+              '<span data-newsurg="1" style="margin-left:auto;font-size:12.5px;font-weight:700;' +
+                'color:var(--accent-ink);border:1px dashed #c7d6ea;border-radius:8px;' +
+                'padding:7px 13px;cursor:pointer;white-space:nowrap">+ Add surgery</span>' +
             '</div>';
 
           function rowHtml(o, i, opts) {
@@ -1344,8 +1363,7 @@
               listRows +
               (archRows ? '<div style="padding:8px 14px;background:#f7f9fb;border-top:1px solid var(--line);border-bottom:1px solid var(--line);' +
                 'font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--muted)">NOT CHOSEN, KEPT ON FILE</div>' + archRows : '') +
-              '<div data-newsurg="1" style="padding:11px 14px;font-size:12.5px;font-weight:700;color:var(--pink-deep,#b87f97);' +
-                'background:#fffafb;cursor:pointer">+ Add another surgery</div>' +
+
             '</div>';
 
           el.style.position = "relative";
@@ -1523,53 +1541,52 @@
          * there are never two unnamed halves and the chips never read alike.
          * Nothing is written here - naming happens when she saves the plan.
          */
+        /* THE SURGERY IS CREATED HERE. THE PLAN SITS INSIDE IT.
+         *
+         * Amy, 18 Aug 2026: "how about we have an add surgery even for the
+         * first plan? if i drop stuff in from clinical notes the prompts come
+         * up and surgery is created. and plan sits inside it."
+         *
+         * That is already how a dropped note behaves: it creates a draft
+         * surgery before anything is written into it. The button did the
+         * opposite. It made a surgery that existed only in this browser, and
+         * the row was created as a side effect of pressing Save on the plan.
+         * So a surgery she had "added" was invisible everywhere else until she
+         * happened to save, and if she did not, it silently never existed.
+         *
+         * Now the button does what the note drop does: it creates the surgery,
+         * as a draft, and everything else is written into it afterwards. Same
+         * for the first surgery as for the fourth.
+         *
+         * The one thing kept from before is naming the FIRST surgery from its
+         * own procedure when it has none, so a patient with two does not have
+         * one named and one not. (17 Aug 2026.) */
         async function newSurgery() {
-          /* NO QUESTION. IT IS JUST ANOTHER SURGERY.
-           *
-           * This asked "another way of doing X, or a different operation?"
-           * before she had seen anything. Amy, 18 Aug 2026: "i dont want
-           * another thing saying another way of doing? its not needed. instead
-           * say add another surgery?"
-           *
-           * She is right, and nothing downstream ever used the answer: it was
-           * thrown away on save. An option and a second operation are the same
-           * row in the same table either way, and what actually tells them
-           * apart is the NAME, which she gives on the plan screen.
-           *
-           * The one thing kept from the old flow is naming the FIRST surgery
-           * from its own procedure when it has no name, silently, and only
-           * when it has none. Otherwise a patient with two surgeries has one
-           * named and one not, and the dropdown reads alike.
-           * (17 Aug 2026, and it is still the reason.) */
+          if (!state.patient || !state.patient.id) { toast("Open a patient first"); return; }
+          var c = sb(); if (!c) { toast("Not signed in"); return; }
           var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
           var sameOp = live[0];
           if (sameOp && !sameOp.plan_name && sameOp.procedure_name) {
             var auto = String(sameOp.procedure_name).split("(")[0].trim().slice(0, 40);
             try {
-              var c0 = sb();
-              if (c0 && auto) {
-                var r0 = await c0.from("surgeon_orders").update({ plan_name: auto }).eq("id", sameOp.id);
-                if (!(r0 && r0.error)) sameOp.plan_name = auto;
-              }
+              var r0 = await c.from("surgeon_orders").update({ plan_name: auto }).eq("id", sameOp.id);
+              if (!(r0 && r0.error)) sameOp.plan_name = auto;
             } catch (e) { /* a name is not worth blocking the new surgery for */ }
           }
-          /* The cursor goes into "Name this plan" whenever there is already a
-           * surgery, because that is exactly when the two need telling apart. */
+          /* status "draft" is the same state a dropped note leaves a surgery
+           * in, so nothing downstream has to learn a new one. */
+          var ins = await c.from("surgeon_orders")
+            .insert({ patient_id: state.patient.id, status: "draft" }).select("id").single();
+          if (!ins || ins.error || !ins.data || !ins.data.id) {
+            alert("The surgery was NOT created, so nothing has changed.\n\n" +
+                  ((ins && ins.error && ins.error.message) || "The database did not return a new surgery."));
+            return;
+          }
+          state.wantOrderId = ins.data.id;
           state.pendingIsOption = !!sameOp;
-          var o = { id: null, procedure_codes: [], _new: true };
-          state.orders = state.orders || [];
-          state.orders.unshift(o); state.order = o; state.orderId = null;
-          renderSurgeryPicker(); renderSurgery(); renderOrder();
-          /* Say "new" to the plan frame, out loud, now.
-           *
-           * wireLaunch already knows how to do this (it sends order=new for a
-           * surgery being started), but nothing called it here, so the frame
-           * kept the FIRST surgery on screen. She typed the second operation
-           * into the first one's form and Save overwrote it: procedure, item
-           * numbers and recovery answers replaced, no second surgery created,
-           * and the screen still said Saved. This is the "could not save a
-           * second surgery" she was stuck on. (18 Aug 2026.) */
-          try { wireLaunch(); } catch (e) {}
+          planGen++;
+          toast("Surgery added");
+          if (typeof loadReal === "function") loadReal();
         }
         var orderEditing = false;
         function orderHasData(o) {
@@ -5116,7 +5133,15 @@
                  * this left as it was the printed list and this screen could
                  * disagree about the same patient. They cannot now.
                  * (18 Aug 2026.) */
-                var _chosen = state.orders.filter(function (o) { return o && o.confirmed_at; })[0]
+                /* ...unless something has just asked for one BY NAME.
+                 * Adding a surgery must land on the surgery you just added,
+                 * even when another one is ticked as going ahead. */
+                var _want = state.wantOrderId
+                  ? state.orders.filter(function (o) { return String(o.id) === String(state.wantOrderId); })[0]
+                  : null;
+                state.wantOrderId = null;
+                var _chosen = _want
+                              || state.orders.filter(function (o) { return o && o.confirmed_at; })[0]
                               || state.orders[0];
                 state.order = _chosen; state.orderId = _chosen.id;
               } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });

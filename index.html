@@ -4097,10 +4097,52 @@
           note.innerHTML = msg + ' Use the buttons at the top of the file to change which one is going ahead.';
           el.parentNode.insertBefore(note, el);
         }
+        /* ASK ONCE, THEN GET OUT OF THE WAY.
+         *
+         * Amy, 18 Aug 2026: "if one isnt selected and a plan is trying to be
+         * started have a pop up saying is this the surgery going ahead. then we
+         * can click confirm, then the pop up arhiving the others? if we dont
+         * want to then thats fine. but i think usually we would."
+         *
+         * So: a question, not a locked door. Answering yes runs the same
+         * confirmSurgery the buttons at the top run, which then offers to put
+         * the others away. Answering "not yet" writes nothing and the plan
+         * opens anyway, with the line above it saying whose it is.
+         *
+         * Asked ONCE per surgery per visit. Re-mounting a tab, switching away
+         * and back, or a background reload must not re-ask a question she has
+         * already answered. */
+        var _preopAsked = {};
+        async function preopAskWhich() {
+          var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
+          if (live.length < 2) return;
+          if (live.some(function (o) { return o.confirmed_at; })) return;
+          var cur = state.order; if (!cur || !cur.id) return;
+          if (_preopAsked[cur.id]) return;
+          _preopAsked[cur.id] = true;
+          var name = cur.plan_name || cur.procedure_name || "this surgery";
+          var pick = await pfAskBox({
+            title: "Is this the surgery going ahead?",
+            sub: name,
+            intro: (state.patient && state.patient.full_name ? state.patient.full_name : "This patient") +
+                   " has " + live.length + " surgeries and none is marked as going ahead. " +
+                   "A pre-op plan produces the theatre staff sheet for one operation.",
+            choices: [
+              { id: "yes", primary: true, head: "Yes, this one is going ahead",
+                line: "You will then be asked whether to put the others away as not chosen. They are kept either way." },
+              { id: "no", head: "Not yet, just write the plan",
+                line: "Nothing is marked. The plan belongs to " + name + " and you can decide later." }
+            ],
+            cancelLabel: "" });
+          if (pick === "yes") await confirmSurgery(cur);
+        }
         function mountPreop() {
           var old = qs("pp-whose"); if (old && old.parentNode) old.parentNode.removeChild(old);
           preopNotice();
           mountSurgeonTab("pp-inline", "ClinicPreopPlan", _ppFor, function (s) { _ppFor = s; });
+          /* After the form is up, so the question is never asked over a blank
+           * screen and she can see what she is being asked about. */
+          try { preopAskWhich(); } catch (e) {}
         }
         /* CHANGING SURGERY HAS TO REACH THE FORM THAT IS OPEN.
          *

@@ -1428,98 +1428,72 @@
            * is the thing you press to change it, so there is nothing extra to
            * find. The list opens OVER the page, fixed to the screen, so the
            * menu cannot grow and nothing can clip it. */
-          /* A BUTTON THAT SAYS WHAT IT DOES, NOT A 10-PIXEL ARROW.
+          /* THE SURGERIES GO ACROSS THE TOP, ONE PILL EACH.
            *
-           * Amy, 18 Aug 2026: "drop down arrow too small. unclear how you
-           * select one ... also it looks like 1 is selected and its not! not
-           * clear. this formatting matters!!"
+           * Amy, 18 Aug 2026: "is there a better spot to put this so it isnt
+           * taking up so much lenth on the left hand side. also flicking
+           * between the drop down. especially if they have a suergey then they
+           * have another one months later."
            *
-           * All three were the same mistake: the control was decoration. The
-           * arrow was 10px, nothing said it could be pressed, and the kicker
-           * read "1 OF 5", which looks like an instruction that surgery one is
-           * selected rather than a position. Now the surgery is named plainly,
-           * the count is a sentence, and changing it is a full-width button
-           * with a word on it. */
-          var boxHead =
-            '<div style="font-size:9.5px;font-weight:700;letter-spacing:.06em;color:' +
-              (undecided ? '#96660f' : 'var(--accent-ink)') + '">YOU ARE WORKING ON</div>' +
-            '<div style="font-size:13px;font-weight:700;color:var(--ink);margin-top:5px;line-height:1.35;' +
-              'display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">' +
-              esc(nameOf(cur)) + '</div>' +
-            (whenOf(cur) ? '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">' + esc(whenOf(cur)) + '</div>' : '') +
-            (isDone(cur)
-              ? '<div style="display:inline-block;margin-top:6px;font-size:9.5px;font-weight:700;letter-spacing:.05em;' +
-                'padding:2px 8px;border-radius:999px;background:#eef1f5;color:#375a6b">✓ DONE</div>'
-            : (going && going === cur
-              ? '<div style="display:inline-block;margin-top:6px;font-size:9.5px;font-weight:700;letter-spacing:.05em;' +
-                'padding:2px 8px;border-radius:999px;background:#e6f4ec;color:#2d8a5f">✓ GOING AHEAD</div>'
-              : (undecided
-                ? '<div style="display:inline-block;margin-top:6px;font-size:9.5px;font-weight:700;letter-spacing:.05em;' +
-                  'padding:2px 8px;border-radius:999px;background:#fff;border:1px solid #f0ddb0;color:#96660f">NOT DECIDED</div>'
-                : (isDone(cur)
-                  ? ''
-                  : '')))) +
-            (live.length > 1
-              ? '<button type="button" id="pf-surg-change" style="width:100%;margin-top:10px;font-family:inherit;' +
-                'font-size:12.5px;font-weight:700;padding:9px 10px;border-radius:8px;cursor:pointer;' +
-                'border:1.5px solid var(--accent-ink);background:#fff;color:var(--accent-ink);' +
-                'display:flex;align-items:center;justify-content:center;gap:7px">' +
-                'Change surgery <span style="font-size:14px;line-height:1">▾</span></button>' +
-                '<div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">' +
-                  'This is ' + (live.indexOf(cur) >= 0 ? (live.indexOf(cur) + 1) : 1) + ' of ' + live.length + '</div>'
-              : '');
-
-          /* The top strip keeps only what belongs in the main part of the file:
-           * how many there are, and the button that adds one. Amy asked for the
-           * add to work the same way for the first surgery as for the fourth,
-           * and this is the one place that is true of. */
+           * Both complaints are the same thing. A header in the side menu costs
+           * 200px of the one column that has no room, and a dropdown makes
+           * every switch two clicks: open it, then choose. A patient with a
+           * left foot done in November and a right foot coming has two
+           * surgeries she moves between constantly.
+           *
+           * Pills across the top are one click each, cost the side menu
+           * NOTHING, and show every surgery at once without opening anything.
+           * The menu is left with two labels and its tabs. */
+          function pill(o, i, opts) {
+            var isCur = (o === cur), done = !opts.arch && isDone(o);
+            var bg = opts.arch ? '#fff' : (isCur ? 'var(--accent-ink)' : '#fff');
+            var fg = opts.arch ? 'var(--muted)' : (isCur ? '#fff' : 'var(--ink)');
+            var bd = opts.arch ? '1px dashed var(--line)'
+                   : (isCur ? '1.5px solid var(--accent-ink)'
+                   : (o.confirmed_at && !done ? '1.5px solid #a9d3bd' : '1px solid var(--line)'));
+            var tag = opts.arch ? 'not chosen'
+                    : (done ? '✓ done' : (o.confirmed_at ? '✓ going ahead' : ''));
+            var nm = nameOf(o); if (nm.length > 34) nm = nm.slice(0, 33).trim() + '…';
+            var sub = opts.arch ? '' : (whenOf(o) || '');
+            return '<span ' + (opts.arch ? 'data-oun="' + i + '" ' : 'data-oi="' + i + '" ') +
+              'title="' + esc(nameOf(o)) + (sub ? ' · ' + esc(sub) : '') + '" ' +
+              'style="display:inline-flex;flex-direction:column;gap:1px;cursor:pointer;' +
+              'border:' + bd + ';background:' + bg + ';color:' + fg + ';border-radius:9px;' +
+              'padding:6px 12px;max-width:290px">' +
+              '<span style="font-size:12.5px;font-weight:700;line-height:1.25;white-space:nowrap;' +
+                'overflow:hidden;text-overflow:ellipsis">' + esc(nm) + '</span>' +
+              ((sub || tag)
+                ? '<span style="font-size:10.5px;font-weight:600;opacity:' + (isCur ? '.85' : '.6') + ';white-space:nowrap">' +
+                  esc([sub, tag].filter(Boolean).join(' · ')) + '</span>'
+                : '') +
+            '</span>';
+          }
+          var pills = orders.map(function (o, i) { return o.archived_at ? '' : pill(o, i, {}); }).join('') +
+                      archived.map(function (o, i) { return pill(o, i, { arch: true }); }).join('');
           var top =
-            '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
-              '<span style="font-size:12.5px;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
-                (live.length
-                  ? (live.length === 1 ? '1 surgery on file'
-                      : live.length + ' surgeries on file' + (undecided ? ' · none going ahead' : ''))
-                  : 'No surgery on file yet') +
-                (archived.length ? ' · ' + archived.length + ' not chosen' : '') +
-              '</span>' +
-              '<span data-newsurg="1" style="margin-left:auto;font-size:12.5px;font-weight:700;' +
-                'color:var(--accent-ink);border:1px dashed #c7d6ea;border-radius:8px;' +
-                'padding:7px 13px;cursor:pointer;white-space:nowrap">+ Add surgery</span>' +
+            '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">' +
+              '<span style="font-size:9.5px;font-weight:700;letter-spacing:.07em;color:var(--muted)">SURGERY</span>' +
+              (pills || '<span style="font-size:12.5px;color:var(--muted)">None on file yet</span>') +
+              '<span data-newsurg="1" style="font-size:12.5px;font-weight:700;color:var(--accent-ink);' +
+                'border:1px dashed #c7d6ea;border-radius:9px;padding:7px 13px;cursor:pointer;white-space:nowrap">' +
+                '+ Add surgery</span>' +
+              (undecided
+                ? '<span style="font-size:11.5px;color:#96660f;width:100%">' +
+                  'None is marked as going ahead. Open one and use "This one is going ahead".</span>'
+                : '') +
             '</div>';
 
           el.innerHTML = top;
+          /* The side menu keeps only a label. Everything that grew is gone. */
           var box = qs("pf-opbox"), boxHeadEl = qs("pf-opbox-head");
           if (box) box.classList.toggle("undecided", !!undecided);
-          if (boxHeadEl) boxHeadEl.innerHTML = boxHead;
+          if (boxHeadEl) boxHeadEl.innerHTML =
+            '<div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;color:' +
+              (undecided ? '#96660f' : 'var(--accent-ink)') + '">THIS SURGERY</div>' +
+            '<div style="font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.3;' +
+              'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' +
+              esc(nameOf(cur)) + '</div>';
 
-          /* The list is put on the BODY, fixed to the screen, and placed beside
-           * the box when it opens. Inside the menu it would be clipped by the
-           * card and would push the tabs down, which is the whole thing she
-           * objected to. */
-          var oldList = qs("pf-surg-list"); if (oldList && oldList.parentNode) oldList.parentNode.removeChild(oldList);
-          var list = document.createElement("div");
-          list.id = "pf-surg-list";
-          list.style.cssText = "display:none;position:fixed;z-index:60;width:min(520px,92vw);max-height:70vh;" +
-            "overflow:auto;background:#fff;border:1px solid var(--line);border-radius:11px;" +
-            "box-shadow:0 14px 44px rgba(31,58,95,.22)";
-          list.innerHTML = panelInner;
-          document.body.appendChild(list);
-          var opener = qs("pf-surg-change") || boxHeadEl;
-          if (opener && boxHeadEl) {
-            opener.addEventListener("click", function (ev) {
-              ev.stopPropagation();
-              if (list.style.display === "block") { list.style.display = "none"; return; }
-              var r = boxHeadEl.getBoundingClientRect();
-              list.style.display = "block";
-              var w = list.getBoundingClientRect().width;
-              var left = Math.min(r.right + 10, window.innerWidth - w - 12);
-              list.style.left = Math.max(8, left) + "px";
-              list.style.top = Math.max(8, Math.min(r.top, window.innerHeight - list.getBoundingClientRect().height - 12)) + "px";
-            });
-            document.addEventListener("click", function (ev) {
-              if (list.style.display === "block" && !list.contains(ev.target)) list.style.display = "none";
-            });
-          }
           // Removing a surgery CANCELS it, it does not delete it. The row is
           // clinical history, and a plan built by mistake still records what
           // somebody intended at the time. Cancelled orders are excluded by the
@@ -3407,8 +3381,8 @@
               (live.length + gone.length) + ' surgeries on this file</h3>' +
             '<div style="font-size:12px;color:' + (undecided ? '#96660f' : 'var(--muted)') + ';margin-bottom:8px">' +
               (undecided
-                ? 'None is marked as going ahead yet. Use the surgery dropdown at the top to say which one is.'
-                : 'Change which one you are working on with the dropdown at the top.') +
+                ? 'None is marked as going ahead yet. Open one at the top and use \'This one is going ahead\'.'
+                : 'Click a surgery at the top to work on it.') +
             '</div>' +
             '<div style="overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:22px">' +
             '<table style="width:100%;border-collapse:collapse;min-width:640px">' +

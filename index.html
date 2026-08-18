@@ -1382,26 +1382,7 @@
               });
             });
           }
-          planAction("data-ocf", async function (o, c) {
-            var label = o.plan_name || o.procedure_name || "this surgery";
-            if (!confirm("Confirm " + label + " as the one going ahead?\n\nHer other plans stay " +
-                         "on the file; only the tick moves.")) return;
-            /* THE TICK MOVES. NOTHING IS ARCHIVED.
-             *
-             * This archived every other live plan the patient had, so ticking
-             * the left foot removed the right foot that was booked for
-             * November, and an option she was still weighing up disappeared.
-             * "Going ahead" is one answer to one question, and clearing it from
-             * the others says so without deleting anything.
-             * (17 Aug 2026, stage 1 item that the theatre list got and this
-             * screen did not.) */
-            await c.from("surgeon_orders").update({ confirmed_at: null })
-              .eq("patient_id", state.patient.id).is("archived_at", null).neq("id", o.id);
-            var r = await c.from("surgeon_orders")
-              .update({ confirmed_at: new Date().toISOString(), archived_at: null }).eq("id", o.id);
-            if (r.error) { toast("Couldn't confirm: " + r.error.message); return; }
-            toast("Confirmed"); planGen++; if (typeof loadReal === "function") loadReal();
-          });
+          planAction("data-ocf", async function (o) { await confirmSurgery(o); });
           planAction("data-oar", async function (o, c) {
             var label = o.procedure_name || "this surgery";
             if (!confirm("Archive " + label + "?\n\nUse this when it was a real option they " +
@@ -1486,6 +1467,46 @@
          * and the booklet were built for the wrong operation.
          * (18 Aug 2026. The reload logic to do this properly was already
          * written and commented in wireLaunch; nothing ever called it.) */
+        /* ONE PLACE THAT MOVES THE TICK.
+         *
+         * It used to live inside the dropdown's own click handler, so the only
+         * way to answer "which one is going ahead" was to find a small control
+         * in a list. The Pre-op tab now has to ask the same question, and two
+         * copies of a write that clears a column across a patient is exactly
+         * how the two ends of a fix drift apart.
+         *
+         * THE TICK MOVES. NOTHING IS ARCHIVED. This archived every other live
+         * plan the patient had, so ticking the left foot removed the right foot
+         * booked for November. (17 Aug 2026, stage 1.)
+         *
+         * BOTH WRITES ARE CHECKED. The clear runs first, so a failure on the
+         * second one wipes the answer she gave last time and leaves nothing in
+         * its place. That used to be reported to a console nobody has open.
+         * (18 Aug 2026.) */
+        async function confirmSurgery(o) {
+          if (!o || !o.id) return false;
+          var c = sb(); if (!c) { toast("Not signed in"); return false; }
+          var label = o.plan_name || o.procedure_name || "this surgery";
+          if (!confirm("Confirm " + label + " as the one going ahead?\n\n" +
+                       "The other surgeries stay on the file. Only the tick moves.")) return false;
+          var rc = await c.from("surgeon_orders").update({ confirmed_at: null })
+            .eq("patient_id", state.patient.id).is("archived_at", null).neq("id", o.id);
+          if (rc && rc.error) {
+            alert("Nothing was changed.\n\n" + rc.error.message);
+            return false;
+          }
+          var r = await c.from("surgeon_orders")
+            .update({ confirmed_at: new Date().toISOString(), archived_at: null }).eq("id", o.id);
+          if (r && r.error) {
+            alert("This did NOT save, and the previous answer has been cleared.\n\n" +
+                  "Nobody is marked as going ahead for this patient now. Please pick one again.\n\n" +
+                  r.error.message);
+            planGen++; if (typeof loadReal === "function") loadReal();
+            return false;
+          }
+          toast("Confirmed"); planGen++; if (typeof loadReal === "function") loadReal();
+          return true;
+        }
         function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); try { renderSurgeryRecord(); } catch (e) {}; renderSurgery(); renderOrder(); try { wireLaunch(); } catch (e) {} remountOpenSurgeonTab(); }
         /* "+ NEW SURGERY" ASKS WHICH SHE MEANS.
          *
@@ -3656,7 +3677,68 @@
           }
           if (mountSurgeonForm(host, modName)) setSig(sig);
         }
-        function mountPreop() { mountSurgeonTab("pp-inline", "ClinicPreopPlan", _ppFor, function (s) { _ppFor = s; }); }
+        /* CHOOSE THE SURGERY BEFORE WRITING A PLAN FOR IT.
+         *
+         * Amy, 18 Aug 2026: "perhaps a surgery must be actually selected as
+         * going forward prior to being able to create a pre op plan if
+         * multiple active??!!"
+         *
+         * She is right, and it is better than what I had. A pre-op plan belongs
+         * to ONE operation: it produces that operation's theatre staff sheet.
+         * With three live surgeries and no answer, whichever one the screen
+         * happened to land on got the plan, and the mistake was only visible
+         * later, in theatre. Asking first makes it impossible instead of
+         * merely visible.
+         *
+         * It asks HERE, on the tab she is standing on, not on the checklist and
+         * not in the dropdown. The choice writes through confirmSurgery, the
+         * same one place the dropdown uses. */
+        function preopGate() {
+          var el = qs("pp-inline"); if (!el) return false;
+          var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
+          if (live.length < 2 || live.some(function (o) { return o.confirmed_at; })) return false;
+          var who = (state.patient && state.patient.full_name) || "This patient";
+          el.innerHTML =
+            '<div style="border:1px solid #f0ddb0;background:#fdf3dd;border-radius:11px;padding:17px 19px;max-width:600px">' +
+              '<div style="font-size:15px;font-weight:700;color:#96660f">Which surgery is going ahead?</div>' +
+              '<div style="font-size:13px;color:#8a6a2a;line-height:1.6;margin-top:6px">' +
+                esc(who) + ' has ' + live.length + ' surgeries on file and none is marked as going ahead. ' +
+                'A pre-op plan belongs to one operation and produces its theatre staff sheet, so choose ' +
+                'which one is happening before writing it.' +
+              '</div>' +
+              '<div style="margin-top:13px;display:flex;flex-direction:column;gap:7px">' +
+              live.map(function (o) {
+                var i = (state.orders || []).indexOf(o);
+                return '<span data-preopgo="' + i + '" style="background:#fff;border:1px solid #f0ddb0;' +
+                  'border-radius:8px;padding:9px 13px;font-size:13px;font-weight:600;color:var(--ink);' +
+                  'cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px">' +
+                  '<span>' + esc(o.plan_name || o.procedure_name || "Unnamed surgery") + '</span>' +
+                  '<span style="font-weight:500;color:var(--muted);font-size:11.5px;white-space:nowrap">' +
+                    esc(o.session_date ? isoToDmy(o.session_date) : "no date yet") + '</span>' +
+                  '</span>';
+              }).join("") +
+              '</div>' +
+              '<div style="font-size:12.5px;color:#8a6a2a;margin-top:12px;line-height:1.55">' +
+                'The others are kept, so what was offered and quoted stays on record. You can change ' +
+                'this later from the surgery dropdown at the top.' +
+              '</div>' +
+            '</div>';
+          Array.prototype.forEach.call(el.querySelectorAll("[data-preopgo]"), function (x) {
+            x.addEventListener("click", async function () {
+              var o = (state.orders || [])[parseInt(x.getAttribute("data-preopgo"), 10)];
+              if (!o) return;
+              if (await confirmSurgery(o)) setSurgery((state.orders || []).indexOf(o));
+            });
+          });
+          /* The form has not been mounted, so the next mount must not think it
+           * is already showing this surgery. */
+          _ppFor = null;
+          return true;
+        }
+        function mountPreop() {
+          if (preopGate()) return;
+          mountSurgeonTab("pp-inline", "ClinicPreopPlan", _ppFor, function (s) { _ppFor = s; });
+        }
         /* CHANGING SURGERY HAS TO REACH THE FORM THAT IS OPEN.
          *
          * These two were reached from their nav item's click and nowhere else,

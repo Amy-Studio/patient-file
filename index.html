@@ -1388,7 +1388,18 @@
           else if (typeof wireLaunch === "function") { try { wireLaunch(); } catch (err) {} }
         });
 
-        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); try { renderSurgeryRecord(); } catch (e) {}; renderSurgery(); renderOrder(); }
+        /* PICKING A SURGERY HAS TO REACH THE PLAN AND THE BUTTONS.
+         *
+         * wireLaunch is the only thing that reloads the plan frame and rebuilds
+         * the Quote and Pamphlet links, and it was reached from renderAll
+         * alone. So choosing a different surgery moved the highlight in the
+         * strip and nothing else: the plan underneath was still the surgery she
+         * had just left, one press of Save wrote her typing into THAT one, and
+         * Quote and Pamphlet still carried the old surgery's id, so the quote
+         * and the booklet were built for the wrong operation.
+         * (18 Aug 2026. The reload logic to do this properly was already
+         * written and commented in wireLaunch; nothing ever called it.) */
+        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); try { renderSurgeryRecord(); } catch (e) {}; renderSurgery(); renderOrder(); try { wireLaunch(); } catch (e) {} }
         /* "+ NEW SURGERY" ASKS WHICH SHE MEANS.
          *
          * A different operation and another way of doing the same one are two
@@ -1456,6 +1467,16 @@
           state.orders = state.orders || [];
           state.orders.unshift(o); state.order = o; state.orderId = null;
           renderSurgeryPicker(); renderSurgery(); renderOrder();
+          /* Say "new" to the plan frame, out loud, now.
+           *
+           * wireLaunch already knows how to do this (it sends order=new for a
+           * surgery being started), but nothing called it here, so the frame
+           * kept the FIRST surgery on screen. She typed the second operation
+           * into the first one's form and Save overwrote it: procedure, item
+           * numbers and recovery answers replaced, no second surgery created,
+           * and the screen still said Saved. This is the "could not save a
+           * second surgery" she was stuck on. (18 Aug 2026.) */
+          try { wireLaunch(); } catch (e) {}
         }
         var orderEditing = false;
         function orderHasData(o) {

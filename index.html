@@ -1468,8 +1468,18 @@
                 : '') +
             '</span>';
           }
-          var pills = orders.map(function (o, i) { return o.archived_at ? '' : pill(o, i, {}); }).join('') +
-                      archived.map(function (o, i) { return pill(o, i, { arch: true }); }).join('');
+          /* NOT-CHOSEN ONES LEAVE THE TOP ROW.
+           *
+           * Amy, 18 Aug 2026: "if ones complete what happens to the record of
+           * it as having multiple pills?" and "can they just be removed or will
+           * they go to a different surgery tab for archives".
+           *
+           * A surgery she has put away is not something she is choosing between
+           * any more, so it stops taking space at the top. It is not lost: it is
+           * on Surgery record, under NOT CHOSEN, with Put it back. A DONE one
+           * stays, quietly, because she still opens it for its operation report
+           * and its audit. */
+          var pills = orders.map(function (o, i) { return o.archived_at ? '' : pill(o, i, {}); }).join('');
           var top =
             '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">' +
               '<span style="font-size:9.5px;font-weight:700;letter-spacing:.07em;color:var(--muted)">SURGERY</span>' +
@@ -1477,11 +1487,34 @@
               '<span data-newsurg="1" style="font-size:12.5px;font-weight:700;color:var(--accent-ink);' +
                 'border:1px dashed #c7d6ea;border-radius:9px;padding:7px 13px;cursor:pointer;white-space:nowrap">' +
                 '+ Add surgery</span>' +
-              (undecided
-                ? '<span style="font-size:11.5px;color:#96660f;width:100%">' +
-                  'None is marked as going ahead. Open one and use "This one is going ahead".</span>'
-                : '') +
-            '</div>';
+            '</div>' +
+            /* WHERE YOU ACTUALLY DECIDE.
+             *
+             * Amy, 18 Aug 2026: "how do you select what option you want?"
+             * Nowhere, because taking the dropdown away took its buttons with
+             * it. They belong under the pills, naming the surgery they act on,
+             * so she can only ever decide about the one she is looking at. */
+            (function () {
+              var i = orders.indexOf(cur);
+              if (!cur || !cur.id || i < 0) return '';
+              var doneNow = isDone(cur);
+              var bits = '';
+              if (!doneNow && !cur.confirmed_at)
+                bits += '<span data-ocf="' + i + '" style="font-size:12px;font-weight:700;padding:6px 12px;' +
+                  'border-radius:8px;border:1.5px solid #a9d3bd;color:#2d8a5f;background:#fff;cursor:pointer">' +
+                  '✓ This one is going ahead</span>';
+              if (!doneNow)
+                bits += '<span data-oar="' + i + '" style="font-size:12px;font-weight:600;padding:6px 12px;' +
+                  'border-radius:8px;border:1px solid var(--line);color:var(--muted);background:#fff;cursor:pointer">' +
+                  'Not chosen</span>';
+              bits += '<span data-orm="' + i + '" style="font-size:12px;font-weight:600;padding:6px 12px;' +
+                'border-radius:8px;border:1px solid #e8b9ba;color:#b7484a;background:#fff;cursor:pointer">Delete</span>';
+              return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px">' +
+                '<span style="font-size:11.5px;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
+                  (undecided ? 'Nothing is going ahead yet. For ' : 'For ') +
+                  esc(nameOf(cur).slice(0, 40)) + ':</span>' + bits +
+              '</div>';
+            })();
 
           el.innerHTML = top;
           /* The side menu keeps only a label. Everything that grew is gone. */
@@ -1637,8 +1670,52 @@
             planGen++; if (typeof loadReal === "function") loadReal();
             return false;
           }
+          /* AND OFFER TO PUT THE OTHERS AWAY.
+           *
+           * Amy, 18 Aug 2026: "when you do select a surgery option can it ask
+           * if i want to archive the other two active ones?"
+           *
+           * It ASKS. Stage 1 exists because ticking used to archive the others
+           * silently, which wiped a right foot booked for November. Asking is
+           * the difference between tidying up her options and deleting an
+           * operation she still needs.
+           *
+           * It only asks about surgeries that could be alternatives: nothing
+           * already operated on, and nothing already put away. If it cannot
+           * tidy one it says which, rather than reporting a clean sweep. */
+          var others = (state.orders || []).filter(function (x) {
+            return x && x.id && x.id !== o.id && !x.archived_at && !isDoneRow(x);
+          });
+          if (others.length) {
+            var names = others.map(function (x) { return "\u2022 " + (x.plan_name || x.procedure_name || "Unnamed surgery"); }).join("\n");
+            if (confirm("Put the other " + (others.length === 1 ? "one" : others.length) + " away as not chosen?\n\n" +
+                        names + "\n\n" +
+                        "They are kept, so what was offered and quoted stays on record. They come off the " +
+                        "top of the file and sit on Surgery record, where you can put them back.")) {
+              var failed = [];
+              for (var k = 0; k < others.length; k++) {
+                var ra = await c.from("surgeon_orders")
+                  .update({ archived_at: new Date().toISOString(), confirmed_at: null }).eq("id", others[k].id);
+                if (ra && ra.error) failed.push(others[k].plan_name || others[k].procedure_name || "one of them");
+              }
+              if (failed.length) alert("These were NOT put away:\n\n\u2022 " + failed.join("\n\u2022 ") +
+                                       "\n\nThey are still on the file. Nothing else has changed.");
+            }
+          }
           toast("Confirmed"); planGen++; if (typeof loadReal === "function") loadReal();
           return true;
+        }
+        /* The same "has it happened" rule as the picker, at a scope both the
+         * picker and confirmSurgery can reach. */
+        function isDoneRow(o) {
+          if (!o) return false;
+          if (o.status === "completed") return true;
+          var live = (state.orders || []).filter(function (x) { return x && x.id && !x.archived_at; });
+          var d = o.session_date || ((o.confirmed_at || live.length === 1) ? (state.patient || {}).surgery_date : null);
+          if (!d) return false;
+          var n = new Date();
+          var today = n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2, "0") + "-" + String(n.getDate()).padStart(2, "0");
+          return String(d).slice(0, 10) < today;
         }
         function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); try { renderSurgeryRecord(); } catch (e) {}; renderSurgery(); renderOrder(); try { wireLaunch(); } catch (e) {} remountOpenSurgeonTab(); }
         /* "+ NEW SURGERY" ASKS WHICH SHE MEANS.

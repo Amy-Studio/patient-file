@@ -3170,6 +3170,88 @@
             }).join("") + '</table>';
         }
 
+        /* ALL OF THEM, SIDE BY SIDE, IN THE PANEL.
+         *
+         * Amy, 18 Aug 2026: "and how are these on the file? perhaps theres a
+         * way to see all options but not stacked in the side table or else that
+         * would be very messy?"
+         *
+         * The dropdown is a switcher: it answers "which one am I on" and it can
+         * only show one at a time. It cannot answer "what did we offer this
+         * person", which is the question when she is deciding, or when the
+         * patient rings up about a quote.
+         *
+         * So they are laid out here, in the main panel where there is room,
+         * one row each, showing only what actually DIFFERS between them. The
+         * side menu is untouched, which is the whole point: it stays the same
+         * height whether there is one surgery or four.
+         *
+         * Read-only. Every button that changes anything stays in the dropdown,
+         * so there is exactly one place where a surgery can be confirmed,
+         * archived or deleted. */
+        function srAllSurgeries() {
+          var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
+          var gone = (state.archivedOrders || []).filter(function (o) { return o && o.id; });
+          if (live.length + gone.length < 2) return "";
+          var p = state.patient || {};
+
+          function stateOf(o, isArchived) {
+            if (isArchived) return ["NOT CHOSEN", "#6e7787", "#eef1f5"];
+            if (o.status === "completed") return ["OPERATED", "#375a6b", "#eef1f5"];
+            if (o.confirmed_at) return ["GOING AHEAD", "#2d8a5f", "#e6f4ec"];
+            if (o.status === "draft") return ["DRAFT", "#96660f", "#fdf3dd"];
+            return ["OFFERED", "#4a5a72", "#f2f5f8"];
+          }
+          function cell(v) {
+            return '<td style="padding:8px 10px;font-size:12.5px;color:var(--ink-soft);' +
+              'border-top:1px solid var(--line);vertical-align:top">' + (v || '<span style="color:var(--muted)">—</span>') + '</td>';
+          }
+          function rowOf(o, isArchived) {
+            var st = stateOf(o, isArchived);
+            /* One booking per patient, so the date is shown only where it can
+             * honestly belong. Same rule as the dropdown. */
+            var ownsBooking = o.confirmed_at || (live.length === 1 && live[0] === o);
+            var when = o.session_date ? isoToDmy(o.session_date)
+                     : (ownsBooking && p.surgery_date ? isoToDmy(p.surgery_date) : "");
+            var vk = o.surgery_venue || o.venue || (ownsBooking ? p.surgery_venue : "") || "";
+            var codes = Array.isArray(o.procedure_codes)
+              ? o.procedure_codes.map(function (c) { return (c && (c.code || c)) || ""; }).filter(Boolean)
+              : [];
+            return '<tr' + (o === state.order ? ' style="background:#f4f8fc"' : '') + '>' +
+              '<td style="padding:8px 10px;border-top:1px solid var(--line);vertical-align:top">' +
+                '<div style="font-size:12.5px;font-weight:700;color:' + (isArchived ? 'var(--muted)' : 'var(--ink)') + ';line-height:1.35">' +
+                  esc(o.plan_name || o.procedure_name || "Unnamed surgery") + '</div>' +
+                '<span style="display:inline-block;margin-top:4px;font-size:9.5px;font-weight:700;letter-spacing:.05em;' +
+                  'padding:2px 7px;border-radius:999px;color:' + st[1] + ';background:' + st[2] + '">' + st[0] + '</span>' +
+              '</td>' +
+              cell(esc(VENUE[vk] || vk || "")) +
+              cell(esc(when)) +
+              cell(o.procedure_name ? esc(String(o.procedure_name).slice(0, 90)) : "") +
+              cell(codes.length ? esc(codes.join(", ")) : "") +
+              cell(o.pracsuite_quote_number ? esc(String(o.pracsuite_quote_number)) : "") +
+            '</tr>';
+          }
+          var undecided = live.length > 1 && !live.some(function (o) { return o.confirmed_at; });
+          return '<h3 style="font-size:13.5px;margin:0 0 6px">' +
+              (live.length + gone.length) + ' surgeries on this file</h3>' +
+            '<div style="font-size:12px;color:' + (undecided ? '#96660f' : 'var(--muted)') + ';margin-bottom:8px">' +
+              (undecided
+                ? 'None is marked as going ahead yet. Use the surgery dropdown at the top to say which one is.'
+                : 'Change which one you are working on with the dropdown at the top.') +
+            '</div>' +
+            '<div style="overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:22px">' +
+            '<table style="width:100%;border-collapse:collapse;min-width:640px">' +
+              '<thead><tr>' +
+                ['Surgery', 'Where', 'When', 'Procedure', 'Item numbers', 'Quote'].map(function (h) {
+                  return '<th style="text-align:left;padding:8px 10px;font-size:9.5px;font-weight:700;' +
+                    'letter-spacing:.06em;color:var(--muted);background:#f7f9fb">' + h + '</th>';
+                }).join("") +
+              '</tr></thead><tbody>' +
+              live.map(function (o) { return rowOf(o, false); }).join("") +
+              gone.map(function (o) { return rowOf(o, true); }).join("") +
+            '</tbody></table></div>';
+        }
+
         async function renderSurgeryRecord() {
           const host = qs("sr-body");
           if (!host) return;
@@ -3203,6 +3285,7 @@
           } catch (e) { /* the case details are still worth showing */ }
 
           host.innerHTML =
+            srAllSurgeries() +
             '<h3 style="font-size:13.5px;margin:0 0 6px">Their case</h3>' + srCase(o, pt) +
             // "On their file", not "for this surgery": documents are held against
             // the patient, not against one operation, so a patient with two

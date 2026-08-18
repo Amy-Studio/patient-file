@@ -1438,7 +1438,7 @@
          * and the booklet were built for the wrong operation.
          * (18 Aug 2026. The reload logic to do this properly was already
          * written and commented in wireLaunch; nothing ever called it.) */
-        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); try { renderSurgeryRecord(); } catch (e) {}; renderSurgery(); renderOrder(); try { wireLaunch(); } catch (e) {} }
+        function setSurgery(i) { var o = (state.orders || [])[i]; if (!o) return; state.order = o; state.orderId = o.id || null; renderSurgeryPicker(); try { renderSurgeryRecord(); } catch (e) {}; renderSurgery(); renderOrder(); try { wireLaunch(); } catch (e) {} remountOpenSurgeonTab(); }
         /* "+ NEW SURGERY" ASKS WHICH SHE MEANS.
          *
          * A different operation and another way of doing the same one are two
@@ -2805,7 +2805,7 @@
           }
           show();
         }
-        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); wireCuraDocsPanel(); }
+        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); wireCuraDocsPanel(); remountOpenSurgeonTab(); }
         function renderNotes() {
           var el = qs("pf-notes-list"); if (!el) return;
           var notes = (state.notes || []).filter(function (n) { return !n.deleted_at; });
@@ -3624,6 +3624,26 @@
           if (mountSurgeonForm(host, modName)) setSig(sig);
         }
         function mountPreop() { mountSurgeonTab("pp-inline", "ClinicPreopPlan", _ppFor, function (s) { _ppFor = s; }); }
+        /* CHANGING SURGERY HAS TO REACH THE FORM THAT IS OPEN.
+         *
+         * These two were reached from their nav item's click and nowhere else,
+         * so picking a different surgery while already standing on Pre-op
+         * planning or Operative left the form showing, and SAVING TO, the
+         * surgery she had just clicked away from. The strip said one thing and
+         * the form wrote another.
+         *
+         * Only the tab actually on screen is rebuilt, so this cannot mount a
+         * heavy form nobody asked for, and mountSurgeonTab still refuses to
+         * swap a form with unsaved typing in it: that shows the amber note
+         * instead, exactly as it does today. (18 Aug 2026.) */
+        function remountOpenSurgeonTab() {
+          var sec = document.querySelector(".section.active");
+          var id = sec && sec.id;
+          try {
+            if (id === "sec-preop") mountPreop();
+            else if (id === "sec-operative") mountOperative();
+          } catch (e) {}
+        }
         /* The Operative tab holds two separate forms with two separate Save
          * buttons: the ACPS audit, and the operation report (which carries the
          * patient's post-op instructions under it, since Amy chose on 16 Aug
@@ -4963,7 +4983,28 @@
             // Show the patient straight away so the page is usable even if a
             // secondary table is slow; each section fills in as it arrives.
             state.patient = p; qs("pf-save").disabled = false; status(""); renderAll(); pfDirty = false;
-            pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).is("archived_at", null).order("created_at", { ascending: false }), "surgeries").then(function (r) { if (r && !r.error) { state.orders = r.data || []; if (state.orders.length) { state.order = state.orders[0]; state.orderId = state.orders[0].id; } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });
+            pfQ(client.from("surgeon_orders").select("*").eq("patient_id", p.id).is("archived_at", null).order("created_at", { ascending: false }), "surgeries").then(function (r) { if (r && !r.error) { state.orders = r.data || []; if (state.orders.length) {
+                /* THE ONE SHE TICKED, NOT THE NEWEST ONE.
+                 *
+                 * This took orders[0], the most recently created plan. Add an
+                 * option to a patient and the option is newest, so the file
+                 * opened on the alternative instead of the operation going
+                 * ahead: the plan, the pre-op planning tab, the Operative tab,
+                 * Quote and Pamphlet all pointed at it.
+                 *
+                 * It also meant the tick did nothing you could see. Confirming
+                 * a plan reloads through here, and this sent the screen
+                 * straight back to the newest one, so the answer looked like it
+                 * had not taken.
+                 *
+                 * Since 18 Aug the theatre list follows confirmed_at, so with
+                 * this left as it was the printed list and this screen could
+                 * disagree about the same patient. They cannot now.
+                 * (18 Aug 2026.) */
+                var _chosen = state.orders.filter(function (o) { return o && o.confirmed_at; })[0]
+                              || state.orders[0];
+                state.order = _chosen; state.orderId = _chosen.id;
+              } renderAll(); } else { console.warn("[PF] surgeries:", r && r.error && r.error.message); } });
             // Archived surgeries, kept in their OWN list.
             //
             // Archiving used to be nearly as final as deleting while sounding

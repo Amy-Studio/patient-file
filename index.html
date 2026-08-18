@@ -628,7 +628,7 @@
               <div class="field"><label>Their practice</label><input id="f-referring_doctor_practice"></div>
               <div class="field"><label>Their email</label><input id="f-referring_doctor_email"></div>
               <div class="field"><label>Referral date</label><input id="f-referral_date" type="date"></div>
-              <div class="field full"><label>Their address</label><input id="f-referring_doctor_address" placeholder="typed here, PracSuite does not send an address"></div>
+              <div class="field full"><label>Their address</label><input id="f-referring_doctor_address" placeholder="fills itself from PracSuite"></div>
               <div class="field"><label>GP</label><input id="f-gp_name" placeholder="often not the referrer"></div>
               <div class="field"><label>Preferred name</label><input id="f-preferred_name"></div>
               <div class="field"><label>Sex</label><input id="f-sex"></div>
@@ -4062,50 +4062,44 @@
          * It asks HERE, on the tab she is standing on, not on the checklist and
          * not in the dropdown. The choice writes through confirmSurgery, the
          * same one place the dropdown uses. */
-        function preopGate() {
-          var el = qs("pp-inline"); if (!el) return false;
+        /* A LINE ABOVE IT, NOT A LOCKED DOOR.
+         *
+         * This used to refuse to open the pre-op plan until a surgery was
+         * marked as going ahead. That was right when the screen could land on
+         * the wrong surgery without saying so. It is not right any more: the
+         * pills across the top name every surgery, the one you are on is
+         * filled in, and the tabs sit under a label saying whose they are.
+         *
+         * Amy, 18 Aug 2026: "but the pre op plan opens inside the surgery so
+         * that should be fine?" She is right. Blocking her from planning the
+         * operation she is looking at, because she has not yet formally ticked
+         * it, is friction that buys nothing. Steve plans before the patient has
+         * decided all the time; that is what the options are for.
+         *
+         * So it says which surgery this plan belongs to, and says out loud when
+         * that one is not the one going ahead. Then it gets out of the way. */
+        function preopNotice() {
+          var el = qs("pp-inline"); if (!el) return;
           var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
-          if (live.length < 2 || live.some(function (o) { return o.confirmed_at; })) return false;
-          var who = (state.patient && state.patient.full_name) || "This patient";
-          el.innerHTML =
-            '<div style="border:1px solid #f0ddb0;background:#fdf3dd;border-radius:11px;padding:17px 19px;max-width:600px">' +
-              '<div style="font-size:15px;font-weight:700;color:#96660f">Which surgery is going ahead?</div>' +
-              '<div style="font-size:13px;color:#8a6a2a;line-height:1.6;margin-top:6px">' +
-                esc(who) + ' has ' + live.length + ' surgeries on file and none is marked as going ahead. ' +
-                'A pre-op plan belongs to one operation and produces its theatre staff sheet, so choose ' +
-                'which one is happening before writing it.' +
-              '</div>' +
-              '<div style="margin-top:13px;display:flex;flex-direction:column;gap:7px">' +
-              live.map(function (o) {
-                var i = (state.orders || []).indexOf(o);
-                return '<span data-preopgo="' + i + '" style="background:#fff;border:1px solid #f0ddb0;' +
-                  'border-radius:8px;padding:9px 13px;font-size:13px;font-weight:600;color:var(--ink);' +
-                  'cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px">' +
-                  '<span>' + esc(o.plan_name || o.procedure_name || "Unnamed surgery") + '</span>' +
-                  '<span style="font-weight:500;color:var(--muted);font-size:11.5px;white-space:nowrap">' +
-                    esc(o.session_date ? isoToDmy(o.session_date) : "no date yet") + '</span>' +
-                  '</span>';
-              }).join("") +
-              '</div>' +
-              '<div style="font-size:12.5px;color:#8a6a2a;margin-top:12px;line-height:1.55">' +
-                'The others are kept, so what was offered and quoted stays on record. You can change ' +
-                'this later from the surgery dropdown at the top.' +
-              '</div>' +
-            '</div>';
-          Array.prototype.forEach.call(el.querySelectorAll("[data-preopgo]"), function (x) {
-            x.addEventListener("click", async function () {
-              var o = (state.orders || [])[parseInt(x.getAttribute("data-preopgo"), 10)];
-              if (!o) return;
-              if (await confirmSurgery(o)) setSurgery((state.orders || []).indexOf(o));
-            });
-          });
-          /* The form has not been mounted, so the next mount must not think it
-           * is already showing this surgery. */
-          _ppFor = null;
-          return true;
+          if (live.length < 2) return;
+          var cur = state.order;
+          var going = live.filter(function (o) { return o.confirmed_at; })[0] || null;
+          var name = (cur && (cur.plan_name || cur.procedure_name)) || "this surgery";
+          var msg, amber;
+          if (!going) { amber = true; msg = 'Nothing is marked as going ahead yet, so this plan and its theatre sheet belong to <b>' + esc(name) + '</b> only.'; }
+          else if (going !== cur) { amber = true; msg = 'This plan is for <b>' + esc(name) + '</b>, which is <b>not</b> the one going ahead. <b>' + esc(going.plan_name || going.procedure_name || "the other one") + '</b> is.'; }
+          else return;
+          var note = document.createElement("div");
+          note.id = "pp-whose";
+          note.style.cssText = "background:" + (amber ? "#fdf3dd" : "#f4f8fc") + ";border:1px solid " +
+            (amber ? "#f0ddb0" : "var(--line)") + ";color:" + (amber ? "#96660f" : "var(--ink-soft)") +
+            ";border-radius:9px;padding:9px 13px;font-size:12.5px;line-height:1.55;margin-bottom:11px";
+          note.innerHTML = msg + ' Use the buttons at the top of the file to change which one is going ahead.';
+          el.parentNode.insertBefore(note, el);
         }
         function mountPreop() {
-          if (preopGate()) return;
+          var old = qs("pp-whose"); if (old && old.parentNode) old.parentNode.removeChild(old);
+          preopNotice();
           mountSurgeonTab("pp-inline", "ClinicPreopPlan", _ppFor, function (s) { _ppFor = s; });
         }
         /* CHANGING SURGERY HAS TO REACH THE FORM THAT IS OPEN.

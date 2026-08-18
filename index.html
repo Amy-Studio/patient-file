@@ -777,10 +777,22 @@
              they are reading. Up here they said nothing about what they were
              linked to. What is left is the two that do not depend on a plan. -->
         <div class="launch">
-          <span class="lbl">Create for this patient:</span>
-          <a id="pf-make-list" href="#">Open their day's surgical list</a>
-          <span style="display:none"><a id="pf-make-fee-estimate" href="#"></a></span>
-          <a href="#" id="pf-goto-plan" style="opacity:.8">Quote or recovery guide &rarr; open Surgery plan</a>
+          <!-- THE SIGNPOSTS ARE GONE FROM HERE.
+               Amy, 18 Aug 2026: "what is the Book a surgery date first and Quote or
+               recovery guide -> open Surgery plan - what are they doing there? im
+               assuming they arent needed."
+               They made nothing. One nagged "Book a surgery date first" on a tab about
+               documents, and the other was a note telling her to go to a different tab.
+               The quote and the recovery guide are made from the surgery, and the
+               surgery pills at the top of the file are how she gets there now. A
+               surgical list is a day, not a document.
+               They stay in the page, hidden, because wireLaunch and the readiness
+               guards still address them by id. -->
+          <span style="display:none">
+            <a id="pf-make-list" href="#"></a>
+            <a id="pf-make-fee-estimate" href="#"></a>
+            <a href="#" id="pf-goto-plan"></a>
+          </span>
         </div>
         <!-- kept hidden: wireLaunch and the readiness guards still address these -->
         <span style="display:none"><a id="pf-make-quote" href="#"></a><a id="pf-make-pamphlet" href="#"></a></span>
@@ -2163,6 +2175,23 @@
             pane.scrollIntoView({ behavior: "smooth", block: "nearest" });
           });
         }
+        /* A SIGN-IN CODE IS NOT A PERSON.
+         *
+         * created_by holds whatever filed the document. Sometimes that is an
+         * email, which reads fine. Sometimes it is the raw sign-in id, and the
+         * file then says "by c6f3fc66-5a28-4293-8aa3-1662c90529e9", which tells
+         * her nothing and looks broken. (Amy, 18 Aug 2026, from a screenshot.)
+         *
+         * An email is shortened to the name in front of the @, because that is
+         * how she refers to people. A raw id says nothing at all rather than
+         * printing itself. */
+        function pfWhoName(v) {
+          var t = String(v == null ? "" : v).trim();
+          if (!t) return "";
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)) return "";
+          var at = t.indexOf("@");
+          return at > 0 ? t.slice(0, at) : t;
+        }
         function renderDocs() {
           // Removed documents live behind their OWN tab.
           //
@@ -2218,7 +2247,7 @@
               // The name shown here IS the name it carries on her PracSuite
               // record, so there is never a second hidden one.
               var name = pracSuiteDocName(d);
-              var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmyTime(d.generated_at || d.created_at)); if (d.created_by) meta.push("by " + d.created_by); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
+              var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmyTime(d.generated_at || d.created_at)); if (d.created_by) { var _w = pfWhoName(d.created_by); if (_w) meta.push("by " + _w); } if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
               if (d.pracsuite_filed_at) meta.push("On PracSuite " + isoToDmy(d.pracsuite_filed_at));
               // Already on their PracSuite record, so it does not need sending
               // again. Two options' booklets and quotes are separate rows with

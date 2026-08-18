@@ -186,6 +186,12 @@
       /* Body: nav + panel */
       .body { display: flex; gap: 16px; align-items: flex-start; margin-top: 16px; }
       nav.side { width: 184px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px; box-shadow: var(--shadow-sm); }
+    .navgrp{font-size:9.5px;font-weight:700;letter-spacing:.07em;color:var(--muted);padding:9px 10px 5px}
+    #pf-opbox{border:1.5px solid var(--accent-ink);border-radius:11px;margin-top:11px;overflow:hidden;background:#fff}
+    #pf-opbox.undecided{border-color:#f0ddb0}
+    #pf-opbox-head{padding:9px 11px;background:#f4f8fc;cursor:pointer}
+    #pf-opbox.undecided #pf-opbox-head{background:#fdf3dd}
+    #pf-opbox-tabs{padding:5px 6px 7px;border-top:1px solid var(--line)}
       .navitem {
         display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 500; color: var(--ink-soft);
         padding: 8px 10px; border-radius: var(--radius); cursor: pointer; user-select: none;
@@ -522,18 +528,35 @@
       <div id="pf-surgery-switcher" style="margin-top:14px"></div>
 
       <div class="body">
+        <!-- TWO GROUPS, AND THE OPERATION'S OWN TABS SIT INSIDE ITS BOX.
+             Six of these follow the surgery you have picked and five do not, and
+             nothing on screen said which was which: the caption above the old
+             chip strip named two tabs when six actually followed it, and went
+             stale the day the others were added. Where a tab SITS is the answer
+             now, and a caption cannot go stale.
+             The box header is also the switcher, so the thing you are working
+             inside is the thing you press to change it.
+             (Amy, 18 Aug 2026: "last preview you showed me it with the actual
+             tabs inside it?") -->
         <nav class="side" id="pf-nav">
+          <div class="navgrp">THIS PATIENT</div>
           <div class="navitem active" data-sec="overview"><svg class="ic"><use href="#i-checksq"/></svg> Checklist</div>
           <div class="navitem" data-sec="contact"><svg class="ic"><use href="#i-user"/></svg> Contact</div>
-          <div class="navitem" data-sec="surgery"><svg class="ic"><use href="#i-calendar"/></svg> Surgery</div>
-          <div class="navitem" data-sec="order"><svg class="ic"><use href="#i-clipboard"/></svg> Surgery plan</div>
-          <div class="navitem" data-sec="preop"><svg class="ic"><use href="#i-clock"/></svg> Pre-op planning</div>
-          <div class="navitem" data-sec="operative"><svg class="ic"><use href="#i-activity"/></svg> Operative</div>
           <div class="navitem" data-sec="documents"><svg class="ic"><use href="#i-file"/></svg> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
-          <div class="navitem" data-sec="hire" id="pf-nav-hire"><svg class="ic"><use href="#i-box"/></svg> Hire<span class="mark" id="pf-hire-mark" style="display:none"></span></div>
-          <div class="navitem" data-sec="surgeryrecord"><svg class="ic"><use href="#i-clipboard"/></svg> Surgery record</div>
           <div class="navitem" data-sec="pracsuite"><svg class="ic"><use href="#i-user"/></svg> PracSuite</div>
           <div class="navitem" data-sec="notes"><svg class="ic"><use href="#i-edit"/></svg> Notes</div>
+
+          <div id="pf-opbox">
+            <div id="pf-opbox-head"></div>
+            <div id="pf-opbox-tabs">
+              <div class="navitem" data-sec="order"><svg class="ic"><use href="#i-clipboard"/></svg> Surgery plan</div>
+              <div class="navitem" data-sec="surgery"><svg class="ic"><use href="#i-calendar"/></svg> Booking</div>
+              <div class="navitem" data-sec="hire" id="pf-nav-hire"><svg class="ic"><use href="#i-box"/></svg> Hire<span class="mark" id="pf-hire-mark" style="display:none"></span></div>
+              <div class="navitem" data-sec="preop"><svg class="ic"><use href="#i-clock"/></svg> Pre-op planning</div>
+              <div class="navitem" data-sec="operative"><svg class="ic"><use href="#i-activity"/></svg> Operative</div>
+              <div class="navitem" data-sec="surgeryrecord"><svg class="ic"><use href="#i-clipboard"/></svg> Surgery record</div>
+            </div>
+          </div>
         </nav>
 
         <div class="panel">
@@ -1324,66 +1347,18 @@
             return [d || "no date yet", v].filter(Boolean).join(" · ");
           }
 
-          var head =
-            '<div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">' +
-              '<span style="font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--muted)">SURGERY</span>' +
-              '<span id="pf-surg-btn" style="display:flex;align-items:center;gap:10px;cursor:pointer;' +
-                'border:1.5px solid ' + (undecided ? '#f0ddb0' : 'var(--accent-ink)') + ';' +
-                'background:' + (undecided ? '#fdf3dd' : 'var(--card)') + ';border-radius:9px;padding:7px 13px;max-width:min(560px,60vw)"' +
-                ' title="' + esc(nameOf(cur)) + (whenOf(cur) ? " \u00b7 " + esc(whenOf(cur)) : "") + '">' +
-                '<span style="font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.3;' +
-                  'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1">' + esc(nameOf(cur)) +
-                  (whenOf(cur) ? ' <span style="font-weight:500;color:var(--muted);font-size:12px">· ' + esc(whenOf(cur)) + '</span>' : '') +
-                '</span>' +
-                '<span style="font-size:11px;color:var(--accent-ink)">▾</span>' +
-              '</span>' +
-              (going && going === cur
-                ? '<span style="font-size:10px;font-weight:700;letter-spacing:.05em;padding:3px 9px;border-radius:999px;background:#e6f4ec;color:#2d8a5f">✓ GOING AHEAD</span>'
-                : '') +
-              (live.length > 1
-                ? '<span style="font-size:12px;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
-                  (live.indexOf(cur) >= 0 ? (live.indexOf(cur) + 1) + ' of ' + live.length : live.length + ' surgeries') +
-                  (undecided ? ' · none going ahead' : (going && going !== cur ? ' · you are not on the one going ahead' : '')) +
-                  '</span>'
-                : '') +
-              /* ADD SURGERY LIVES HERE, NOT IN THE DROPDOWN.
-               *
-               * Amy, 18 Aug 2026: "add a another surgery should be somewhere on
-               * the main part of the file just like how you add the first one?
-               * however the first one is added is how the second should be."
-               *
-               * She is right and it was worse than she knew: there was no way
-               * to add the FIRST one either. A surgery only came into being as
-               * a side effect of pressing Save on the Surgery plan, or of
-               * dropping a note in. So "how do I start a surgery" had no
-               * answer on this screen at all.
-               *
-               * One button, always here, whether the patient has none or four.
-               * Hiding it inside the dropdown made the second surgery work
-               * differently from the first, which is exactly what she objected
-               * to. */
-              '<span data-newsurg="1" style="margin-left:auto;font-size:12.5px;font-weight:700;' +
-                'color:var(--accent-ink);border:1px dashed #c7d6ea;border-radius:8px;' +
-                'padding:7px 13px;cursor:pointer;white-space:nowrap">+ Add surgery</span>' +
-            '</div>';
-
+          /* ONE ROW PER SURGERY, WITH ACTIONS ONLY ON THE ONE SHE IS ON.
+           *
+           * Three buttons on every row put fifteen in front of a patient with
+           * five surgeries, and the one she wanted was never the nearest. A row
+           * that is not selected is one click from being selected, and then its
+           * actions are there. So she can only ever confirm, archive or delete
+           * the surgery she is actually looking at. */
           function rowHtml(o, i, opts) {
             var isCur = (o === cur);
             var acts = opts.archivedRow
               ? '<span data-oun="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
                 'border:1px solid var(--line);color:var(--accent-ink);background:#fff;cursor:pointer">Put it back</span>'
-              /* ACTIONS ON THE ROW SHE IS LOOKING AT, AND NOWHERE ELSE.
-               *
-               * Three buttons on every row put fifteen buttons on a patient
-               * with five surgeries, and the one she wanted was never the
-               * nearest. Worse, it offered "this one is going ahead" on a
-               * surgery ALREADY OPERATED ON last November.
-               *
-               * A row that is not selected is one click away from being
-               * selected, and then its actions are there. So she can only ever
-               * confirm, archive or delete the surgery she is actually
-               * looking at, which is the whole point.
-               * (18 Aug 2026.) */
               : (o.id && isCur
                 ? ((o.confirmed_at || o.status === "completed") ? ''
                     : '<span data-ocf="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
@@ -1391,7 +1366,7 @@
                   (o.status === "completed" ? ''
                     : '<span data-oar="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
                       'border:1px solid var(--line);color:var(--muted);background:#fff;cursor:pointer;' +
-                      ((o.confirmed_at) ? '' : 'margin-left:6px') + '">Not chosen</span>') +
+                      (o.confirmed_at ? '' : 'margin-left:6px') + '">Not chosen</span>') +
                   '<span data-orm="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
                     'border:1px solid #e8b9ba;color:#b7484a;background:#fff;cursor:pointer;margin-left:6px">Delete</span>'
                 : '');
@@ -1401,45 +1376,103 @@
               '<div style="font-size:13px;font-weight:600;color:' + (opts.archivedRow ? 'var(--muted)' : 'var(--ink)') + ';line-height:1.35">' +
                 esc(nameOf(o)) +
                 (o.confirmed_at ? ' <span style="font-size:10px;font-weight:700;color:#2d8a5f">✓ GOING AHEAD</span>' : '') +
+                (o.status === "completed" ? ' <span style="font-size:10px;font-weight:700;color:#375a6b">OPERATED</span>' : '') +
               '</div>' +
               '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' +
-                esc(opts.archivedRow ? ('Not chosen. Archived ' + (isoToDmy(o.archived_at) || "") + '. Kept, so what was offered and quoted is still on record.') : (whenOf(o) || "not saved yet")) +
+                esc(opts.archivedRow
+                  ? ('Not chosen. Archived ' + (isoToDmy(o.archived_at) || "") + '. Kept, so what was offered and quoted is still on record.')
+                  : (whenOf(o) || "not saved yet")) +
               '</div>' +
               (acts ? '<div style="margin-top:7px">' + acts + '</div>' : '') +
             '</div>';
           }
-
-          var listRows = orders.map(function (o, i) {
-            return (o.archived_at) ? "" : rowHtml(o, i, {});
-          }).join("");
+          var listRows = orders.map(function (o, i) { return o.archived_at ? "" : rowHtml(o, i, {}); }).join("");
           var archRows = archived.map(function (o, i) { return rowHtml(o, i, { archivedRow: true }); }).join("");
+          var panelInner =
+            '<div style="padding:8px 14px;background:#f7f9fb;border-bottom:1px solid var(--line);' +
+              'font-size:10px;font-weight:700;letter-spacing:.06em;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
+              (live.length ? (undecided ? live.length + ' SURGERIES · NONE GOING AHEAD YET' : 'SURGERIES') : 'NO SURGERY YET') +
+            '</div>' + listRows +
+            (archRows ? '<div style="padding:8px 14px;background:#f7f9fb;border-top:1px solid var(--line);' +
+              'border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--muted)">NOT CHOSEN, KEPT ON FILE</div>' + archRows : '');
 
-          var panelHtml =
-            '<div id="pf-surg-list" style="display:none;position:absolute;z-index:40;margin-top:6px;width:min(520px,92vw);' +
-              'background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 44px rgba(31,58,95,.2);overflow:hidden">' +
-              '<div style="padding:8px 14px;background:#f7f9fb;border-bottom:1px solid var(--line);' +
-                'font-size:10px;font-weight:700;letter-spacing:.06em;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
-                (live.length ? (undecided ? live.length + ' SURGERIES · NONE GOING AHEAD YET' : 'SURGERIES') : 'NO SURGERY YET') +
-              '</div>' +
-              listRows +
-              (archRows ? '<div style="padding:8px 14px;background:#f7f9fb;border-top:1px solid var(--line);border-bottom:1px solid var(--line);' +
-                'font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--muted)">NOT CHOSEN, KEPT ON FILE</div>' + archRows : '') +
+          /* THE BOX HEADER IS THE SWITCHER. The thing you are working inside
+           * is the thing you press to change it, so there is nothing extra to
+           * find. The list opens OVER the page, fixed to the screen, so the
+           * menu cannot grow and nothing can clip it. */
+          var boxHead =
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+              '<span style="font-size:9.5px;font-weight:700;letter-spacing:.06em;color:' +
+                (undecided ? '#96660f' : 'var(--accent-ink)') + '">' +
+                (live.length > 1
+                  ? (live.indexOf(cur) >= 0 ? (live.indexOf(cur) + 1) + ' OF ' + live.length : live.length + ' SURGERIES')
+                  : 'THE SURGERY') +
+              '</span>' +
+              '<span style="font-size:10px;color:var(--accent-ink)">▾</span>' +
+            '</div>' +
+            '<div style="font-size:12.5px;font-weight:700;color:var(--ink);margin-top:5px;line-height:1.35;' +
+              'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' +
+              esc(nameOf(cur)) + '</div>' +
+            (whenOf(cur) ? '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + esc(whenOf(cur)) + '</div>' : '') +
+            (going && going === cur
+              ? '<div style="display:inline-block;margin-top:6px;font-size:9.5px;font-weight:700;letter-spacing:.05em;' +
+                'padding:2px 8px;border-radius:999px;background:#e6f4ec;color:#2d8a5f">✓ GOING AHEAD</div>'
+              : (undecided
+                ? '<div style="display:inline-block;margin-top:6px;font-size:9.5px;font-weight:700;letter-spacing:.05em;' +
+                  'padding:2px 8px;border-radius:999px;background:#fff;border:1px solid #f0ddb0;color:#96660f">NOT DECIDED</div>'
+                : ''));
 
+          /* The top strip keeps only what belongs in the main part of the file:
+           * how many there are, and the button that adds one. Amy asked for the
+           * add to work the same way for the first surgery as for the fourth,
+           * and this is the one place that is true of. */
+          var top =
+            '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+              '<span style="font-size:12.5px;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
+                (live.length
+                  ? (live.length === 1 ? '1 surgery on file'
+                      : live.length + ' surgeries on file' + (undecided ? ' · none going ahead' : ''))
+                  : 'No surgery on file yet') +
+                (archived.length ? ' · ' + archived.length + ' not chosen' : '') +
+              '</span>' +
+              '<span data-newsurg="1" style="margin-left:auto;font-size:12.5px;font-weight:700;' +
+                'color:var(--accent-ink);border:1px dashed #c7d6ea;border-radius:8px;' +
+                'padding:7px 13px;cursor:pointer;white-space:nowrap">+ Add surgery</span>' +
             '</div>';
 
-          el.style.position = "relative";
-          el.innerHTML = head + panelHtml;
-          (function () {
-            var btn = qs("pf-surg-btn"), list = qs("pf-surg-list");
-            if (!btn || !list) return;
-            btn.addEventListener("click", function (ev) {
+          el.innerHTML = top;
+          var box = qs("pf-opbox"), boxHeadEl = qs("pf-opbox-head");
+          if (box) box.classList.toggle("undecided", !!undecided);
+          if (boxHeadEl) boxHeadEl.innerHTML = boxHead;
+
+          /* The list is put on the BODY, fixed to the screen, and placed beside
+           * the box when it opens. Inside the menu it would be clipped by the
+           * card and would push the tabs down, which is the whole thing she
+           * objected to. */
+          var oldList = qs("pf-surg-list"); if (oldList && oldList.parentNode) oldList.parentNode.removeChild(oldList);
+          var list = document.createElement("div");
+          list.id = "pf-surg-list";
+          list.style.cssText = "display:none;position:fixed;z-index:60;width:min(520px,92vw);max-height:70vh;" +
+            "overflow:auto;background:#fff;border:1px solid var(--line);border-radius:11px;" +
+            "box-shadow:0 14px 44px rgba(31,58,95,.22)";
+          list.innerHTML = panelInner;
+          document.body.appendChild(list);
+          if (boxHeadEl) {
+            boxHeadEl.addEventListener("click", function (ev) {
               ev.stopPropagation();
-              list.style.display = (list.style.display === "none") ? "block" : "none";
+              if (list.style.display === "block") { list.style.display = "none"; return; }
+              var r = boxHeadEl.getBoundingClientRect();
+              list.style.display = "block";
+              var w = list.getBoundingClientRect().width;
+              var left = Math.min(r.right + 10, window.innerWidth - w - 12);
+              list.style.left = Math.max(8, left) + "px";
+              list.style.top = Math.max(8, Math.min(r.top, window.innerHeight - list.getBoundingClientRect().height - 12)) + "px";
             });
             document.addEventListener("click", function (ev) {
-              if (list.style.display !== "none" && !list.contains(ev.target)) list.style.display = "none";
+              if (list.style.display === "block" && !list.contains(ev.target)) list.style.display = "none";
             });
-          })();
+          }
           // Removing a surgery CANCELS it, it does not delete it. The row is
           // clinical history, and a plan built by mistake still records what
           // somebody intended at the time. Cancelled orders are excluded by the
@@ -1624,8 +1657,26 @@
          * one named and one not. (17 Aug 2026.) */
         async function newSurgery() {
           if (!state.patient || !state.patient.id) { toast("Open a patient first"); return; }
-          var c = sb(); if (!c) { toast("Not signed in"); return; }
           var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
+          /* PREVIEW MODE ADDS ONE FOR REAL, ON SCREEN ONLY.
+           *
+           * The preview has no login, so every database call returns nothing
+           * and the button just said "Not signed in". Amy could not try the one
+           * thing she was asked to try. Nothing is written anywhere: the row
+           * lives in this tab until it is refreshed away. */
+          if (window.__pfPreview) {
+            var fake = { id: "preview-" + (state.orders || []).length + "-" + Math.floor(Date.now() / 1000),
+                         patient_id: state.patient.id, status: "draft", procedure_codes: [] };
+            state.orders = state.orders || [];
+            state.orders.unshift(fake);
+            state.order = fake; state.orderId = fake.id;
+            state.pendingIsOption = !!live[0];
+            planGen++;
+            toast("Surgery added (preview only)");
+            renderAll();
+            return;
+          }
+          var c = sb(); if (!c) { toast("Not signed in"); return; }
           var sameOp = live[0];
           if (sameOp && !sameOp.plan_name && sameOp.procedure_name) {
             var auto = String(sameOp.procedure_name).split("(")[0].trim().slice(0, 40);
@@ -3718,7 +3769,30 @@
             var go = (window.ClinicPatients && ClinicPatients.update)
               ? ClinicPatients.update(id, patch)
               : client.from("patients").update(patch).eq("id", id);
-            return Promise.resolve(go).then(function (r) {
+            /* THE TWO SHAPES A FAILED WRITE ARRIVES IN, which is why this is
+             * not a plain .then any more.
+             *
+             * ClinicPatients.update THROWS on a database error (clinic-style/
+             * clinic-patients.js does "if (error) throw error"), while the raw
+             * Supabase call underneath RESOLVES with an { error } object. This
+             * handler was written for the second shape only. So with
+             * ClinicPatients loaded, which is always, a missing column made the
+             * promise reject, the retry below never ran, and the WHOLE save was
+             * lost with a red "Save failed" instead of one column being dropped
+             * and named. The rescue has been sitting here unable to fire.
+             *
+             * Both shapes are turned into { error } here so the retry runs
+             * whichever path did the writing. Anything that is not a missing
+             * column is re-thrown further down, so a real failure is still a
+             * failure and can never be swallowed into a cheerful "Saved".
+             *
+             * Found 18 August 2026 while adding the referring doctor. It was
+             * never about the referring doctor: the private health insurance
+             * answer, the given name and the surname could all be lost this way
+             * and presumably have been. */
+            return Promise.resolve(go).catch(function (e) {
+              return { error: e, threw: true };
+            }).then(function (r) {
               var msg = (r && r.error && r.error.message) || "";
               var m = msg.match(/could not find the '([a-z0-9_]+)' column/i);
               if (m && (m[1] in patch) && dropped.length < 8) {
@@ -3726,6 +3800,11 @@
                 if (!Object.keys(next).length) return r;
                 return patientWrite(next, dropped.concat(m[1]));
               }
+              // Not a missing column, so not something this can rescue. Put it
+              // back the way it arrived, or a real failure (no network, a
+              // permission refusal) would be swallowed and the screen would say
+              // the save worked when nothing was written.
+              if (r && r.threw) throw r.error;
               if (dropped.length && !(r && r.error)) {
                 // Named, never silent. She has to know which answer did not land.
                 var human = { phi_status: "the private health insurance answer", first_name: "the given name", surname: "the surname",
@@ -4589,7 +4668,7 @@
 
         // ---- load ----
         function loadStub() {
-          state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, bmi: 31.2, prescreening_date: "2026-06-01", surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
+          state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, bmi: 31.2, prescreening_date: "2026-06-01", referring_doctor: "Dr Helen Prasad", referring_doctor_practice: "Yarra Valley Family Medical", referring_doctor_email: "hprasad@yvfm.com.au", referring_doctor_address: "3/88 Warburton Highway, Wandin North VIC 3139", referral_date: "2026-04-22", gp_name: "Dr Helen Prasad", surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
           state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], side: "bilateral", admission_type: "day_procedure", anaesthesia_type: "GA", est_duration_min: 150, venue_type: "hospital", allergies: "NKA", allergies_nka: true, theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", glp1_sglt2: "none", antibiotics_postop: "Yes, for 5 days", ab_cover: "yes_5d", at_cover: "yes_15d", prosthesis_details: "No", theatre_equipment: "Yes - Power, Podiatry Tray", weight_bearing: "Non-weight bearing for 2 weeks", full_wb_at_weeks: 2, footwear: "Post-operative dressing, ankle brace", footwear_weeks: 6, sport_weeks: 6, swimming_weeks_off: 2, flying_weeks_off: 12, social_event_weeks: 4, shower_wet_at_days: 14, travel_notes: "Can fly after 12 weeks", work_desk_weeks: 2, work_active_weeks: 6, mobility_aid: "multiple", crutches_required: true, knee_scooter_weeks: 3, quote_items: ["F414ab — Ankle Brace"], supplements: ["Vitamin C 1000 mg daily"] };
           state.orderId = "o1";
           state.orders = [state.order, { id: "o0", session_date: "2025-11-18", procedure_name: "Left hallux valgus correction (earlier surgery)", procedure_codes: [{ code: "F782", qty: 1, description: "Primary metatarsal osteotomy" }], side: "left", admission_type: "day_procedure", weight_bearing: "Heel weight-bearing 2 weeks", sport_weeks: 8 }];

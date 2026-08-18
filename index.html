@@ -628,7 +628,7 @@
               <div class="field"><label>Their practice</label><input id="f-referring_doctor_practice"></div>
               <div class="field"><label>Their email</label><input id="f-referring_doctor_email"></div>
               <div class="field"><label>Referral date</label><input id="f-referral_date" type="date"></div>
-              <div class="field full"><label>Their address</label><input id="f-referring_doctor_address" placeholder="fills itself from PracSuite"></div>
+              <div class="field full"><label>Their address</label><input id="f-referring_doctor_address"></div>
               <div class="field"><label>GP</label><input id="f-gp_name" placeholder="often not the referrer"></div>
               <div class="field"><label>Preferred name</label><input id="f-preferred_name"></div>
               <div class="field"><label>Sex</label><input id="f-sex"></div>
@@ -1945,10 +1945,26 @@
         // the same way the board hands them over.
         function ckPatient() {
           var probe = Object.assign({}, state.patient || {});
-          // The NEWEST order, which is what the board reads. Handing over the
-          // surgery currently chosen in the switcher made a patient-level
-          // checklist change its answers depending on which tab was open.
-          probe._order = (state.orders && state.orders[0]) || state.order || null;
+          /* THE SURGERY GOING AHEAD, THEN THE NEWEST.
+           *
+           * There is ONE checklist per patient, and it was reading the NEWEST
+           * surgery. Which steps it shows depends on the venue, so a Clinic
+           * patient was asked for a hospital fee estimate, a pre-screening form
+           * and a place on the surgical list purely because a Masada option had
+           * been typed later. Three steps she would chase that do not exist.
+           *
+           * It is NOT handed the surgery currently on screen: a checklist that
+           * changes its answers as she clicks between options is worse than one
+           * that is occasionally out of date, and that is why the original
+           * comment here refused to do it. The one going ahead is the honest
+           * answer, because it is the operation actually happening.
+           *
+           * Falls back to the newest exactly as before when nothing is ticked,
+           * so a patient with one surgery is completely unaffected.
+           * (Amy, 18 Aug 2026.) */
+          var _ords = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
+          probe._order = _ords.filter(function (o) { return o.confirmed_at; })[0]
+                         || _ords[0] || (state.orders && state.orders[0]) || state.order || null;
           probe._hires = state.hires || null;
           // doc_type only, un-removed, gathered exactly as the board gathers
           // it. This is what turns "the quote is made but not sent" into a half

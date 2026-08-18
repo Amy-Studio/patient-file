@@ -799,6 +799,37 @@
         function status(msg) { qs("pf-status").textContent = msg || ""; }
         function initials(name) { var p = String(name || "").trim().split(/\s+/); return ((p[0] || "")[0] || "") + ((p[p.length - 1] || "")[0] || ""); }
         function isoToDmy(iso) { if (!iso) return ""; var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (m[3] + "/" + m[2] + "/" + m[1]) : iso; }
+        /* WHICH VERSION, not just which day.
+         *
+         * The Documents list said "Created 16/08/2026" on every version, so
+         * three saves of the same booklet on one afternoon were three
+         * identical lines and there was no way to tell which was the latest.
+         * Documents are the one place a version matters, because superseding
+         * keeps the newest and archives the rest.
+         *
+         * The date and the time come from the SAME reading of the stamp. Doing
+         * the date off the raw text and the time off the local clock made them
+         * disagree across midnight: a 14:32 UTC save showed as "16/08 12:32am"
+         * when here it was already the 17th.
+         *
+         * A stamp with no time in it gets no time. Some rows carry a date
+         * only, and 10am is not a fact about them.
+         * (Amy, 17 Aug 2026: "i want the program to show what time a version
+         * was saved not just the date".) */
+        function isoToDmyTime(iso) {
+          if (!iso) return "";
+          var txt = String(iso);
+          var d = new Date(txt);
+          if (isNaN(d.getTime())) return isoToDmy(txt);
+          var dmy = String(d.getDate()).padStart(2, "0") + "/" +
+                    String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear();
+          // No time in the stamp: say the day and stop.
+          if (!/\d{2}:\d{2}/.test(txt)) return dmy;
+          var hh = d.getHours(), mm = String(d.getMinutes()).padStart(2, "0");
+          var ap = hh >= 12 ? "pm" : "am";
+          hh = hh % 12; if (!hh) hh = 12;
+          return dmy + " " + hh + ":" + mm + ap;
+        }
         // Post-op care ends = surgery date + 12 weeks (informational, for admin to note). Local date math, DMY to match isoToDmy.
         function postopCareEnds(iso) { if (!iso) return ""; var m = String(iso).slice(0, 10).split("-"); if (m.length !== 3) return ""; var d = new Date(+m[0], +m[1] - 1, +m[2]); if (isNaN(d)) return ""; d.setDate(d.getDate() + 84); return ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear(); }
         function ageFrom(iso) { if (!iso) return ""; var d = new Date(iso); if (isNaN(d)) return ""; var t = new Date(); var a = t.getFullYear() - d.getFullYear(); var mo = t.getMonth() - d.getMonth(); if (mo < 0 || (mo === 0 && t.getDate() < d.getDate())) a--; return a; }
@@ -1830,7 +1861,7 @@
               // The name shown here IS the name it carries on her PracSuite
               // record, so there is never a second hidden one.
               var name = pracSuiteDocName(d);
-              var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmy(d.generated_at || d.created_at)); if (d.created_by) meta.push("by " + d.created_by); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
+              var meta = []; if (d.generated_at || d.created_at) meta.push("Created " + isoToDmyTime(d.generated_at || d.created_at)); if (d.created_by) meta.push("by " + d.created_by); if (d.sent_at) meta.push("Sent " + isoToDmy(d.sent_at));
               if (d.pracsuite_filed_at) meta.push("On PracSuite " + isoToDmy(d.pracsuite_filed_at));
               // Already on their PracSuite record, so it does not need sending
               // again. Two options' booklets and quotes are separate rows with

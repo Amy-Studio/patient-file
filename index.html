@@ -315,6 +315,40 @@
       }
       #pf-search::placeholder { color: var(--faint); }
       #pf-search:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(35,78,125,.08); }
+
+      /* ---- more than one file for one person ---- */
+      .dup-flag { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:999px;
+                  background:#fdf3dd; color:#96660f; border:1px solid #f0ddb0;
+                  font-size:10.5px; font-weight:700; vertical-align:middle; }
+      .mg-wrap { border:1px solid var(--line); border-radius:var(--radius); padding:16px; background:#fbfcfe; }
+      .mg-wrap h3 { margin:0 0 4px; font-size:15px; color:var(--navy); }
+      .mg-sub { font-size:12.5px; color:var(--faint); line-height:1.55; margin-bottom:14px; }
+      .mg-files { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+      .mg-file { flex:1 1 190px; border:1px solid var(--line); border-radius:var(--radius);
+                 padding:10px 12px; background:#fff; font-size:12.5px; }
+      .mg-file.keep { border-color:#4b9e63; background:#f2f9f4; }
+      .mg-file.arch { border-color:#f0ddb0; background:#fdfaf2; }
+      .mg-file .mg-when { color:var(--faint); font-size:11.5px; }
+      .mg-file .mg-owns { margin-top:4px; font-size:11.5px; color:var(--navy); }
+      .mg-file label { display:flex; gap:7px; align-items:center; font-weight:700; cursor:pointer; }
+      .mg-sec { font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+                color:#8a6b7c; font-weight:700; margin:16px 0 8px; }
+      .mg-auto { font-size:12px; color:var(--faint); line-height:1.6; }
+      .mg-auto b { color:var(--navy); font-weight:600; }
+      .mg-row { border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+                margin-bottom:9px; background:#fff; }
+      .mg-col { font-weight:700; font-size:13px; color:var(--navy); margin-bottom:7px; }
+      .mg-opt { display:flex; gap:8px; align-items:flex-start; padding:6px 8px;
+                border-radius:7px; cursor:pointer; font-size:12.5px; }
+      .mg-opt:hover { background:#f4f8fd; }
+      .mg-opt input { margin-top:2px; flex:none; }
+      .mg-opt .mg-v { flex:1; word-break:break-word; font-weight:600; }
+      .mg-opt .mg-src { color:var(--faint); font-size:11px; flex:none; }
+      .mg-warn { border:1px solid #f0ddb0; background:#fdf3dd; color:#96660f;
+                 border-radius:var(--radius); padding:10px 12px; font-size:12.5px;
+                 line-height:1.55; margin-bottom:14px; }
+      .mg-act { display:flex; gap:8px; align-items:center; margin-top:16px; flex-wrap:wrap; }
+      .mg-msg { font-size:12.5px; }
       .full { grid-column: 1 / -1; }
       .field.full { grid-column: 1 / -1; }
 
@@ -421,8 +455,13 @@
           <div class="panel-sub" style="margin-bottom:12px">Search by name, phone or Medicare number, or add someone new.</div>
           <div style="display:flex; gap:8px; align-items:stretch">
             <input id="pf-search" placeholder="Search by name, phone or Medicare…" autocomplete="off">
+            <button type="button" id="pf-dups-btn" class="np-btn" title="Look through the whole register for anyone who has more than one file, archived ones included">Check for multiples</button>
             <button type="button" id="pf-new-btn" class="np-btn">+ New patient</button>
           </div>
+          <!-- Merge lives HERE, on the search, because searching is the moment
+               you find out somebody has two files. Anywhere else and you would
+               have to already suspect it. -->
+          <div id="pf-merge" style="display:none; margin-top:14px"></div>
           <div id="pf-newform" style="display:none; margin-top:14px; border:1px solid var(--line); border-radius:var(--radius); padding:14px; background:#fbfcfe">
             <div style="font-size:13px; font-weight:600; color:var(--navy); margin-bottom:10px">New patient</div>
             <!-- STEP 2 OF 3. The register was searched by the box above; PracSuite
@@ -4327,6 +4366,340 @@
           Array.prototype.forEach.call(qs("pf-results").querySelectorAll("[data-pid]"), function (el) {
             el.addEventListener("click", function () { location.href = "?patient_id=" + encodeURIComponent(el.getAttribute("data-pid")); });
           });
+          // Flag anyone here who has a second live file. Searching is the
+          // moment you would find out, so it is said here rather than left
+          // for somebody to suspect.
+          markDuplicatesInResults();
+        }
+
+        // ================================================================
+        // MORE THAN ONE FILE FOR ONE PERSON
+        //
+        // Lives on the search because that is where you find out. A flag on
+        // the row, a button to sweep the whole register, and a review that
+        // asks about every disagreement instead of quietly picking one.
+        // Nothing is archived until Confirm.
+        // ================================================================
+        var MG_LABEL = {
+          dob: "Date of birth", sex: "Sex", phone: "Phone", email: "Email",
+          address: "Address", suburb: "Suburb", state: "State", postcode: "Postcode",
+          medicare_number: "Medicare number", medicare_irn: "Medicare IRN",
+          medicare_expiry: "Medicare expiry", health_fund: "Health fund",
+          health_fund_membership: "Health fund membership", notes: "Notes",
+          surgery_date: "Surgery date", surgery_time: "Surgery time",
+          surgery_venue: "Venue", surgery_status: "Surgery status",
+          surgery_procedure: "Procedure", surgery_anaesthetist: "Anaesthetist",
+          surgery_duration_min: "Duration (min)", nok_name: "Next of kin",
+          nok_phone: "Next of kin phone", mrn: "MRN", client_id: "PracSuite ID",
+          preferred_name: "Preferred name", paid_in_full: "Paid in full",
+          bmi: "BMI", height_cm: "Height (cm)", weight_kg: "Weight (kg)",
+          prescreening_date: "Prescreening date", full_name: "Full name",
+          given_names: "Given names", family_name: "Family name",
+          first_name: "First name", surname: "Surname", hire_status: "Hire status",
+        };
+        function mgLabel(c) { return MG_LABEL[c] || c.replace(/_/g, " "); }
+        function mgShow(v) {
+          if (v === true) return "Yes"; if (v === false) return "No";
+          if (v == null || v === "") return "(blank)";
+          var s = typeof v === "object" ? JSON.stringify(v) : String(v);
+          return s.length > 220 ? s.slice(0, 220) + "…" : s;
+        }
+        function pfNorm(s) {
+          return (window.ClinicPatients && window.ClinicPatients.normName)
+            ? window.ClinicPatients.normName(s)
+            : String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        }
+
+        // Archived files are OFF unless she ticks the box. They are as likely
+        // to be a record archived for being wrong as a duplicate, and nothing
+        // stored tells them apart, so they are never assumed to be wanted.
+        var _mgArchived = false;
+        var _dupIndex = null;
+        function loadDupIndex(force) {
+          if (_dupIndex && !force) return Promise.resolve(_dupIndex);
+          if (!window.ClinicPatients || !window.ClinicPatients.findDuplicateGroups) return Promise.resolve({});
+          return window.ClinicPatients.findDuplicateGroups({ includeArchived: _mgArchived }).then(function (groups) {
+            var ix = {};
+            (groups || []).forEach(function (g) { ix[g.key] = g; });
+            _dupIndex = ix; return ix;
+          }).catch(function () { return {}; });
+        }
+
+        // A flag only where it is ACTIONABLE: two or more LIVE files. Somebody
+        // whose duplicate was merged away last week keeps an archived row for
+        // ever, and flagging that would be noise nobody can clear.
+        function markDuplicatesInResults() {
+          var host = qs("pf-results"); if (!host) return;
+          loadDupIndex().then(function (ix) {
+            Array.prototype.forEach.call(host.querySelectorAll("[data-pid]"), function (el) {
+              var nm = el.querySelector(".pk-name"); if (!nm || nm.querySelector(".dup-flag")) return;
+              var g = ix[pfNorm(nm.textContent)];
+              if (!g || g.liveCount < 2) return;
+              var b = document.createElement("span");
+              b.className = "dup-flag";
+              b.textContent = g.liveCount + " files — merge";
+              b.addEventListener("click", function (ev) { ev.stopPropagation(); openMergeScreen(g); });
+              nm.appendChild(b);
+            });
+          });
+        }
+
+        function countOwned(id) {
+          var client = sb(); if (!client) return Promise.resolve(0);
+          return Promise.all([
+            client.from("patient_documents").select("id", { count: "exact", head: true }).eq("patient_id", id),
+            client.from("surgeon_orders").select("id", { count: "exact", head: true }).eq("patient_id", id),
+          ]).then(function (r) {
+            return ((r[0] && r[0].count) || 0) + ((r[1] && r[1].count) || 0);
+          }).catch(function () { return 0; });
+        }
+
+        function openMergeScreen(group) {
+          var box = qs("pf-merge"); if (!box) return;
+          box.style.display = "";
+          box.innerHTML = '<div class="mg-wrap"><div class="mg-msg">Reading the files…</div></div>';
+          box.scrollIntoView({ behavior: "smooth", block: "start" });
+          // Archived files only come along when she asked for them, and even
+          // then they can be merged IN but never kept.
+          var use = group.rows.filter(function (r) { return _mgArchived || !r.archived_at; });
+          Promise.all(use.map(function (r) { return countOwned(r.id).then(function (n) { r._owns = n; return r; }); }))
+            .then(function (rows) {
+              /* WHICH FILE IS SUGGESTED. (Amy, 18 Aug 2026: "check which one
+               * is connected to pracsuite, the one connected is the one thats
+               * gets kept".) The PracSuite-connected file is the one the
+               * booking sweep and the practice system both already know, so
+               * it is the one offered. Where none is connected, or more than
+               * one is, fall back to whoever holds the most, because moving
+               * the fewest documents is the least that can go wrong.
+               *
+               * Either way the PracSuite id ENDS UP on the file that is kept,
+               * so the merged record is connected whichever is chosen. This
+               * decides which row survives, not whether it is linked. */
+              var liveRows = rows.filter(function (r) { return !r.archived_at; });
+              var connected = liveRows.filter(function (r) { return r.client_id; });
+              rows.sort(function (a, b) {
+                return (!!a.archived_at - !!b.archived_at)
+                  || ((connected.length === 1) ? (!!b.client_id - !!a.client_id) : 0)
+                  || (b._owns - a._owns);
+              });
+              var firstLive = rows.filter(function (r) { return !r.archived_at; })[0];
+              if (!firstLive) {
+                qs("pf-merge").innerHTML = '<div class="mg-wrap"><div class="mg-warn">'
+                  + 'Every file for this person is archived, so there is nothing to merge into. '
+                  + 'Restore the right one first.</div></div>';
+                return;
+              }
+              renderMergeScreen(group, rows, firstLive.id);
+            });
+        }
+
+        function renderMergeScreen(group, rows, keeperId) {
+          var box = qs("pf-merge");
+          var files = rows.map(function (r) {
+            var arch = !!r.archived_at;
+            return '<div class="mg-file' + (r.id === keeperId ? " keep" : "") + (arch ? " arch" : "") + '">'
+              // An archived file has no "keep" option at all: it can be merged
+              // in, but making it the live record would undo the archiving.
+              + (arch
+                  ? '<div style="font-weight:700">Archived ' + esc(String(r.archived_at).slice(0, 10)) + '</div>'
+                  : '<label><input type="radio" name="mg-keep" value="' + esc(r.id) + '"' + (r.id === keeperId ? " checked" : "") + '>'
+                    + (r.id === keeperId ? "Keep this one" : "Merge in") + '</label>')
+              + '<div class="mg-when">Made ' + esc(String(r.created_at || "").slice(0, 10)) + '</div>'
+              + '<div class="mg-owns">' + (r._owns ? r._owns + " document" + (r._owns === 1 ? "" : "s") + " / plans" : "nothing attached") + '</div>'
+              + (r.client_id
+                  ? '<div class="mg-when" style="color:#2c7a4b;font-weight:600">Connected to PracSuite (' + esc(r.client_id) + ')</div>'
+                  : '<div class="mg-when">Not connected to PracSuite</div>')
+              + (arch ? '<div class="mg-when" style="color:#96660f">Nothing is taken off this one without asking you</div>' : "")
+              + '</div>';
+          }).join("");
+          // Say it out loud when the suggested file is not the fullest one, so
+          // "keep the connected one" is a choice she makes rather than one
+          // made quietly on her behalf.
+          var keeperRow = rows.filter(function (r) { return r.id === keeperId; })[0] || {};
+          var fullest = rows.slice().sort(function (a, b) { return b._owns - a._owns; })[0] || {};
+          var moveNote = (fullest.id && fullest.id !== keeperId && fullest._owns > (keeperRow._owns || 0))
+            ? '<div class="mg-warn">Keeping the file connected to PracSuite. The other file holds more ('
+              + fullest._owns + ' vs ' + (keeperRow._owns || 0) + '), so more has to move across. '
+              + 'That is fine, but if you would rather keep the fuller one, tick it instead. '
+              + 'The PracSuite ID moves onto whichever you keep either way.</div>'
+            : "";
+          box.innerHTML = '<div class="mg-wrap">'
+            + '<h3>' + esc(group.name) + ' has ' + rows.length + ' files</h3>'
+            + '<div class="mg-sub">Pick the file to keep, then say which value is right wherever they disagree. '
+            + 'Everything attached to the others moves across. The others are archived, never deleted, so this can be undone.</div>'
+            + '<div class="mg-files">' + files + '</div>'
+            + moveNote
+            + '<div id="mg-plan"><div class="mg-msg">Working out what differs…</div></div>'
+            + '</div>';
+          Array.prototype.forEach.call(box.querySelectorAll('input[name="mg-keep"]'), function (el) {
+            el.addEventListener("change", function () { renderMergeScreen(group, rows, el.value); });
+          });
+          var losers = rows.filter(function (r) { return r.id !== keeperId; }).map(function (r) { return r.id; });
+          window.ClinicPatients.planMerge(keeperId, losers).then(function (plan) {
+            renderMergePlan(group, rows, keeperId, losers, plan);
+          }).catch(function (e) {
+            qs("mg-plan").innerHTML = '<div class="mg-warn">Could not work out the merge: ' + esc((e && e.message) || "error") + '</div>';
+          });
+        }
+
+        function renderMergePlan(group, rows, keeperId, losers, plan) {
+          var host = qs("mg-plan"); if (!host) return;
+          var whenOf = {};
+          rows.forEach(function (r) { whenOf[r.id] = String(r.created_at || "").slice(0, 10); });
+
+          var autoKeys = Object.keys(plan.autofill);
+          var auto = autoKeys.length
+            ? autoKeys.sort().map(function (k) { return "<b>" + esc(mgLabel(k)) + "</b> " + esc(mgShow(plan.autofill[k])); }).join(" &middot; ")
+            : "nothing";
+          var owns = Object.keys(plan.children).map(function (t) {
+            return plan.children[t] + " " + (plan.OWNED_LABELS[t] || t);
+          }).join(", ");
+
+          var warn = "";
+          if (plan.unreadable && plan.unreadable.length) {
+            warn += '<div class="mg-warn"><b>Could not read ' + esc(plan.unreadable.map(function (t) { return plan.OWNED_LABELS[t] || t; }).join(", "))
+              + '.</b> Those will still be moved, but I cannot tell you how many first. Worth a look at the file afterwards.</div>';
+          }
+
+          var conf = plan.conflicts.slice().sort(function (a, b) { return mgLabel(a.column).localeCompare(mgLabel(b.column)); });
+
+          host.innerHTML = warn
+            + '<div class="mg-sec">Happens automatically</div>'
+            + '<div class="mg-auto">Moves onto the file you are keeping: <b>' + esc(owns || "nothing attached") + '</b>.'
+            + '<br>Blanks filled in: ' + auto + '.</div>'
+            + '<div class="mg-sec">Where the files disagree</div>'
+            + '<div class="mg-auto">' + (conf.length
+                ? '<b>' + conf.length + '</b> ' + (conf.length === 1 ? "detail differs" : "details differ") + ' between these files: '
+                  + esc(conf.map(function (c) { return mgLabel(c.column); }).join(", "))
+                  + '. You will be asked about each one, the same way as when a document is dropped.'
+                : 'The files agree on everything. Nothing to choose.') + '</div>'
+            + '<div class="mg-act">'
+            + '<button type="button" class="np-btn primary" id="mg-go">' + (conf.length ? "Choose what to keep" : "Merge into one file") + '</button>'
+            + '<button type="button" class="np-btn ghost" id="mg-cancel">Cancel</button>'
+            + '<span class="mg-msg" id="mg-status"></span></div>';
+
+          qs("mg-cancel").addEventListener("click", function () {
+            qs("pf-merge").style.display = "none"; qs("pf-merge").innerHTML = "";
+          });
+
+          // The same "what do you want to keep?" popup the document drop uses,
+          // widened to as many files as the person has. One review screen for
+          // the whole suite rather than a second one that behaves differently.
+          function askThenMerge() {
+            if (!conf.length) return runMerge({});
+            if (!window.ClinicMergeReview) {
+              qs("mg-status").textContent = "The review popup did not load. Hard refresh and try again.";
+              return;
+            }
+            var reviewRows = conf.map(function (c) {
+              var options = [], noKeeper = (c.keeper == null || c.keeper === "");
+              if (!noKeeper) {
+                options.push({ side: "keep", cap: "Keeping (" + (whenOf[keeperId] || "this file") + ")", value: c.keeper, selected: true });
+              }
+              c.offers.forEach(function (o, j) {
+                options.push({
+                  side: "o" + j,
+                  cap: "File made " + (whenOf[o.fromId] || "earlier"),
+                  value: o.value,
+                  selected: noKeeper && j === 0,
+                });
+              });
+              return { key: c.column, label: mgLabel(c.column), options: options };
+            });
+            window.ClinicMergeReview.open({
+              title: "Merging " + rows.length + " files into one",
+              patientName: group.name,
+              subtitle: "keeping the file made " + (whenOf[keeperId] || ""),
+              intro: "These files disagree. Tick the value that is right for each one. "
+                   + "Anything you do not change keeps what is on the file being kept.",
+              rows: reviewRows,
+              saveLabel: "Merge into one file",
+            }).then(function (res) {
+              if (!res) return; // cancelled: nothing archived, nothing written
+              var choices = {};
+              (res.changes || []).forEach(function (ch) { choices[ch.key] = ch.value; });
+              runMerge(choices);
+            });
+          }
+
+          function runMerge(choices) {
+            var btn = qs("mg-go"), st = qs("mg-status");
+            btn.disabled = true; btn.textContent = "Merging…"; st.textContent = "";
+            window.ClinicPatients.mergeMany(keeperId, losers, { choices: choices }).then(function (res) {
+              var bits = Object.keys(res.moved || {}).filter(function (t) { return res.moved[t]; })
+                .map(function (t) { return res.moved[t] + " " + (plan.OWNED_LABELS[t] || t); });
+              var msg = "Done. One file now, " + losers.length + " archived"
+                + (bits.length ? ", moved " + bits.join(", ") : "") + ".";
+              if (res.couldNotMove && res.couldNotMove.length) {
+                msg += " Could NOT move " + res.couldNotMove.map(function (x) { return plan.OWNED_LABELS[x.table] || x.table; }).join(", ")
+                  + " — check the archived file before you rely on this.";
+              }
+              if (res.clientIdProblem) msg += " " + res.clientIdProblem;
+              st.textContent = msg;
+              btn.textContent = "Merged";
+              _dupIndex = null;
+              setTimeout(function () { location.href = "?patient_id=" + encodeURIComponent(keeperId); }, 1600);
+            }).catch(function (e) {
+              st.textContent = "Failed: " + ((e && e.message) || "error") + " Nothing was archived.";
+              btn.disabled = false;
+              btn.textContent = conf.length ? "Choose what to keep" : "Merge into one file";
+            });
+          }
+
+          qs("mg-go").addEventListener("click", askThenMerge);
+        }
+
+        // Sweep the whole register, archived rows included.
+        function pfCheckMultiples() {
+          var box = qs("pf-merge"); if (!box) return;
+          var btn = qs("pf-dups-btn");
+          box.style.display = "";
+          box.innerHTML = '<div class="mg-wrap"><div class="mg-msg">Looking through every file…</div></div>';
+          if (btn) btn.disabled = true;
+          loadDupIndex(true).then(function (ix) {
+            if (btn) btn.disabled = false;
+            // Archived files are as likely to be a record put away for being
+            // WRONG as a duplicate, so they are opt-in and warned about.
+            var tick = '<div class="mg-act" style="margin-top:14px">'
+              + '<label style="display:flex;gap:7px;align-items:center;font-size:12.5px;cursor:pointer">'
+              + '<input type="checkbox" id="mg-arch"' + (_mgArchived ? " checked" : "") + '>'
+              + 'Look at archived files too</label>'
+              + '<button type="button" class="np-btn ghost" id="mg-close">Close</button></div>'
+              + (_mgArchived
+                  ? '<div class="mg-warn" style="margin:10px 0 0">Archived files are included. Some were archived '
+                    + 'because their details were wrong, so nothing is copied off one without asking you first, '
+                    + 'and an archived file can never be the one you keep.</div>'
+                  : "");
+            var groups = Object.keys(ix).map(function (k) { return ix[k]; })
+              .filter(function (g) { return _mgArchived ? g.rows.length > 1 : g.liveCount > 1; });
+            if (!groups.length) {
+              box.innerHTML = '<div class="mg-wrap"><h3>No one has two files</h3>'
+                + '<div class="mg-sub">Every person in the register has exactly one live file'
+                + (_mgArchived ? ", and no archived copies either." : ". Archived files were not looked at.") + '</div>'
+                + tick + '</div>';
+            } else {
+              box.innerHTML = '<div class="mg-wrap"><h3>' + groups.length + ' ' + (groups.length === 1 ? "person has" : "people have") + ' more than one file</h3>'
+                + '<div class="mg-sub">Same name, and no clashing date of birth. Open one to see what differs.</div>'
+                + '<div class="mg-files">' + groups.map(function (g, i) {
+                    return '<div class="mg-file"><label style="font-weight:700">' + esc(g.name) + '</label>'
+                      + '<div class="mg-when">' + g.liveCount + ' live files'
+                      + (g.archivedCount ? ", " + g.archivedCount + " archived" : "")
+                      + (g.dob ? " &middot; born " + esc(g.dob) : "") + '</div>'
+                      + '<div style="margin-top:7px"><button type="button" class="np-btn" data-mg="' + i + '">Review and merge</button></div></div>';
+                  }).join("") + '</div>'
+                + tick + '</div>';
+              Array.prototype.forEach.call(box.querySelectorAll("[data-mg]"), function (el) {
+                el.addEventListener("click", function () { openMergeScreen(groups[+el.getAttribute("data-mg")]); });
+              });
+            }
+            var cl = document.getElementById("mg-close");
+            if (cl) cl.addEventListener("click", function () { box.style.display = "none"; box.innerHTML = ""; });
+            var ar = document.getElementById("mg-arch");
+            if (ar) ar.addEventListener("change", function () { _mgArchived = ar.checked; pfCheckMultiples(); });
+          }).catch(function (e) {
+            if (btn) btn.disabled = false;
+            box.innerHTML = '<div class="mg-wrap"><div class="mg-warn">Could not check: ' + esc((e && e.message) || "error") + '</div></div>';
+          });
         }
 
         // ---- new patient (create from the picker, with the shared duplicate check) ----
@@ -4493,6 +4866,11 @@
             btn.disabled = false;
           });
         }
+        (function wireCheckMultiples() {
+          var b = qs("pf-dups-btn"); if (!b) return;
+          b.addEventListener("click", pfCheckMultiples);
+        })();
+
         (function wireNewPatient() {
           var b = qs("pf-new-btn"); if (!b) return;
           b.addEventListener("click", function () {

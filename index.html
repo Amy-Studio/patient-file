@@ -1272,7 +1272,7 @@
                 'padding:6px 12px;margin:0 7px 6px 0;cursor:pointer">' +
                 esc(o.plan_name || o.procedure_name || "Unnamed plan") + '</button>';
             }).join("") + '</div>';
-          el.innerHTML = ask + '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery, Surgeon order &amp; Documents</div>' +
+          el.innerHTML = ask + '<div style="font-size:11px;color:var(--accent-ink);letter-spacing:.04em;margin-bottom:6px">WHICH SURGERY · applies to Surgery and the Surgery plan. Documents are the whole file, whichever is picked</div>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid #d8e4f4;border-radius:10px;padding:8px">' + (items || '<span style="font-size:13px;color:var(--muted)">No surgery yet</span>') + '<span data-newsurg="1" style="' + pill + 'color:var(--accent-ink);border:1px dashed #c7d6ea;margin-left:auto">+ new surgery</span></div>' + archivedHtml;
           // Removing a surgery CANCELS it, it does not delete it. The row is
           // clinical history, and a plan built by mistake still records what

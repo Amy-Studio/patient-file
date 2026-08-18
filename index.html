@@ -442,7 +442,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v9</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v10</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -582,6 +582,31 @@
                 </select></div>
               <div class="field"><label>Next of kin</label><input id="f-nok_name"></div>
               <div class="field"><label>Next of kin phone</label><input id="f-nok_phone"></div>
+              <!-- WHO SENT THEM. Every other name on this file is either the
+                   patient or their next of kin, so until now there was nowhere
+                   to read the referring doctor from and nowhere to type one in
+                   either. A letter going back to whoever referred the patient
+                   had to get the name out of somebody's memory.
+                   PracSuite has held it the whole time. A count across 108 real
+                   patient records on 29 July 2026 found a GP on 67 files in
+                   every 100 and a referrer on 41, and this page was throwing
+                   all of it away because there was no column for it to land in.
+                   The GP and the referrer are kept apart on purpose: PracSuite
+                   keeps them apart, they are often two different people, and
+                   putting the wrong doctor's name on a letter is worse than an
+                   empty box. The address is the one that is typed by hand,
+                   because PracSuite sends the referrer's name but not their
+                   postal address, and a name you cannot post to is no use
+                   halfway through writing a letter. Blank is fine everywhere.
+                   All six boxes stay hidden until add-referring-doctor.sql has
+                   been run, so nothing here can accept typing it cannot save.
+                   (18 August 2026.) -->
+              <div class="field"><label>Referring doctor</label><input id="f-referring_doctor"></div>
+              <div class="field"><label>Their practice</label><input id="f-referring_doctor_practice"></div>
+              <div class="field"><label>Their email</label><input id="f-referring_doctor_email"></div>
+              <div class="field full"><label>Their address</label><input id="f-referring_doctor_address" placeholder="typed here, PracSuite does not send an address"></div>
+              <div class="field"><label>Referral date</label><input id="f-referral_date" type="date"></div>
+              <div class="field"><label>GP</label><input id="f-gp_name" placeholder="often not the referrer"></div>
               <div class="field"><label>Preferred name</label><input id="f-preferred_name"></div>
               <div class="field"><label>Sex</label><input id="f-sex"></div>
               <div class="field"><label>MRN</label><input id="f-mrn"></div>
@@ -948,8 +973,29 @@
         }
         function renderContact() {
           var p = state.patient || {};
-          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes"].forEach(function (k) { setVal("f-" + k, p[k]); });
+          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes", "referring_doctor", "referring_doctor_practice", "referring_doctor_email", "referring_doctor_address", "gp_name"].forEach(function (k) { setVal("f-" + k, p[k]); });
           setVal("f-dob", p.dob ? String(p.dob).slice(0, 10) : "");
+          // The referral date is set on its own line, exactly as the date of
+          // birth and the pre-screening date are, because a date box shows
+          // nothing at all unless it is handed YYYY-MM-DD. Put it in the list
+          // above and it would silently stay empty on every file that has one.
+          setVal("f-referral_date", p.referral_date ? String(p.referral_date).slice(0, 10) : "");
+          /* THE SIX REFERRING-DOCTOR BOXES ONLY APPEAR ONCE THEIR COLUMNS DO.
+           *
+           * Same rule as BMI and the pre-screening date over in renderSurgery.
+           * Until add-referring-doctor.sql has been run these columns are not
+           * on the record at all, so select("*") never sends the keys and the
+           * "in" test below is false. Six boxes that accept typing and then
+           * quietly drop it on save are worse than six boxes that are not
+           * there yet, so they are hidden rather than shown broken. After the
+           * SQL they appear on their own, with nothing to switch on.
+           * (18 August 2026.)
+           */
+          var hasReferrerCols = ("referring_doctor" in p) || ("gp_name" in p);
+          ["f-referring_doctor", "f-referring_doctor_practice", "f-referring_doctor_email",
+           "f-referring_doctor_address", "f-referral_date", "f-gp_name"].forEach(function (id) {
+            var f = qs(id) && qs(id).closest(".field"); if (f) f.style.display = hasReferrerCols ? "" : "none";
+          });
           wireExpiryField();
           sayAboutExpiry();
         }
@@ -1326,11 +1372,26 @@
             var acts = opts.archivedRow
               ? '<span data-oun="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
                 'border:1px solid var(--line);color:var(--accent-ink);background:#fff;cursor:pointer">Put it back</span>'
-              : (o.id
-                ? '<span data-ocf="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
-                    'border:1px solid #a9d3bd;color:#2d8a5f;background:#fff;cursor:pointer">✓ This one is going ahead</span>' +
-                  '<span data-oar="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
-                    'border:1px solid var(--line);color:var(--muted);background:#fff;cursor:pointer;margin-left:6px">Not chosen</span>' +
+              /* ACTIONS ON THE ROW SHE IS LOOKING AT, AND NOWHERE ELSE.
+               *
+               * Three buttons on every row put fifteen buttons on a patient
+               * with five surgeries, and the one she wanted was never the
+               * nearest. Worse, it offered "this one is going ahead" on a
+               * surgery ALREADY OPERATED ON last November.
+               *
+               * A row that is not selected is one click away from being
+               * selected, and then its actions are there. So she can only ever
+               * confirm, archive or delete the surgery she is actually
+               * looking at, which is the whole point.
+               * (18 Aug 2026.) */
+              : (o.id && isCur
+                ? ((o.confirmed_at || o.status === "completed") ? ''
+                    : '<span data-ocf="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
+                      'border:1px solid #a9d3bd;color:#2d8a5f;background:#fff;cursor:pointer">✓ This one is going ahead</span>') +
+                  (o.status === "completed" ? ''
+                    : '<span data-oar="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
+                      'border:1px solid var(--line);color:var(--muted);background:#fff;cursor:pointer;' +
+                      ((o.confirmed_at) ? '' : 'margin-left:6px') + '">Not chosen</span>') +
                   '<span data-orm="' + i + '" style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
                     'border:1px solid #e8b9ba;color:#b7484a;background:#fff;cursor:pointer;margin-left:6px">Delete</span>'
                 : '');
@@ -3487,7 +3548,23 @@
         // ---- save ----
         function collectPatientPatch() {
           var patch = {};
-          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
+          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status", "referring_doctor", "referring_doctor_practice", "referring_doctor_email", "referring_doctor_address", "referral_date", "gp_name"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
+          /* AND OFF AGAIN, UNTIL THE COLUMNS EXIST.
+           *
+           * Guarded the same way bmi and prescreening_date are a few lines
+           * down. Before add-referring-doctor.sql is run these six are not
+           * columns yet, and sending them would cost six goes round the
+           * drop-and-retry below and hand her a toast naming all six on every
+           * single save, when the boxes are hidden and there is nothing in
+           * them to lose anyway. Once the SQL has run the keys come back on
+           * the record, this test passes, and all six save like any other
+           * box. The retry underneath still covers the surprises, which is
+           * why the six also have plain-English names down there.
+           */
+          if (!(state.patient && (("referring_doctor" in state.patient) || ("gp_name" in state.patient)))) {
+            ["referring_doctor", "referring_doctor_practice", "referring_doctor_email",
+             "referring_doctor_address", "referral_date", "gp_name"].forEach(function (k) { delete patch[k]; });
+          }
           // Saved without leaving the box (a keyboard save never fires blur),
           // so the one stored shape is settled here too. Tidies only — a value
           // the reader cannot understand is saved exactly as she typed it.
@@ -3651,7 +3728,10 @@
               }
               if (dropped.length && !(r && r.error)) {
                 // Named, never silent. She has to know which answer did not land.
-                var human = { phi_status: "the private health insurance answer", first_name: "the given name", surname: "the surname" };
+                var human = { phi_status: "the private health insurance answer", first_name: "the given name", surname: "the surname",
+                              referring_doctor: "the referring doctor", referring_doctor_practice: "the referring doctor's practice",
+                              referring_doctor_email: "the referring doctor's email", referring_doctor_address: "the referring doctor's address",
+                              referral_date: "the referral date", gp_name: "the GP's name" };
                 toast("Saved, except " + dropped.map(function (c) { return human[c] || c; }).join(" and ") +
                       ". That needs its column adding in Supabase.");
               }
@@ -4631,6 +4711,9 @@
           prescreening_date: "Prescreening date", full_name: "Full name",
           given_names: "Given names", family_name: "Family name",
           first_name: "First name", surname: "Surname", hire_status: "Hire status",
+          referring_doctor: "Referring doctor", referring_doctor_practice: "Referring doctor's practice",
+          referring_doctor_email: "Referring doctor's email", referring_doctor_address: "Referring doctor's address",
+          referral_date: "Referral date", gp_name: "GP",
         };
         function mgLabel(c) { return MG_LABEL[c] || c.replace(/_/g, " "); }
         function mgShow(v) {

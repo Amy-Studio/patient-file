@@ -1331,7 +1331,9 @@
           var archived = (state.archivedOrders || []).filter(function (o) { return o && o.id; });
           var going = live.filter(function (o) { return o.confirmed_at; })[0] || null;
           var cur = state.order || live[0] || null;
-          var undecided = live.length > 1 && !going;
+          /* Nothing is undecided once every surgery on the file is in the
+             past. See isDone below for why. */
+          var undecided = live.length > 1 && !going && !live.every(isDone);
 
           /* THE NAME HE GAVE IT WINS, and an unsaved one says so.
            *
@@ -1358,10 +1360,33 @@
           function isDone(o) {
             if (!o) return false;
             if (o.status === "completed") return true;
-            var d = o.session_date || ((o.confirmed_at || live.length === 1) ? (state.patient || {}).surgery_date : null);
-            if (!d) return false;
             var n = new Date();
             var today = n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2, "0") + "-" + String(n.getDate()).padStart(2, "0");
+            var d = o.session_date || ((o.confirmed_at || live.length === 1) ? (state.patient || {}).surgery_date : null);
+            /* HISTORY DOES NOT NEED A DECISION.
+             *
+             * With two surgeries and no tick, neither could claim the
+             * patient's surgery date, so neither counted as done, both read as
+             * OFFERED, and the file went on asking which one is going ahead
+             * about an operation that happened months ago.
+             *
+             * Amy, 19 Aug 2026, on Helen Sargeant: "she was done in the past,
+             * her surgery is complete. both surgeries listed are basically
+             * half versions of what was done. i dont have time to correct it."
+             *
+             * A date in the past is not an ambiguity. Which of two half
+             * records is the better one is a real question, but it is not a
+             * decision the operation is waiting on: it already happened. So a
+             * patient whose surgery date has passed is history, whatever state
+             * the records are in, and the file stops asking.
+             *
+             * It stays tickable. Saying which one actually happened is still
+             * worth doing when there is time. It is just no longer nagged for. */
+            if (!d) {
+              var pd = (state.patient || {}).surgery_date;
+              if (pd && String(pd).slice(0, 10) < today) return true;
+            }
+            if (!d) return false;
             return String(d).slice(0, 10) < today;
           }
           function nameOf(o) {
@@ -3691,6 +3716,15 @@
             if (!o) return false;
             if (o.status === "completed") return true;
             var d = o.session_date || ((o.confirmed_at || _live.length === 1) ? (state.patient || {}).surgery_date : null);
+            var n0 = new Date();
+            var today0 = n0.getFullYear() + "-" + String(n0.getMonth() + 1).padStart(2, "0") + "-" + String(n0.getDate()).padStart(2, "0");
+            /* The same rule as the strip's isDone: a patient whose surgery
+               date has passed is history even when no surgery has been
+               ticked, so this screen calls it DONE rather than OFFERED. */
+            if (!d) {
+              var pd0 = (state.patient || {}).surgery_date;
+              if (pd0 && String(pd0).slice(0, 10) < today0) return true;
+            }
             if (!d) return false;
             var n = new Date();
             var today = n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2, "0") + "-" + String(n.getDate()).padStart(2, "0");
@@ -3764,7 +3798,9 @@
             return '<td style="padding:8px 10px;border-top:1px solid var(--line);' +
                    'vertical-align:top;text-align:right">' + bits + '</td>';
           }
-          var undecided = live.length > 1 && !live.some(function (o) { return o.confirmed_at; });
+          var undecided = live.length > 1
+            && !live.some(function (o) { return o.confirmed_at; })
+            && !live.every(srDone);
           return '<h3 style="font-size:13.5px;margin:0 0 6px">' +
               (live.length + gone.length) + ' surgeries on this file</h3>' +
             '<div style="font-size:12px;color:' + (undecided ? '#96660f' : 'var(--muted)') + ';margin-bottom:8px">' +
@@ -7738,7 +7774,22 @@
      *
      * Hidden rather than removed, because it is also how a newer build
      * announces itself below. That branch shows it again, and only then. */
-    if (document.getElementById("pf-ver")) el.style.display = "none";
+    /* THE HEADING'S VERSION HAS TO BE (a) TRUE AND (b) ON SCREEN.
+     *
+     * It was neither. #pf-ver was the literal text "v10", typed into the HTML,
+     * so it said v10 whatever copy was actually loaded, which is the one thing
+     * a version label exists to tell you. And the floating pill stood down on
+     * that element merely EXISTING. Inside the Suite the header it sits in is
+     * not shown, so the element was there, the pill hid, and there was no
+     * version anywhere at all. Amy, 19 Aug 2026: "the patient file program was
+     * meant to mention a version number but doesnt".
+     *
+     * offsetParent is null for anything not being displayed, which is the
+     * cheapest honest test of "is this actually on screen". Same test the
+     * Suite's copy uses, for the same reason. */
+    var pfVer = document.getElementById("pf-ver");
+    if (pfVer && trusted) pfVer.textContent = say(built);
+    if (pfVer && pfVer.offsetParent !== null) el.style.display = "none";
 
     if (!trusted) return;
 

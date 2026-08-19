@@ -3136,7 +3136,65 @@
           }
           show();
         }
-        function renderAll() { renderHeader(); renderSurgeryPicker(); renderContact(); renderSurgery(); renderOrder(); renderOverview(); renderDocs(); renderHire(); renderNotes(); wireLaunch(); renderPsBanner(); renderPsStamp(); wireCuraDocsPanel(); remountOpenSurgeonTab(); }
+        /* ONE SECTION THAT BREAKS MUST NOT TAKE THE REST OF THE FILE WITH IT.
+         *
+         * This was a single chain of fourteen calls, and renderDocs was the
+         * SEVENTH of them. Anything that threw in the first six left #pf-docs
+         * never written at all: no documents, no "No documents saved yet", no
+         * "Removed" chip, no badge, no error. On screen that is
+         * indistinguishable from every document on the patient having been
+         * deleted. It also survives a reload, because whatever threw is in the
+         * stored record and is still there the next time she opens it.
+         *
+         * Amy, 19 August 2026, opened a patient after bringing PracSuite
+         * details across and reported that it had "deleted all the documents i
+         * made for this patient". It had not, and a blank render was not the
+         * cause that day. But a silent empty panel is the worst way this
+         * program can be wrong: it says something untrue about a patient's file
+         * and gives nobody anything to act on. So it is closed off whether or
+         * not it has bitten yet.
+         *
+         * Each section now stands on its own. One that throws leaves a short
+         * line saying so, names itself in the console for whoever has to fix
+         * it, and every other section still draws. The order is unchanged, and
+         * so is what each section draws.
+         */
+        function renderAll() {
+          var sections = [
+            ["heading",            renderHeader,          null],
+            ["surgery picker",     renderSurgeryPicker,   null],
+            ["contact details",    renderContact,         null],
+            ["surgery",            renderSurgery,         null],
+            ["surgery plan",       renderOrder,           null],
+            ["checklist",          renderOverview,        null],
+            ["documents",          renderDocs,            "pf-docs"],
+            ["hire",               renderHire,            null],
+            ["notes",              renderNotes,           "pf-notes-list"],
+            ["buttons",            wireLaunch,            null],
+            ["PracSuite banner",   renderPsBanner,        null],
+            ["PracSuite stamp",    renderPsStamp,         null],
+            ["Cura panel",         wireCuraDocsPanel,     null],
+            ["surgeon tab",        remountOpenSurgeonTab, null]
+          ];
+          sections.forEach(function (s) {
+            try {
+              s[1]();
+            } catch (e) {
+              console.error("[PF] the " + s[0] + " section could not be drawn:", e);
+              /* Only speak where the section owns a panel of its own, and only
+               * when it left that panel empty. Writing over a half-drawn list
+               * would throw away the part that DID work, which is worse than
+               * saying nothing. */
+              if (!s[2]) return;
+              var el = qs(s[2]);
+              if (!el || el.innerHTML) return;
+              el.innerHTML = '<div class="empty">This part of the file could not be drawn, so it is ' +
+                'showing nothing rather than showing you something wrong. <b>Nothing has been ' +
+                'deleted.</b> Reload the page, and if it keeps happening tell Claude it was the ' +
+                esc(s[0]) + ' section.</div>';
+            }
+          });
+        }
         function renderNotes() {
           var el = qs("pf-notes-list"); if (!el) return;
           var notes = (state.notes || []).filter(function (n) { return !n.deleted_at; });
@@ -7485,6 +7543,23 @@
     el.textContent = NAME + " \u00b7 " + (trusted ? say(built) : "build date unknown");
     el.title = trusted ? "The copy of " + NAME + " this tab is running." : "";
     (document.body || document.documentElement).appendChild(el);
+
+    /* OUT OF THE WAY WHILE THE HEADING ALREADY SAYS IT.
+     *
+     * This pill is position:fixed at the very top right, which is where the
+     * page's own buttons live, and on the Suite it sat straight on top of Users
+     * and Help. Amy, 19 August 2026, with a screenshot: "its position is bad as
+     * it covers buttons."
+     *
+     * This page has carried its own version beside the heading (#pf-ver) since
+     * v9, and that one scrolls with the page and cannot be covered. So while it
+     * is there, the floating copy is saying nothing that is not already on
+     * screen, and it stands down.
+     *
+     * Hidden rather than removed, because it is also how a newer build
+     * announces itself below. That branch shows it again, and only then. */
+    if (document.getElementById("pf-ver")) el.style.display = "none";
+
     if (!trusted) return;
 
     fetch(location.href, { method: "HEAD", cache: "no-store" }).then(function (r) {
@@ -7493,6 +7568,9 @@
       var server = new Date(lm);
       // A minute of slack, so clock drift never cries wolf.
       if (!isFinite(server.getTime()) || server.getTime() - built.getTime() < 60000) return;
+      // Back on screen. A newer build waiting to be loaded is the one thing
+      // this pill exists to interrupt her for, and clicking it makes it go.
+      el.style.display = "";
       el.style.background = "#fdf3dd"; el.style.borderColor = "#f0ddb0";
       el.style.color = "#96660f"; el.style.cursor = "pointer";
       el.textContent = NAME + " \u00b7 " + say(built) + " \u00b7 newer version ready, click to load it";

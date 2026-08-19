@@ -1526,10 +1526,18 @@
                   'Not chosen</span>';
               bits += '<span data-orm="' + i + '" style="font-size:12px;font-weight:600;padding:6px 12px;' +
                 'border-radius:8px;border:1px solid #e8b9ba;color:#b7484a;background:#fff;cursor:pointer">Delete</span>';
+              /* NO "For <name>:" LABEL. Amy, 19 Aug 2026: "is it needed? its
+                 messy". It is not. The surgery these buttons act on is the
+                 pill highlighted directly above them, so the label repeated a
+                 name the screen was already showing, and cut it off mid-word
+                 at 40 characters doing it: "...fasciotomy with nerv:".
+
+                 The amber line stays. It is not a label, it is the one thing
+                 the pills cannot say: that nobody has decided yet. */
               return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px">' +
-                '<span style="font-size:11.5px;color:' + (undecided ? '#96660f' : 'var(--muted)') + '">' +
-                  (undecided ? 'Nothing is going ahead yet. For ' : 'For ') +
-                  esc(nameOf(cur).slice(0, 40)) + ':</span>' + bits +
+                (undecided
+                  ? '<span style="font-size:11.5px;color:#96660f">Nothing is going ahead yet.</span>'
+                  : '') + bits +
               '</div>';
             })();
 
@@ -1794,7 +1802,17 @@
           var c = sb(); if (!c) { toast("Not signed in"); return; }
           var sameOp = live[0];
           if (sameOp && !sameOp.plan_name && sameOp.procedure_name) {
-            var auto = String(sameOp.procedure_name).split("(")[0].trim().slice(0, 40);
+            /* CUT AT A WORD, NEVER MID-WORD. This name is SAVED, so it is
+               what the surgery is called on every screen and every list from
+               then on. A straight slice(0, 40) turned "Left plantar instep
+               fasciotomy with nerve decompression" into "Left plantar instep
+               fasciotomy with nerv", permanently. (Amy, 19 Aug 2026, who
+               spotted the same 40-character cut in the label under the
+               pills.) */
+            var full40 = String(sameOp.procedure_name).split("(")[0].trim();
+            var auto = full40.length <= 40
+              ? full40
+              : (full40.slice(0, 40).replace(/\s+\S*$/, "") || full40.slice(0, 40));
             try {
               var r0 = await c.from("surgeon_orders").update({ plan_name: auto }).eq("id", sameOp.id);
               if (!(r0 && r0.error)) sameOp.plan_name = auto;

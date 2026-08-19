@@ -457,7 +457,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v12</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v13</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -666,6 +666,14 @@
               <div class="field"><label>GP's practice</label><input id="f-gp_practice"></div>
               <div class="field"><label>GP's email</label><input id="f-gp_email"></div>
               <div class="field full"><label>GP's address</label><input id="f-gp_address"></div>
+              <!-- The other health professionals in this patient's care. They
+                   come from PracSuite's Contacts tab, from anyone added there
+                   with ADD LINKED CONTACT and the Referrers tab, which is what
+                   tells a physiotherapist from a sister. One per line, with
+                   their practice and address, so a letter can be written to
+                   any of them without opening PracSuite. (Amy, 19 August
+                   2026.) -->
+              <div class="field full"><label>Other practitioners in their care</label><textarea id="f-other_practitioners" rows="3" style="width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);resize:vertical"></textarea></div>
               <div class="field"><label>Preferred name</label><input id="f-preferred_name"></div>
               <div class="field"><label>Sex</label><input id="f-sex"></div>
               <div class="field"><label>MRN</label><input id="f-mrn"></div>
@@ -1050,7 +1058,7 @@
         }
         function renderContact() {
           var p = state.patient || {};
-          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes", "referring_doctor", "referring_doctor_practice", "referring_doctor_email", "referring_doctor_address", "gp_name", "gp_practice", "gp_email", "gp_address"].forEach(function (k) { setVal("f-" + k, p[k]); });
+          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "notes", "referring_doctor", "referring_doctor_practice", "referring_doctor_email", "referring_doctor_address", "gp_name", "gp_practice", "gp_email", "gp_address", "other_practitioners"].forEach(function (k) { setVal("f-" + k, p[k]); });
           setVal("f-dob", p.dob ? String(p.dob).slice(0, 10) : "");
           // The referral date is set on its own line, exactly as the date of
           // birth and the pre-screening date are, because a date box shows
@@ -1081,6 +1089,12 @@
           ["f-gp_practice", "f-gp_email", "f-gp_address"].forEach(function (id) {
             var f = qs(id) && qs(id).closest(".field"); if (f) f.style.display = hasGpCols ? "" : "none";
           });
+          // Its own test again, its own column.
+          var hasOthers = ("other_practitioners" in p);
+          (function () {
+            var f = qs("f-other_practitioners") && qs("f-other_practitioners").closest(".field");
+            if (f) f.style.display = hasOthers ? "" : "none";
+          })();
           wireExpiryField();
           sayAboutExpiry();
         }
@@ -4180,7 +4194,7 @@
         // ---- save ----
         function collectPatientPatch() {
           var patch = {};
-          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status", "referring_doctor", "referring_doctor_practice", "referring_doctor_email", "referring_doctor_address", "referral_date", "gp_name", "gp_practice", "gp_email", "gp_address"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
+          ["full_name", "first_name", "surname", "phone", "email", "address", "medicare_number", "medicare_irn", "health_fund", "health_fund_membership", "phi_status", "nok_name", "nok_phone", "preferred_name", "sex", "medicare_expiry", "mrn", "client_id", "surgery_anaesthetist", "surgery_procedure", "surgery_status", "referring_doctor", "referring_doctor_practice", "referring_doctor_email", "referring_doctor_address", "referral_date", "gp_name", "gp_practice", "gp_email", "gp_address", "other_practitioners"].forEach(function (k) { var e = qs("f-" + k); if (e) patch[k] = e.value || null; });
           /* AND OFF AGAIN, UNTIL THE COLUMNS EXIST.
            *
            * Guarded the same way bmi and prescreening_date are a few lines
@@ -4393,7 +4407,8 @@
                               referring_doctor_email: "their email", referring_doctor_address: "their address",
                               referral_date: "the referral date", gp_name: "the GP's name",
                               gp_practice: "the GP's practice", gp_address: "the GP's address",
-                              gp_email: "the GP's email" };
+                              gp_email: "the GP's email",
+                              other_practitioners: "the other practitioners in their care" };
                 toast("Saved, except " + dropped.map(function (c) { return human[c] || c; }).join(" and ") +
                       ". That needs its column adding in Supabase.");
               }
@@ -5292,7 +5307,7 @@
 
         // ---- load ----
         function loadStub() {
-          state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, bmi: 31.2, prescreening_date: "2026-06-01", referring_doctor: "Dr Helen Prasad", referring_doctor_practice: "Yarra Valley Family Medical", referring_doctor_email: "hprasad@yvfm.com.au", referring_doctor_address: "3/88 Warburton Highway, Wandin North VIC 3139", referral_date: "2026-04-22", gp_name: "Dr Helen Prasad", gp_practice: "Yarra Valley Family Medical", gp_email: "hprasad@yvfm.com.au", gp_address: "3/88 Warburton Highway, Wandin North VIC 3139", surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
+          state.patient = { id: "preview", full_name: "Josh Service", dob: "1990-02-08", phone: "0437 680 359", email: "josh.service18@gmail.com", address: "25 Greenwood Drive, Launching Place 3139", medicare_number: "3492375694", medicare_irn: "2", health_fund: "Bupa", health_fund_membership: "41121112", nok_name: "Lauren Service", nok_phone: "0417 680 606", surgery_date: "2026-07-02", surgery_venue: "sjm", surgery_duration_min: 150, bmi: 31.2, prescreening_date: "2026-06-01", referring_doctor: "Dr Helen Prasad", referring_doctor_practice: "Yarra Valley Family Medical", referring_doctor_email: "hprasad@yvfm.com.au", referring_doctor_address: "3/88 Warburton Highway, Wandin North VIC 3139", referral_date: "2026-04-22", gp_name: "Dr Helen Prasad", gp_practice: "Yarra Valley Family Medical", gp_email: "hprasad@yvfm.com.au", gp_address: "3/88 Warburton Highway, Wandin North VIC 3139", other_practitioners: "Physiotherapist: Jane Bloggs, Bayside Physio, 12 High St Hampton VIC 3188", surgery_procedure: "Right lateral ankle ligament stabilisation (Brostrom-Gould) with repair of the subtalar facet and calcaneonavicular joint", quote_pdf_url: "x", pamphlet_pdf_url: "x", updated_at: "2026-06-10" };
           state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], side: "bilateral", admission_type: "day_procedure", anaesthesia_type: "GA", est_duration_min: 150, venue_type: "hospital", allergies: "NKA", allergies_nka: true, theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", glp1_sglt2: "none", antibiotics_postop: "Yes, for 5 days", ab_cover: "yes_5d", at_cover: "yes_15d", prosthesis_details: "No", theatre_equipment: "Yes - Power, Podiatry Tray", weight_bearing: "Non-weight bearing for 2 weeks", full_wb_at_weeks: 2, footwear: "Post-operative dressing, ankle brace", footwear_weeks: 6, sport_weeks: 6, swimming_weeks_off: 2, flying_weeks_off: 12, social_event_weeks: 4, shower_wet_at_days: 14, travel_notes: "Can fly after 12 weeks", work_desk_weeks: 2, work_active_weeks: 6, mobility_aid: "multiple", crutches_required: true, knee_scooter_weeks: 3, quote_items: ["F414ab — Ankle Brace"], supplements: ["Vitamin C 1000 mg daily"] };
           state.orderId = "o1";
           state.orders = [state.order, { id: "o0", session_date: "2025-11-18", procedure_name: "Left hallux valgus correction (earlier surgery)", procedure_codes: [{ code: "F782", qty: 1, description: "Primary metatarsal osteotomy" }], side: "left", admission_type: "day_procedure", weight_bearing: "Heel weight-bearing 2 weeks", sport_weeks: 8 }];
@@ -5436,6 +5451,7 @@
           referring_doctor_email: "Their email", referring_doctor_address: "Their address",
           referral_date: "Referral date", gp_name: "GP",
           gp_practice: "GP's practice", gp_address: "GP's address", gp_email: "GP's email",
+          other_practitioners: "Other practitioners in their care",
         };
         function mgLabel(c) { return MG_LABEL[c] || c.replace(/_/g, " "); }
         function mgShow(v) {

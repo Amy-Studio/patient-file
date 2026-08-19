@@ -34,12 +34,21 @@
          // offers. clinic-op-templates.js goes in first because it is only ever
          // read, never a reader.
          "clinic-op-templates.js", "clinic-operation-report.js",
+         // The three documents written beside the operation report on the day:
+         // the day of surgery note, the procedure episode report and the
+         // surgical completion letter. It goes in AFTER clinic-surgery-docs.js,
+         // which holds every question, every heading and every standing
+         // paragraph it draws, and after clinic-operation-report.js, whose
+         // isRoomsFor it asks so the two halves of this tab can never disagree
+         // about the venue.
+         "clinic-surgery-notes.js",
          "clinic-procedure-codes.js", "clinic-merge-review.js", "clinic-smart-inbox.js",
          // The PracSuite comparison. Loaded here, through the page's own
          // loader, so it gets the same cache-busting stamp as everything
          // else. Added as a plain tag at the foot of the page it never
          // arrived in time and the panel gave up waiting for it.
-         "clinic-pracsuite-link.js", "clinic-pracsuite-files.js", "clinic-pracsuite-tags.js"].forEach(function (f) {
+         "clinic-pracsuite-link.js", "clinic-pracsuite-files.js", "clinic-pracsuite-tags.js",
+         "clinic-phi.js"].forEach(function (f) {
           document.write('<script src="' + base + f + '?fresh=' + v + '"><\/script>');
         });
       })();
@@ -596,17 +605,29 @@
               <div class="field"><label>Medicare expiry</label><input id="f-medicare_expiry"></div>
               <div class="field"><label>Health fund</label><input id="f-health_fund"></div>
               <div class="field"><label>Fund membership</label><input id="f-health_fund_membership"></div>
-              <!-- THREE answers, not two. A patient nobody has asked must never
-                   look the same as one who has told us she has no cover: the
-                   first still needs asking, the second never will. Left blank,
-                   a file behaves exactly as it does today. (Amy, 16 Aug 2026:
-                   "we need to have that yes or no for private health insurance
-                   as a toggle on the patients file".) -->
+              <!-- THREE answers, not two. A patient nobody has answered for must
+                   never look the same as one who has told us she has no cover:
+                   the first still needs asking, the second never will. Left as
+                   it is, a file behaves exactly as it did before.
+                   (Amy, 16 Aug 2026: "we need to have that yes or no for
+                   private health insurance as a toggle on the patients file".)
+
+                   Yes and No, and nothing else in the list. Amy, 19 Aug 2026:
+                   "the dropdown will say yes or no. if unsure it wont tick
+                   unsure". The unanswered state reads "To confirm", the same
+                   words the documents print, and never "not asked": "THE more
+                   professional wordng, inslude private".
+
+                   Fund details on file outrank this. Amy, same day: "if theres
+                   health insurance details and a conflicting tag just use the
+                   health fund details on the forms!" So this answer only
+                   decides anything when both fund boxes are empty, which is
+                   why "Yes" here changes nothing on its own. -->
               <div class="field"><label>Private health insurance</label>
                 <select id="f-phi_status">
-                  <option value="">Not asked yet</option>
-                  <option value="has">Yes, has cover</option>
-                  <option value="none">No private health insurance</option>
+                  <option value="">To confirm</option>
+                  <option value="has">Yes</option>
+                  <option value="none">No</option>
                 </select></div>
               <div class="field"><label>Next of kin</label><input id="f-nok_name"></div>
               <div class="field"><label>Next of kin phone</label><input id="f-nok_phone"></div>
@@ -737,6 +758,12 @@
             <div id="op-inline"></div>
             <h3 class="op-subhead">Operation report</h3>
             <div id="op-report-inline"></div>
+            <!-- The three documents written on the same day as the report.
+                 Which of the two clinical notes is drawn follows the venue:
+                 the day of surgery note is the hospital list's, the procedure
+                 episode report is the rooms one. -->
+            <h3 class="op-subhead">Day of surgery documents</h3>
+            <div id="op-notes-inline"></div>
           </div>
 
           <!-- Documents -->
@@ -4431,7 +4458,7 @@
          * rebuilding it would throw that typing away and nothing clinical may
          * disappear without her seeing it go.
          */
-        var _ppFor = null, _opFor = null, _orFor = null;
+        var _ppFor = null, _opFor = null, _orFor = null, _snFor = null;
         function formSig() { return String(state.orderId || "") + "#" + orderGen; }
         function mountSurgeonForm(host, modName, mount) {
           var el = qs(host); if (!el) return;
@@ -4600,6 +4627,11 @@
         function mountOperative() {
           mountSurgeonTab("op-inline", "ClinicSurgeryAudit", _opFor, function (s) { _opFor = s; });
           mountSurgeonTab("op-report-inline", "ClinicOperationReport", _orFor, function (s) { _orFor = s; });
+          /* The day of surgery note, the procedure episode report and the
+             completion letter. Its own record of which surgery it is showing,
+             for the same reason the two above have theirs: typing in one form
+             must never stop another being offered a newer surgery. */
+          mountSurgeonTab("op-notes-inline", "ClinicSurgeryNotes", _snFor, function (s) { _snFor = s; });
         }
         (function () { var n = document.querySelector('.navitem[data-sec="preop"]'); if (n) n.addEventListener("click", mountPreop); })();
         (function () { var n = document.querySelector('.navitem[data-sec="operative"]'); if (n) n.addEventListener("click", mountOperative); })();

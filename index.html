@@ -2285,7 +2285,14 @@
           state.goneView = gone;
           if (showingGone) {
             qs("pf-docs").innerHTML = gone.map(function (d, i) {
+              /* A box here too, so a pile of removed documents can be put back
+                 or finished off in one go instead of one at a time. Ticking a
+                 removed document still cannot SEND it: the tick bar on this
+                 tab offers only Put back and Delete, for the reason in the
+                 comment above. (19 Aug 2026.) */
               return '<div class="doc" style="opacity:.72">' +
+                '<label style="margin-right:10px;flex-shrink:0;cursor:pointer" title="Tick to put back, or to delete for good">' +
+                '<input type="checkbox" class="pf-gone-tick" data-gone-tick="' + i + '"></label>' +
                 '<div style="flex:1;min-width:0"><div class="dname" style="color:var(--muted)">' +
                 docTypePill(d) + esc(pracSuiteDocName(d)) + '</div>' +
                 '<div class="dmeta">Removed ' + esc(isoToDmy(d.archived_at) || "") +
@@ -2311,6 +2318,102 @@
           Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-doc-restore]"), function (el) {
             el.addEventListener("click", function (ev) { ev.stopPropagation(); restoreDoc(parseInt(el.getAttribute("data-doc-restore"), 10)); });
           });
+          Array.prototype.forEach.call(qs("pf-docs").querySelectorAll("[data-gone-tick]"), function (el) {
+            el.addEventListener("change", updateDocTickButtons);
+          });
+        }
+
+        /* ---- doing it to more than one at a time ---------------------------
+         *
+         * Amy, 19 Aug 2026: "its very tedious". Three bulk actions, all driven
+         * by the boxes that were already on the rows.
+         *
+         * Remove and Put back are the safe pair and only ever say how many.
+         * Delete for good is the one that cannot be undone, so it is offered
+         * ONLY on the Removed tab: a document has to be taken off the file
+         * first, which means nothing can be destroyed in one press from the
+         * screen she works on every day. It also asks her to type the word,
+         * the same as deleting a surgery.
+         */
+        function goneTickedDocs() {
+          var out = [], view = state.goneView || [];
+          Array.prototype.forEach.call(document.querySelectorAll("[data-gone-tick]"), function (el) {
+            if (el.checked) { var d = view[parseInt(el.getAttribute("data-gone-tick"), 10)]; if (d) out.push(d); }
+          });
+          return out;
+        }
+
+        /* One write, not one per document. A loop of single updates half
+         * succeeds when the connection drops, and leaves her looking at a list
+         * where some went and some did not with nothing saying which. */
+        async function bulkDocs(docs, patch, verb) {
+          var ids = docs.map(function (d) { return d && d.id; }).filter(Boolean);
+          if (!ids.length) return false;
+          if (window.__pfPreview) { toast("Preview - not saved"); return false; }
+          var client = sb(); if (!client) { toast("Not signed in."); return false; }
+          status(verb + "…");
+          var r = patch === null
+            ? await client.from("patient_documents").delete().in("id", ids)
+            : await client.from("patient_documents").update(patch).in("id", ids);
+          status("");
+          if (r && r.error) {
+            console.error("[PF] bulk " + verb, r.error);
+            toast("Could not " + verb.toLowerCase() + ": " + (r.error.message || "try again"));
+            return false;
+          }
+          return true;
+        }
+
+        async function removeTickedDocs() {
+          var picked = tickedDocs();
+          if (!picked.length) return;
+          if (!confirm("Take " + picked.length + " document" + (picked.length === 1 ? "" : "s") +
+                       " off this patient's file?\n\nThey are archived rather than deleted, so they " +
+                       "stop showing here and the Removed tab can put them back.")) return;
+          var stamp = new Date().toISOString();
+          if (!await bulkDocs(picked, { archived_at: stamp }, "Removing")) return;
+          /* Stamped, NOT dropped from state.docs. The Removed tab builds its
+             list by filtering that same array for archived_at, so dropping
+             them here would take them off the file AND out of the tab that is
+             supposed to be able to put them back, until the page was
+             reloaded. */
+          picked.forEach(function (d) { d.archived_at = stamp; });
+          toast("Removed " + picked.length + " from the file");
+          renderDocs(); renderOverview();
+        }
+
+        async function restoreTickedDocs() {
+          var picked = goneTickedDocs();
+          if (!picked.length) return;
+          if (!await bulkDocs(picked, { archived_at: null }, "Putting back")) return;
+          picked.forEach(function (d) { d.archived_at = null; });
+          toast("Put " + picked.length + " back on the file");
+          renderDocs(); renderOverview();
+        }
+
+        async function deleteTickedDocs() {
+          var picked = goneTickedDocs();
+          if (!picked.length) return;
+          var onPS = picked.filter(function (d) { return d.pracsuite_filed_at; }).length;
+          /* TYPE THE WORD. The same confirmation PracSuite asks for, and for
+             the same reason: this row is gone for good. The stored PDF itself
+             is left alone, and anything already on their PracSuite record
+             stays there, because PracSuite has no delete at all. Saying so is
+             the difference between deleting a row and believing you have
+             deleted a document. */
+          var typed = prompt(
+            "Delete " + picked.length + " document" + (picked.length === 1 ? "" : "s") + " for good?\n\n" +
+            "This cannot be undone. They will not be on the Removed tab afterwards.\n\n" +
+            (onPS ? onPS + " of them " + (onPS === 1 ? "is" : "are") + " already on their PracSuite record " +
+                    "and will STAY there: PracSuite has no way to take a file back.\n\n" : "") +
+            "Type DELETE to confirm.");
+          if (typed === null) return;
+          if (String(typed).trim().toUpperCase() !== "DELETE") { toast("Not deleted, the word did not match"); return; }
+          if (!await bulkDocs(picked, null, "Deleting")) return;
+          var deadIds = {}; picked.forEach(function (d) { deadIds[d.id] = 1; });
+          state.docs = (state.docs || []).filter(function (x) { return !deadIds[x.id]; });
+          toast("Deleted " + picked.length + " for good");
+          renderDocs(); renderOverview();
         }
         // The other half of Remove. Nothing about the file changes, it simply
         // stops being hidden: same document, same name, same PracSuite state.
@@ -2405,6 +2508,19 @@
             dl.textContent = m ? ("Download " + m) : "Download ticked";
             dl.style.opacity = m ? "1" : ".55";
           }
+          var rm = qs("pf-rm-ticked");
+          if (rm) {
+            var k = tickedDocs().length;
+            rm.disabled = !k;
+            rm.textContent = k ? ("Remove " + k) : "Remove ticked";
+            rm.style.opacity = k ? "1" : ".55";
+          }
+          var gb = qs("pf-gone-back"), gd = qs("pf-gone-del");
+          if (gb || gd) {
+            var g = goneTickedDocs().length;
+            if (gb) { gb.disabled = !g; gb.textContent = g ? ("Put " + g + " back") : "Put back ticked"; gb.style.opacity = g ? "1" : ".55"; }
+            if (gd) { gd.disabled = !g; gd.textContent = g ? ("Delete " + g + " for good") : "Delete for good"; gd.style.opacity = g ? "1" : ".55"; }
+          }
         }
         function renderPracSuiteSendBar(hide) {
           var host = qs("pf-docs");
@@ -2412,7 +2528,33 @@
           // Nothing on the removed tab can be sent, so the Send bar is not
           // offered there. A button that cannot act is a question you have to
           // answer every time you look at it.
-          if (hide) { var b0 = qs("pf-ps-bar"); if (b0) b0.style.display = "none"; return; }
+          /* The Removed tab gets its own bar. Nothing here can be sent, so it
+             offers the only two things that make sense on a removed document:
+             put it back, or finish it off. (19 Aug 2026.) */
+          var gbar = qs("pf-gone-bar");
+          if (hide) {
+            var b0 = qs("pf-ps-bar"); if (b0) b0.style.display = "none";
+            if (!gbar) {
+              gbar = document.createElement("div");
+              gbar.id = "pf-gone-bar";
+              gbar.style.cssText = "display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:0 0 12px;" +
+                "padding:10px 13px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius)";
+              gbar.innerHTML =
+                '<button type="button" id="pf-gone-back" class="np-btn" style="opacity:.55">Put back ticked</button>' +
+                '<button type="button" id="pf-gone-del" class="np-btn" style="opacity:.55;' +
+                'border-color:#e8b9ba;color:#b7484a">Delete for good</button>' +
+                '<span style="font-size:12.5px;color:var(--muted)">' +
+                '<b>Put back</b> returns them to the file. <b>Delete for good</b> cannot be undone, ' +
+                'and anything already on their PracSuite record stays there either way.</span>';
+              host.parentNode.insertBefore(gbar, host);
+              qs("pf-gone-back").addEventListener("click", restoreTickedDocs);
+              qs("pf-gone-del").addEventListener("click", deleteTickedDocs);
+            }
+            gbar.style.display = "";
+            updateDocTickButtons();
+            return;
+          }
+          if (gbar) gbar.style.display = "none";
           var shown = qs("pf-ps-bar"); if (shown) shown.style.display = "";
           var bar = qs("pf-ps-bar");
           if (!bar) {
@@ -2427,12 +2569,23 @@
               '<button type="button" id="pf-ps-send" class="np-btn" style="opacity:.55">Send to PracSuite</button>' +
               '<button type="button" id="pf-dl-ticked" class="np-btn" style="opacity:.55" ' +
               'title="Save a copy of everything ticked onto this computer. Nothing on their record changes.">Download ticked</button>' +
+              /* THE SAME TICKS, A THIRD THING THEY CAN DO. Amy, 19 Aug 2026:
+                 "is there a way to select multiple for archiving and for
+                 deleting rather than having to hit the remove button for each.
+                 its very tedious." She was right, and there was no need for a
+                 second way of choosing: every row already had a box on it for
+                 sending to PracSuite. */
+              '<button type="button" id="pf-rm-ticked" class="np-btn" style="opacity:.55;' +
+              'border-color:#e8b9ba;color:#b7484a" ' +
+              'title="Take everything ticked off the file. They are archived, not destroyed, and the ' +
+              'Removed tab can put them back.">Remove ticked</button>' +
               '<span id="pf-ps-note" style="font-size:12.5px;color:var(--muted)">' +
               'Tick what you want. <b>Send to PracSuite</b> puts it on their record and PracSuite has no way ' +
               'to take a file back. <b>Download ticked</b> only saves a copy here.</span>';
             host.parentNode.insertBefore(bar, host);
             qs("pf-ps-send").addEventListener("click", sendTickedToPracSuite);
             qs("pf-dl-ticked").addEventListener("click", downloadTickedDocs);
+            qs("pf-rm-ticked").addEventListener("click", removeTickedDocs);
           }
           updateDocTickButtons();
         }
@@ -5041,12 +5194,21 @@
             procedure_codes: [{ code: "F698", qty: 1 }, { code: "F414s", qty: 1 }],
             surgery_venue: "masada", side: "right", admission_type: "day_procedure",
             archived_at: "2026-08-10T00:00:00Z", created_at: "2026-08-01T00:00:00Z" }];
+          /* Ids, because everything that acts on a document acts on its id and
+             without one the preview quietly did nothing. And two REMOVED
+             documents, so the Removed tab, its tick boxes, Put back and Delete
+             for good can be looked at and tested without a real patient. The
+             second one is already on PracSuite on purpose: that is the case
+             where deleting the row here does NOT take it off their record, and
+             the warning has to say so. (19 Aug 2026.) */
           state.docs = [
-            { doc_type: "quote_sjm", label: "Quote — Sir John Monash", generated_at: "2026-06-10", sent_at: "2026-06-11", url: "#" },
-            { doc_type: "quote_masada", label: "Quote — Masada", generated_at: "2026-06-02", url: "#" },
-            { doc_type: "pamphlet_full", label: "Recovery pamphlet — ankle", generated_at: "2026-06-06", url: "#" },
-            { doc_type: "pamphlet_full", label: "Recovery pamphlet — earlier surgery", generated_at: "2025-11-20", url: "#" },
-            { doc_type: "cheat_sheet", label: "Reception cheat sheet", generated_at: "2026-06-12", url: "#" }
+            { id: "d1", doc_type: "quote_sjm", label: "Quote — Sir John Monash", generated_at: "2026-06-10", sent_at: "2026-06-11", url: "#" },
+            { id: "d2", doc_type: "quote_masada", label: "Quote — Masada", generated_at: "2026-06-02", url: "#" },
+            { id: "d3", doc_type: "pamphlet_full", label: "Recovery pamphlet — ankle", generated_at: "2026-06-06", url: "#" },
+            { id: "d4", doc_type: "pamphlet_full", label: "Recovery pamphlet — earlier surgery", generated_at: "2025-11-20", url: "#" },
+            { id: "d5", doc_type: "cheat_sheet", label: "Reception cheat sheet", generated_at: "2026-06-12", url: "#" },
+            { id: "d6", doc_type: "quote_main", label: "Main quote — superseded", generated_at: "2026-05-28", archived_at: "2026-06-02T04:00:00Z", url: "#" },
+            { id: "d7", doc_type: "consent", label: "Consent — wrong patient, filed by mistake", generated_at: "2026-05-30", archived_at: "2026-06-01T02:00:00Z", pracsuite_filed_at: "2026-05-30", url: "#" }
           ];
           state.hires = [{ hire_item_id: 1, hire_items: { name: "Knee scooter" }, start_date: "2026-07-02", due_date: "2026-08-13", amount_paid: 80, status: "out" }];
           state.notes = [{ id: "n1", body: "Patient called — prefers a morning slot. Confirmed mobile number.", created_by: "amy@clinic", created_at: "2026-06-27T23:10:00Z" }, { id: "n2", body: "IFC posted out 24 Jun.", created_by: "steph@clinic", created_at: "2026-06-24T01:00:00Z" }];

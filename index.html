@@ -457,7 +457,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v11</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v12</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -650,7 +650,7 @@
                    All six boxes stay hidden until add-referring-doctor.sql has
                    been run, so nothing here can accept typing it cannot save.
                    (18 August 2026.) -->
-              <div class="field"><label>Referring doctor</label><input id="f-referring_doctor"></div>
+              <div class="field"><label>Referring health care professional</label><input id="f-referring_doctor"></div>
               <div class="field"><label>Their practice</label><input id="f-referring_doctor_practice"></div>
               <div class="field"><label>Their email</label><input id="f-referring_doctor_email"></div>
               <div class="field"><label>Referral date</label><input id="f-referral_date" type="date"></div>
@@ -4389,8 +4389,8 @@
               if (dropped.length && !(r && r.error)) {
                 // Named, never silent. She has to know which answer did not land.
                 var human = { phi_status: "the private health insurance answer", first_name: "the given name", surname: "the surname",
-                              referring_doctor: "the referring doctor", referring_doctor_practice: "the referring doctor's practice",
-                              referring_doctor_email: "the referring doctor's email", referring_doctor_address: "the referring doctor's address",
+                              referring_doctor: "the referring health care professional", referring_doctor_practice: "their practice",
+                              referring_doctor_email: "their email", referring_doctor_address: "their address",
                               referral_date: "the referral date", gp_name: "the GP's name",
                               gp_practice: "the GP's practice", gp_address: "the GP's address",
                               gp_email: "the GP's email" };
@@ -5432,8 +5432,8 @@
           prescreening_date: "Prescreening date", full_name: "Full name",
           given_names: "Given names", family_name: "Family name",
           first_name: "First name", surname: "Surname", hire_status: "Hire status",
-          referring_doctor: "Referring doctor", referring_doctor_practice: "Referring doctor's practice",
-          referring_doctor_email: "Referring doctor's email", referring_doctor_address: "Referring doctor's address",
+          referring_doctor: "Referring health care professional", referring_doctor_practice: "Their practice",
+          referring_doctor_email: "Their email", referring_doctor_address: "Their address",
           referral_date: "Referral date", gp_name: "GP",
           gp_practice: "GP's practice", gp_address: "GP's address", gp_email: "GP's email",
         };

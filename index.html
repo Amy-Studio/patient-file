@@ -545,6 +545,12 @@
           <div class="navitem" data-sec="documents"><svg class="ic"><use href="#i-file"/></svg> Documents <span class="badge" id="pf-doc-badge" style="display:none">0</span></div>
           <div class="navitem" data-sec="pracsuite"><svg class="ic"><use href="#i-user"/></svg> PracSuite</div>
           <div class="navitem" data-sec="notes"><svg class="ic"><use href="#i-edit"/></svg> Notes</div>
+          <!-- SURGERY RECORD BELONGS TO THE PATIENT, NOT TO ONE SURGERY.
+               It was inside the box below, which is the box for whichever
+               surgery is selected, while the thing it shows is every surgery
+               on the file. Amy, 19 Aug 2026: "shouldnt surgery record not be
+               inside the actual ticked surgery if its the whole record?" -->
+          <div class="navitem" data-sec="surgeryrecord"><svg class="ic"><use href="#i-clipboard"/></svg> Surgery record</div>
 
           <div id="pf-opbox">
             <div id="pf-opbox-head"></div>
@@ -554,7 +560,6 @@
               <div class="navitem" data-sec="hire" id="pf-nav-hire"><svg class="ic"><use href="#i-box"/></svg> Hire<span class="mark" id="pf-hire-mark" style="display:none"></span></div>
               <div class="navitem" data-sec="preop"><svg class="ic"><use href="#i-clock"/></svg> Pre-op planning</div>
               <div class="navitem" data-sec="operative"><svg class="ic"><use href="#i-activity"/></svg> Operative</div>
-              <div class="navitem" data-sec="surgeryrecord"><svg class="ic"><use href="#i-clipboard"/></svg> Surgery record</div>
             </div>
           </div>
         </nav>
@@ -3496,7 +3501,39 @@
               cell(o.procedure_name ? esc(String(o.procedure_name).slice(0, 90)) : "") +
               cell(codes.length ? esc(codes.join(", ")) : "") +
               cell(o.pracsuite_quote_number ? esc(String(o.pracsuite_quote_number)) : "") +
+              srActions(o, isArchived) +
             '</tr>';
+          }
+          /* PUT IT BACK, AND DELETE, ON THE SCREEN THAT LISTS THEM.
+           *
+           * Both already existed on the surgery strip at the top of the file.
+           * Neither was here, on the one screen that shows every surgery
+           * including the ones that are not chosen, which is the screen you
+           * are on when you want them. Amy, 19 Aug 2026: "when i go to surgery
+           * record it doesnt actually say a way to bring it back".
+           *
+           * Delete is offered on EVERY row, not only the archived ones. A
+           * surgery entered by mistake is a mistake whether or not anybody
+           * has put it away since, and archiving a mistake leaves it on the
+           * file for good. Amy, same day: "i need a way to delete a past
+           * surgery and a current one if in error rather than just
+           * archiving".
+           *
+           * Rows are addressed by id, never by position: this table draws the
+           * live ones and the archived ones from two different lists, and an
+           * index would mean the delete button on row four pointing at
+           * whichever surgery happened to be fourth in the other list. */
+          function srActions(o, isArchived) {
+            var btn = 'font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px;' +
+                      'cursor:pointer;background:#fff;white-space:nowrap;display:inline-block';
+            var bits = isArchived
+              ? '<span data-srun="' + esc(String(o.id)) + '" style="' + btn +
+                ';border:1px solid var(--line);color:var(--accent-ink)">Put it back</span> '
+              : '';
+            bits += '<span data-srdel="' + esc(String(o.id)) + '" style="' + btn +
+                    ';border:1px solid #e8b9ba;color:#b7484a">Delete</span>';
+            return '<td style="padding:8px 10px;border-top:1px solid var(--line);' +
+                   'vertical-align:top;text-align:right">' + bits + '</td>';
           }
           var undecided = live.length > 1 && !live.some(function (o) { return o.confirmed_at; });
           return '<h3 style="font-size:13.5px;margin:0 0 6px">' +
@@ -3509,7 +3546,7 @@
             '<div style="overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:22px">' +
             '<table style="width:100%;border-collapse:collapse;min-width:640px">' +
               '<thead><tr>' +
-                ['Surgery', 'Where', 'When', 'Procedure', 'Item numbers', 'Quote'].map(function (h) {
+                ['Surgery', 'Where', 'When', 'Procedure', 'Item numbers', 'Quote', ''].map(function (h) {
                   return '<th style="text-align:left;padding:8px 10px;font-size:9.5px;font-weight:700;' +
                     'letter-spacing:.06em;color:var(--muted);background:#f7f9fb">' + h + '</th>';
                 }).join("") +
@@ -3518,6 +3555,80 @@
               gone.map(function (o) { return rowOf(o, true); }).join("") +
             '</tbody></table></div>';
         }
+
+        /* Wired once, on the panel, not on the buttons.
+         *
+         * The table is redrawn every time the screen is opened or a surgery
+         * changes, so anything bound to a button is bound to a button that is
+         * about to be thrown away. Listening on the panel instead means the
+         * buttons work however many times the table is rebuilt, and it does
+         * not touch renderSurgeryRecord, which another session is editing. */
+        (function wireSurgeryRecordActions() {
+          var host = document.getElementById("sr-body");
+          if (!host || host.__srWired) return;
+          host.__srWired = true;
+
+          function orderById(id) {
+            var all = (state.orders || []).concat(state.archivedOrders || []);
+            for (var i = 0; i < all.length; i++) {
+              if (all[i] && String(all[i].id) === String(id)) return all[i];
+            }
+            return null;
+          }
+          function nameOf(o) {
+            return (o && (o.plan_name || o.procedure_name)) || "this surgery";
+          }
+          function refresh() {
+            planGen++;
+            if (typeof loadReal === "function") { try { loadReal(); } catch (e) {} }
+          }
+
+          host.addEventListener("click", async function (ev) {
+            var back = ev.target && ev.target.closest && ev.target.closest("[data-srun]");
+            var del  = ev.target && ev.target.closest && ev.target.closest("[data-srdel]");
+            if (!back && !del) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            var o = orderById((back || del).getAttribute(back ? "data-srun" : "data-srdel"));
+            if (!o) { toast("Couldn't find that surgery"); return; }
+            var c = sb();
+            if (!c) { toast("Not signed in"); return; }
+
+            if (back) {
+              var r = await c.from("surgeon_orders").update({ archived_at: null }).eq("id", o.id);
+              if (r.error) { toast("Couldn't put it back: " + r.error.message); return; }
+              toast("Back on their file");
+              refresh();
+              return;
+            }
+
+            /* TYPE THE WORD. Amy, 19 Aug 2026: "i know pracsuite when deleting
+             * things make me type DELETE as a proper confirmation". An OK
+             * button is one slip away from a permanent deletion, and this one
+             * is permanent: unlike archiving, there is nothing to put back. */
+            var going = o.confirmed_at ? "\n\nTHIS IS THE ONE MARKED AS GOING AHEAD." : "";
+            var typed = prompt(
+              "Delete " + nameOf(o) + " for good?" + going +
+              "\n\nOnly do this if it was entered by mistake. It cannot be undone, and " +
+              "archiving is the right choice if they were genuinely offered it.\n\n" +
+              "Any documents already filed for it are kept and stay on their file.\n\n" +
+              "Type DELETE to confirm.");
+            if (typed === null) return;
+            if (String(typed).trim().toUpperCase() !== "DELETE") {
+              toast("Not deleted, the word did not match");
+              return;
+            }
+            var d = await c.from("surgeon_orders").delete().eq("id", o.id);
+            if (d.error) { toast("Couldn't delete: " + d.error.message); return; }
+            /* Never leave the file pointing at a surgery that is gone. */
+            if (state.orderId && String(state.orderId) === String(o.id)) {
+              state.order = null; state.orderId = null;
+            }
+            toast("Deleted");
+            refresh();
+          });
+        })();
 
         async function renderSurgeryRecord() {
           const host = qs("sr-body");
@@ -4863,6 +4974,15 @@
           state.order = { id: "o1", procedure_name: state.patient.surgery_procedure, procedure_codes: [{ code: "F694", qty: 1, description: "Ligament/Capsule Repair (Ankle) – similar to MBS 49709" }, { code: "F791", qty: 2, description: "Excision of Tarsal Coalition – similar to MBS 50333" }], side: "bilateral", admission_type: "day_procedure", anaesthesia_type: "GA", est_duration_min: 150, venue_type: "hospital", allergies: "NKA", allergies_nka: true, theatre_alerts: "Not taking GLP-1/SGLT2. Supine position.", glp1_sglt2: "none", antibiotics_postop: "Yes, for 5 days", ab_cover: "yes_5d", at_cover: "yes_15d", prosthesis_details: "No", theatre_equipment: "Yes - Power, Podiatry Tray", weight_bearing: "Non-weight bearing for 2 weeks", full_wb_at_weeks: 2, footwear: "Post-operative dressing, ankle brace", footwear_weeks: 6, sport_weeks: 6, swimming_weeks_off: 2, flying_weeks_off: 12, social_event_weeks: 4, shower_wet_at_days: 14, travel_notes: "Can fly after 12 weeks", work_desk_weeks: 2, work_active_weeks: 6, mobility_aid: "multiple", crutches_required: true, knee_scooter_weeks: 3, quote_items: ["F414ab — Ankle Brace"], supplements: ["Vitamin C 1000 mg daily"] };
           state.orderId = "o1";
           state.orders = [state.order, { id: "o0", session_date: "2025-11-18", procedure_name: "Left hallux valgus correction (earlier surgery)", procedure_codes: [{ code: "F782", qty: 1, description: "Primary metatarsal osteotomy" }], side: "left", admission_type: "day_procedure", weight_bearing: "Heel weight-bearing 2 weeks", sport_weeks: 8 }];
+          /* A surgery that was offered and NOT chosen, so the preview can show
+             the state that only exists once somebody has decided. Without one
+             here, the NOT CHOSEN row and its "Put it back" could not be looked
+             at, or tested, without a real patient. (19 Aug 2026.) */
+          state.archivedOrders = [{ id: "oA", plan_name: "Right foot, the option she did not take",
+            procedure_name: "Right plantar instep fasciotomy with nerve decompression",
+            procedure_codes: [{ code: "F698", qty: 1 }, { code: "F414s", qty: 1 }],
+            surgery_venue: "masada", side: "right", admission_type: "day_procedure",
+            archived_at: "2026-08-10T00:00:00Z", created_at: "2026-08-01T00:00:00Z" }];
           state.docs = [
             { doc_type: "quote_sjm", label: "Quote — Sir John Monash", generated_at: "2026-06-10", sent_at: "2026-06-11", url: "#" },
             { doc_type: "quote_masada", label: "Quote — Masada", generated_at: "2026-06-02", url: "#" },

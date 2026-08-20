@@ -1056,15 +1056,34 @@
           if (!isFinite(b) || b <= 0) return null;
           return Math.round(b * 10) / 10;
         }
+        /* A stored BMI does not follow a corrected weight. The calculated one does.
+         *
+         * (Amy, 21 Aug 2026: "if we adjust the weight later the bmi box will be
+         * incorrect or will it autoupdate?") The line below is worked out fresh
+         * every time this screen loads, so correcting a weight on the plan
+         * corrects it here. A number sitting in the box above is a stored value
+         * and cannot follow anything.
+         *
+         * So when the two disagree, BOTH are shown and neither is hidden. Quietly
+         * preferring one would either keep showing a BMI the weight has outgrown,
+         * or bury a measured figure somebody entered on purpose. The screen says
+         * they differ and lets her decide which is wrong. */
         function renderBmiCategory() {
           var e = qs("f-bmi-cat"); if (!e) return;
           var raw = val("f-bmi"), cat = whoBmiCategory(raw);
-          if (raw) { e.textContent = cat || "Not a usable BMI"; return; }
           var p = state.patient || {};
           var calc = bmiFromHeightWeight(p.height_cm, p.weight_kg);
-          e.textContent = calc
-            ? calc + " from the surgery plan (" + p.height_cm + " cm, " + p.weight_kg + " kg) \u2014 " + whoBmiCategory(calc)
-            : "";
+          var from = calc ? " (" + p.height_cm + " cm, " + p.weight_kg + " kg)" : "";
+          if (!raw) { e.textContent = calc ? calc + " from the surgery plan" + from + " \u2014 " + whoBmiCategory(calc) : ""; return; }
+          if (!cat) { e.textContent = "Not a usable BMI"; return; }
+          var typed = parseFloat(String(raw).replace(/[^\d.]/g, ""));
+          if (calc && Math.abs(typed - calc) >= 0.1) {
+            e.textContent = "Typed " + typed + " \u2014 " + cat +
+              ". The plan's height and weight give " + calc + from + " \u2014 " + whoBmiCategory(calc) +
+              ". Check which is right.";
+            return;
+          }
+          e.textContent = cat;
         }
         function setVal(id, v) { var e = qs(id); if (e) e.value = (v == null ? "" : v); }
         function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }

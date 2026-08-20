@@ -33,9 +33,17 @@ is("weight only -> nothing",        renderWith("", { weight_kg: 99 }), "");
 is("zero height -> nothing",        renderWith("", { height_cm: 0, weight_kg: 99 }), "");
 is("nonsense -> nothing",           renderWith("", { height_cm: "n/a", weight_kg: "?" }), "");
 
-console.log("\nA typed BMI still wins -- she may have a measured one");
-is("typed 28 beats the plan's 31.2", renderWith("28", { height_cm: 178, weight_kg: 99 }), "Overweight");
-is("typed nonsense still says so",   renderWith("abc", { height_cm: 178, weight_kg: 99 }), "Not a usable BMI");
+console.log("\nA stored BMI cannot follow a corrected weight, so a disagreement is SHOWN, never hidden");
+is("typed 28 vs the plan's 31.2 -- both said, neither buried",
+   renderWith("28", { height_cm: 178, weight_kg: 99 }),
+   "Typed 28 \u2014 Overweight. The plan's height and weight give 31.2 (178 cm, 99 kg) \u2014 Obese class I. Check which is right.");
+is("weight corrected to 78 -> the calculated one follows it",
+   renderWith("28", { height_cm: 178, weight_kg: 78 }),
+   "Typed 28 \u2014 Overweight. The plan's height and weight give 24.6 (178 cm, 78 kg) \u2014 Healthy. Check which is right.");
+is("they agree -> just the category, no noise", renderWith("31.2", { height_cm: 178, weight_kg: 99 }), "Obese class I");
+is("agree within a rounding hair -> still no noise", renderWith("31.25", { height_cm: 178, weight_kg: 99 }), "Obese class I");
+is("typed with no height or weight to check against", renderWith("28", {}), "Overweight");
+is("typed nonsense still says so", renderWith("abc", { height_cm: 178, weight_kg: 99 }), "Not a usable BMI");
 
 console.log("\nThe pre-screening box is gone, and so is every way to write it");
 const noBox   = !/id="f-prescreening_date"/.test(SRC);

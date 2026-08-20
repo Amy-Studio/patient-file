@@ -800,7 +800,6 @@
               <div class="field"><label>Anaesthetist</label><input id="f-surgery_anaesthetist"></div>
               <div class="field"><label>Duration (min)</label><input id="f-surgery_duration_min" type="number"></div>
               <div class="field"><label>BMI</label><input id="f-bmi" type="number" step="0.1" min="10" max="80" placeholder="e.g. 31.2"><div id="f-bmi-cat" style="font-size:12px;color:var(--text-secondary);margin-top:4px;min-height:15px"></div></div>
-              <div class="field"><label>Pre-screening completed</label><input id="f-prescreening_date" type="date"><div style="font-size:12px;color:var(--text-secondary);margin-top:4px">Date the screening form was filled in.</div></div>
               <div class="field"><label>List position</label><input id="f-list_position" type="number"></div>
               <div class="field"><label>Status</label>
                 <select id="f-surgery_status"><option value="">—</option><option>booked</option><option>confirmed</option><option>cancelled</option></select>
@@ -1021,10 +1020,35 @@
           if (n < 40) return "Obese class II";
           return "Obese class III";
         }
+        /* BMI worked out from the surgery plan's height and weight.
+         *
+         * The plan saves height_cm and weight_kg and deliberately saves no BMI
+         * of its own (db-setup-patient-height-weight.sql). The box above is a
+         * typed number and was read on its own, so a patient whose height and
+         * weight were sitting on the very record this screen has open still
+         * showed nothing here. The theatre list has always worked it out; this
+         * screen never did. (Amy, 21 Aug 2026: "link it to the surgical plan".)
+         *
+         * It is shown UNDER the box, never in it. Anything in the box is written
+         * back on the next save, and a saved BMI is the one that goes stale the
+         * day a weight is corrected — which is the fault being fixed, not one
+         * worth repeating. A typed BMI still wins: she may have a measured one. */
+        function bmiFromHeightWeight(h, w) {
+          var hn = parseFloat(h), wn = parseFloat(w);
+          if (!isFinite(hn) || !isFinite(wn) || hn <= 0 || wn <= 0) return null;
+          var m = hn / 100, b = wn / (m * m);
+          if (!isFinite(b) || b <= 0) return null;
+          return Math.round(b * 10) / 10;
+        }
         function renderBmiCategory() {
           var e = qs("f-bmi-cat"); if (!e) return;
           var raw = val("f-bmi"), cat = whoBmiCategory(raw);
-          e.textContent = raw && !cat ? "Not a usable BMI" : cat;
+          if (raw) { e.textContent = cat || "Not a usable BMI"; return; }
+          var p = state.patient || {};
+          var calc = bmiFromHeightWeight(p.height_cm, p.weight_kg);
+          e.textContent = calc
+            ? calc + " from the surgery plan (" + p.height_cm + " cm, " + p.weight_kg + " kg) \u2014 " + whoBmiCategory(calc)
+            : "";
         }
         function setVal(id, v) { var e = qs(id); if (e) e.value = (v == null ? "" : v); }
         function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
@@ -1402,12 +1426,11 @@
             // BMI + screening date only exist once the surgical-list v2 migration
             // has run. select("*") omits the keys entirely until then, so hide the
             // boxes rather than let anyone type into a field that cannot save.
-            var hasBmiCols = ("bmi" in p) || ("prescreening_date" in p);
-            ["f-bmi", "f-prescreening_date"].forEach(function (id) {
+            var hasBmiCols = ("bmi" in p);
+            ["f-bmi"].forEach(function (id) {
               var f = qs(id) && qs(id).closest(".field"); if (f) f.style.display = hasBmiCols ? "" : "none";
             });
             setVal("f-bmi", p.bmi == null ? "" : p.bmi);
-            setVal("f-prescreening_date", p.prescreening_date ? String(p.prescreening_date).slice(0, 10) : "");
             renderBmiCategory();
             setVal("f-paid_in_full", p.paid_in_full === true ? "full" : "");
             return;
@@ -4449,8 +4472,7 @@
           }
           /* AND OFF AGAIN, UNTIL THE COLUMNS EXIST.
            *
-           * Guarded the same way bmi and prescreening_date are a few lines
-           * down. Before add-referring-doctor.sql is run these six are not
+           * Guarded the same way bmi is a few lines down. Before add-referring-doctor.sql is run these six are not
            * columns yet, and sending them would cost six goes round the
            * drop-and-retry below and hand her a toast naming all six on every
            * single save, when the boxes are hidden and there is nothing in
@@ -4483,7 +4505,15 @@
             var bmiN = parseFloat(val("f-bmi"));
             patch.bmi = (isFinite(bmiN) && bmiN > 0) ? bmiN : null;
           }
-          if (state.patient && ("prescreening_date" in state.patient)) patch.prescreening_date = val("f-prescreening_date") || null;
+          /* The Pre-screening completed box was removed on 21 Aug 2026 (Amy: "it
+           * is not needed"). Its SAVE line went with it, and that is the whole
+           * point: val() returns "" for a box that is not on the page, so leaving
+           * this line behind would have written null on every save of this screen
+           * and quietly wiped a screening date the rest of the suite had stored.
+           * The column and its data are untouched. The Surgical List still has
+           * its own "Pre-screening completed" box per patient and still writes
+           * the date back, and the Smart Inbox still fills it from a dropped
+           * screening form, so nothing here leaves it permanently blank. */
           patch.paid_in_full = (val("f-paid_in_full") === "full");
           return patch;
         }

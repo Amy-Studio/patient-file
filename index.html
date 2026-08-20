@@ -34,6 +34,22 @@
          // offers. clinic-op-templates.js goes in first because it is only ever
          // read, never a reader.
          "clinic-op-templates.js", "clinic-operation-report.js",
+         /* One place to change a chip, and the read that makes an edit reach
+            another machine. clinic-surgery-docs.js, clinic-preop-plan.js and
+            clinic-operation-report.js all ask window.ClinicChipSettings what a
+            question offers and what an empty box prints, and all three fall
+            back to their own built-in wording when it is not there. Without
+            this the ask was dead on this screen, so wording Steve edits could
+            only ever reach the browser he typed it in.
+
+            Inert on its own: it defines window.ClinicChipSettings and makes no
+            request until something asks it, and it stays quiet until
+            db-setup-chip-settings.sql has been run.
+
+            Rescued from an uncommitted copy of this file that was otherwise
+            two versions behind and would have undone the Practitioners tab.
+            Only this line and the Operation document group came across. */
+         "clinic-chip-settings.js",
          // And the read that makes an edit to one of those 193 descriptions
          // reach THIS screen. Dr Edwards edits them in the suite, at Settings ->
          // Operative descriptions; clinic-op-template-settings.js is the store
@@ -488,7 +504,7 @@
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
-          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v13</span></div>
+          <div class="brand-title">Patient file <span id="pf-ver" title="The version of this page you are looking at. If it does not match what Claude says is live, your browser is showing you a cached copy: press the round arrow on the tab, or Cmd+Shift+R." style="font-size:11px;font-weight:600;letter-spacing:.04em;vertical-align:middle;opacity:.5;cursor:help">v14</span></div>
           <div class="brand-sub">Foot &amp; Ankle Medicine &amp; Surgery</div>
         </div>
         <a class="back-link" id="pf-back-search" href="?all=1" style="display:none; margin-right:14px">← All patients</a>
@@ -2523,6 +2539,27 @@
           // the rest of its pack, so this sits ABOVE the plain consent line,
           // which would otherwise claim it.
           if (t.indexOf("theatre_instructions") >= 0 || t.indexOf("postop_instructions") >= 0 || t.indexOf("referral") >= 0 || t.indexOf("cura") >= 0) return "Surgery pack";
+          /* THE OPERATION'S OWN DOCUMENTS. Amy, 19 August 2026, asked for them
+             together and named the group: "operation".
+
+             All four used to fall through to "Other", the catch-all at the
+             bottom of the tab, which is where anything the app does not
+             recognise goes. The operation report is the signed operative
+             record, and it was sitting in the same bucket as a stray upload.
+             Amy pressed the completion letter, was told it was filed, went
+             looking for it and could not find it, which is what surfaced this.
+             A document filed where nobody looks for it may as well not be
+             filed.
+
+             BELOW the Surgery pack line and ABOVE consent, which is where it
+             takes nothing from anybody. Checked against every document type
+             this suite writes: six move, and all six come out of "Other".
+
+             This is the Documents tab, and it is NOT the Operative tab. That
+             tab and the descriptions on it are a different thing entirely and
+             are untouched by this. */
+          if (t.indexOf("operation_report") >= 0 || t.indexOf("day_of_surgery") >= 0
+              || t.indexOf("procedure_episode") >= 0 || t.indexOf("surgical_completion") >= 0) return "Operation";
           if (t.indexOf("consent") >= 0) return "Consent";
           if (t.indexOf("quote") >= 0) return "Quotes";
           return "Other";
@@ -2611,7 +2648,9 @@
           }
           var groups = {};
           docs.forEach(function (d, i) { var c = docCategory(d.doc_type); (groups[c] = groups[c] || []).push(i); });
-          var order = ["Quotes", "Recovery guides", "Fee estimates", "Reception sheets", "Consent", "Surgery pack", "Other"];
+          // "Operation" sits after the pack and before the catch-all: the pack
+          // is made before the day, the operation's own documents on it.
+          var order = ["Quotes", "Recovery guides", "Fee estimates", "Reception sheets", "Consent", "Surgery pack", "Operation", "Other"];
           qs("pf-docs").innerHTML = order.filter(function (c) { return groups[c]; }).map(function (c) {
             var rows = groups[c].map(function (i) {
               var d = docs[i];

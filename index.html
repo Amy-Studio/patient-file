@@ -34,6 +34,22 @@
          // offers. clinic-op-templates.js goes in first because it is only ever
          // read, never a reader.
          "clinic-op-templates.js", "clinic-operation-report.js",
+         // And the read that makes an edit to one of those 193 descriptions
+         // reach THIS screen. Dr Edwards edits them in the suite, at Settings ->
+         // Operative descriptions; clinic-op-template-settings.js is the store
+         // that holds what he changed, and the Operative tab's template picker
+         // asks it before falling back to clinic-op-templates.js.
+         //
+         // Without this line the picker here goes on offering the descriptions
+         // in the file: he would correct one, be told it was saved, and then be
+         // handed the OLD wording while writing a report, with no reason to
+         // doubt it.
+         //
+         // Inert until db-setup-op-template-settings.sql has been run, and
+         // harmless before clinic-style is deployed: a file that 404s leaves
+         // window.ClinicOpTemplateSettings undefined, which is exactly the
+         // "no store" case both pickers already fall back from.
+         "clinic-op-template-settings.js",
          // The three documents written beside the operation report on the day:
          // the day of surgery note, the procedure episode report and the
          // surgical completion letter. It goes in AFTER clinic-surgery-docs.js,

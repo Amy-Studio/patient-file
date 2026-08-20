@@ -335,8 +335,6 @@
       .pr-del { border: 0; background: none; padding: 0; font: inherit; font-size: 12.5px;
                 color: #a3402d; cursor: pointer; }
       .pr-del:hover { text-decoration: underline; }
-      .pr-cc { display: flex; align-items: center; gap: 7px; margin: 10px 0 0; font-size: 12.5px;
-               color: var(--muted); cursor: pointer; }
       .pr-none { font-size: 12.5px; color: var(--muted); padding: 10px 0 2px; }
 
       .arch-row { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -1275,9 +1273,6 @@
                 prBox("Email", "email", x) +
                 prBox("Address", "address", x, true) +
               '</div>' +
-              '<label class="pr-cc"><input type="checkbox" data-k="include_on_letters"' +
-                (x.include_on_letters === false ? "" : " checked") +
-                '> Copy them on letters by default</label>' +
             '</div>';
           }).join("");
           prSync();
@@ -1305,15 +1300,6 @@
             prSync();
             prTouch();
           });
-          host.addEventListener("change", function (e) {
-            if (e.target.getAttribute && e.target.getAttribute("data-k") === "include_on_letters") {
-              var card = e.target.closest(".pr-card");
-              if (!card) return;
-              var i = +card.getAttribute("data-i");
-              if (prList[i]) prList[i].include_on_letters = e.target.checked;
-              prTouch();
-            }
-          });
           host.addEventListener("click", function (e) {
             var b = e.target.closest && e.target.closest("[data-del]");
             if (!b) return;
@@ -1332,8 +1318,7 @@
           });
           var add = qs("pr-add");
           if (add) add.addEventListener("click", function () {
-            prList.push({ relationship: "", name: "", practice: "", address: "", email: "",
-                          include_on_letters: true });
+            prList.push({ relationship: "", name: "", practice: "", address: "", email: "" });
             prRender();
             prTouch();
             var boxes = qs("pr-others").querySelectorAll(".pr-card");

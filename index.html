@@ -4726,7 +4726,13 @@
         // and a count of nothing must never be written down as a clean result.
         function psComplete(res) {
           return !!(res && (res.status === "ok" || res.status === "differs") &&
-                    res.differs != null && res.checkedAt);
+                    res.differs != null && res.checkedAt &&
+                    /* And the same rule for a check that only PARTLY ran. A
+                     * count written down here is read back after a reload with
+                     * the warnings long gone, so a partial failure stamped as
+                     * clean turns into a green sentence on every machine that
+                     * opens this patient afterwards. */
+                    !(res.warnings || []).some(function (w) { return w && w.kind === "fail"; }));
         }
 
         // A mirror of the stamp in this browser, so the date survives a reload
@@ -4967,6 +4973,33 @@
             out.unsettled = "found " + out.count +
                             (out.count === 1 ? " difference" : " differences") +
                             " nobody has looked at yet.";
+            return out;
+          }
+          /* A CHECK THAT COULD NOT READ EVERYTHING IS NOT A CLEAN CHECK.
+           *
+           * Part of a check can fall over while every field it did reach
+           * matched. Those failures ride on warnings and never on the count,
+           * because a lookup that failed leaves no row behind for differs to
+           * count. So this branch was reached with a genuine failure in hand
+           * and said "matched this file" in green, which is the exact fault
+           * the rule above psComplete exists to prevent: a count of nothing
+           * from a check that compared nothing must never read as nothing
+           * wrong. On 20 August 2026 that green sentence hid a linked health
+           * care professional that PracSuite had handed over and we could not
+           * read, and it hid it for a day.
+           */
+          var partial = ((_psRes && _psRes.warnings) || []).filter(function (w) {
+            return w && w.kind === "fail";
+          });
+          if (partial.length) {
+            out.key = "unknown"; out.tone = "warn";
+            out.text = "PracSuite matched every detail it could read when it was checked" +
+                       whenBit + ", but part of the check could not be read, so those " +
+                       "details were never compared. " +
+                       partial.map(function (w) { return w.text; }).join(" ") +
+                       " Open the PracSuite tab to see it in full.";
+            out.unsettled = "could not read part of PracSuite, so some details were " +
+                            "never compared.";
             return out;
           }
           out.key = "clean"; out.tone = "good";

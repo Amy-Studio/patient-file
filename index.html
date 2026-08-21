@@ -1091,6 +1091,37 @@
         function status(msg) { qs("pf-status").textContent = msg || ""; }
         function initials(name) { var p = String(name || "").trim().split(/\s+/); return ((p[0] || "")[0] || "") + ((p[p.length - 1] || "")[0] || ""); }
         function isoToDmy(iso) { if (!iso) return ""; var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (m[3] + "/" + m[2] + "/" + m[1]) : iso; }
+
+        /* ALLERGIES: FOUR STATES, AND A NAMED ALLERGEN ALWAYS WINS.
+         *
+         * "No known allergies", "there is one and here it is", "there is one
+         * and nobody wrote which", and "nobody has been asked" are four
+         * different things, and a screen that cannot tell them apart says the
+         * wrong one.
+         *
+         * This page read the allergies_nka flag FIRST and dropped the allergen
+         * entirely, so a record holding "Penicillin" AND a stale NKA tick — a
+         * state the plan's chip row lets you save, and one the theatre list has
+         * resolved the other way since 5ec4177 — had the penicillin printed by
+         * the theatre list and the theatre sheet, and "no known allergies"
+         * printed here. One patient, two screens, two answers. (22 Aug 2026.)
+         *
+         * The rule is allergyState in clinic-style/clinic-clinical-notes.js,
+         * word for word, and allergiesRaw on the theatre sheet in
+         * clinic-preop-plan.js. This page cannot share it: it loads the theatre
+         * sheet WITHOUT clinic-clinical-notes.js. So the copy is deliberate,
+         * and test-allergies-agree.js runs this one and that one over the same
+         * records and fails if they ever disagree. (House rule 1.) */
+        var PF_SAYS_NONE = /^(nka|nkda|n\.?k\.?d?\.?a\.?|no known(\s+(drug\s+)?allerg(y|ies))?|none( known)?|nil( known)?|n\/a|-)\.?$/i;
+        function allergyState(o) {
+          var v = o && o.allergies;
+          if (Array.isArray(v)) v = v.join(", ");
+          var raw = v ? String(v).trim() : "";
+          if (raw && !PF_SAYS_NONE.test(raw)) return { state: "allergy", text: raw };
+          if (o && o.allergies_nka === false) return { state: "unnamed", text: "" };
+          if (raw || (o && o.allergies_nka === true)) return { state: "none", text: "" };
+          return { state: "unasked", text: "" };
+        }
         /* WHICH VERSION, not just which day.
          *
          * The Documents list said "Created 16/08/2026" on every version, so
@@ -1570,7 +1601,13 @@
           if (codes.length) out += "ITEM CODES\n" + codes.join(", ") + "\n\n";
           var s2 = clinLine("Anaesthesia", "anaesthesia_type") + clinLine("Tourniquet", "tourniquet") + clinLine("Pre-op fasting", "preop_fasting");
           if (s2) out += "ANAESTHESIA\n" + s2 + "\n";
-          var allergy = o.allergies_nka ? "Allergies: NKA (no known allergies)\n" : clinLine("Allergies", "allergies");
+          // A named allergen beats the flag beside it — see allergyState above.
+          // Nobody-asked is the one state that prints nothing at all.
+          var _al = allergyState(o);
+          var allergy = _al.state === "allergy" ? "Allergies: " + _al.text + "\n"
+                      : _al.state === "none"    ? "Allergies: NKA (no known allergies)\n"
+                      : _al.state === "unnamed" ? "Allergies: Yes, and none is named on the record. Check with the patient.\n"
+                      : "";
           var s3 = allergy + clinLine("Theatre alerts", "theatre_alerts") + clinLine("GLP-1 / SGLT2", "glp1_sglt2") + clinLine("Pre-op meds to stop", "preop_meds_to_stop") + clinLine("Risk", "risk_stratification") + clinLine("Pre-op considerations", "preop_considerations");
           if (s3) out += "CLINICAL ALERTS\n" + s3 + "\n";
           var s4 = clinLine("Equipment", "theatre_equipment") + clinLine("Prosthesis", "prosthesis_details") + clinLine("Banding rule", "banding_rule");
@@ -4059,8 +4096,13 @@
             ["Implants", o.prosthesis_details],
             ["Equipment", o.theatre_equipment],
             ["Alerts", o.theatre_alerts],
-            ["Allergies", o.allergies_nka ? "No known allergies"
-                          : (Array.isArray(o.allergies) ? o.allergies.join(", ") : o.allergies)],
+            ["Allergies", (function () {          // named allergen beats the flag — allergyState
+              var a = allergyState(o);
+              return a.state === "allergy" ? a.text
+                   : a.state === "none"    ? "No known allergies"
+                   : a.state === "unnamed" ? "Yes, and none is named on the record. Check with the patient."
+                   : "";                              // nobody asked: the row drops out below
+            })()],
             ["GLP-1 / SGLT2", o.glp1_sglt2 === true ? "Yes" : o.glp1_sglt2 === false ? "No" : ""],
             ["Antibiotic cover", o.ab_cover],
             ["Antithrombotic", o.at_cover]

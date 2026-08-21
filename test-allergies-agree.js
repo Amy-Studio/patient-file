@@ -25,9 +25,36 @@
 "use strict";
 const fs = require("fs");
 const CS = "/Users/amyedwards/GitHub/clinic-style/";
+const { execFileSync } = require("child_process");
 const PF = fs.readFileSync(__dirname + "/index.html", "utf8");
-const NOTES = fs.readFileSync(CS + "clinic-clinical-notes.js", "utf8");
-const PLAN = fs.readFileSync(CS + "clinic-preop-plan.js", "utf8");
+
+/* READ THE SIBLING REPO WITHOUT BEING HOSTAGE TO ITS CHECKOUT.
+ *
+ * Several sessions share ~/GitHub/clinic-style and switch branches in it, so
+ * the file on disk can belong to somebody else's work in progress and be
+ * missing a function this test needs — which turned this suite red for a
+ * reason that had nothing to do with either repo. Take the working copy when
+ * it carries the rule, and otherwise fall back to the branch that is actually
+ * deployed, saying out loud which one was used. (22 Aug 2026.) */
+function sibling(file, marker, what) {
+  let src = "";
+  try { src = fs.readFileSync(CS + file, "utf8"); } catch (_) {}
+  if (src.includes(marker)) return src;
+  let branch = "?";
+  try { branch = execFileSync("git", ["-C", CS, "branch", "--show-current"], { encoding: "utf8" }).trim() || "a detached HEAD"; } catch (_) {}
+  try {
+    const out = execFileSync("git", ["-C", CS, "show", "origin/main:" + file], { encoding: "utf8", maxBuffer: 1 << 26 });
+    if (!out.includes(marker)) throw new Error("origin/main has no " + what + " either");
+    console.log("  note: the clinic-style checkout is on " + branch + ", which has no " + what +
+                " — read " + file + " from origin/main instead");
+    return out;
+  } catch (e) {
+    console.error("FAIL: " + what + " is in neither the working copy nor origin/main (" + e.message + ")");
+    process.exit(1);
+  }
+}
+const NOTES = sibling("clinic-clinical-notes.js", "function allergyState", "allergyState");
+const PLAN = sibling("clinic-preop-plan.js", "function namesAnAllergen", "namesAnAllergen");
 
 const g = (src, re, what) => { const m = src.match(re); if (!m) { console.error("FAIL: " + what + " not found"); process.exit(1); } return m[0]; };
 

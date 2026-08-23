@@ -5300,6 +5300,18 @@
             '    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 20px; align-items: start; }',
             '  #sec-operative .csa-section, #sec-operative .cor-section,',
             '  #sec-operative .sn-section { grid-column: 1 / -1; min-width: 0; }',
+            /* ANYTHING THAT IS NOT A QUESTION RUNS THE FULL WIDTH.
+               Amy, 23 August 2026: "WHY DOES THIS STILL LOOK DIFFERENT?" --
+               because when the columns became opt-in, the rule listing the
+               bands, warnings, headings and feet by name went with the old
+               block, and every one of them became a grid cell. A 90-word amber
+               warning in a third of the row, beside two thirds of nothing.
+               Named by what they are NOT, so the next thing added to one of
+               these panels is full width without this file being told. */
+            '  #sec-operative .cor-group > *:not(.cor-section),',
+            '  #sec-operative .csa-body > *:not(.csa-section),',
+            '  #sec-operative .sn-doc > *:not(.sn-section),',
+            '  #sec-operative .cpop-body > *:not(.cpop-section) { grid-column: 1 / -1; }',
             /* THE GROUP HEADING IS NOT A COLUMN. Amy, 23 August 2026: "do these
                padding spaces look strange to you too" -- they did. The heading
                is a grid child like everything else, so "TIMES AND TOURNIQUET"
@@ -5516,6 +5528,8 @@
           try { drawOpFooter(state.order, state.patient); } catch (e) {}
           try { foldRepeatedNotes(qs("op-forms")); } catch (e) {}
           try { markWhereItGoes(qs("op-forms")); } catch (e) {}
+          /* Last, so it measures boxes that are already in their final column. */
+          try { fitBoxes(qs("op-forms")); } catch (e) {}
 
         }
 
@@ -5651,6 +5665,31 @@
               p.textContent = text;
               sec.appendChild(p);
             });
+          });
+        }
+
+        /* A BOX HE MUST READ CANNOT HIDE ITS FIRST LINE.
+         *
+         * Amy, 18 August 2026: "everything needs to be seen what is printed so
+         * he can amend it", and "show the text box with it in and how it will
+         * be shown. with formatting." A standing paragraph is four or five
+         * lines; the boxes are three rows; so the box scrolled, and what he saw
+         * was the MIDDLE of a sentence he is signing. On 23 August she
+         * screenshotted exactly that.
+         *
+         * Grown to fit what is in them, and re-grown as he types. Capped, so
+         * one very long description cannot push the rest of the tab off the
+         * screen -- past the cap it scrolls, but from the top, which is the
+         * part that was wrong. */
+        function fitBoxes(root) {
+          root.querySelectorAll("textarea").forEach(function (t) {
+            var grow = function () {
+              t.style.height = "auto";
+              t.style.height = Math.min(t.scrollHeight + 2, 420) + "px";
+              t.scrollTop = 0;
+            };
+            grow();
+            if (!t.__fitWired) { t.__fitWired = true; t.addEventListener("input", grow); }
           });
         }
 

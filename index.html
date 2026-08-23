@@ -5030,6 +5030,8 @@
           if (pick === "yes") await confirmSurgery(cur);
         }
         function mountPreop() {
+          /* Same sheet, both tabs. It is idempotent -- one flag, one <style>. */
+          try { injectOperativeSkin(); } catch (e) {}
           var old = qs("pp-whose"); if (old && old.parentNode) old.parentNode.removeChild(old);
           preopNotice();
           mountSurgeonTab("pp-inline", "ClinicPreopPlan", _ppFor, function (s) { _ppFor = s; });
@@ -5509,8 +5511,51 @@
             '#sec-operative .sn-doc-h { font-size: 12px; letter-spacing: .6px; color: #7a8496;',
             '  border-bottom: none; padding-bottom: 0; margin: 22px 0 2px; }'
           ].join("\n");
+          /* THE SAME LOOK ON THE PRE-OP TAB. Amy, 23 August 2026: "can you match
+             the pre op forms to look like this in terms of the layout but dont
+             touch the item number parts as i need the banding rules etc. i mean
+             just the visual."
+             The pre-op plan draws with the SAME cpop- class names as the
+             post-operative instructions, which this sheet already styles -- so
+             this is a change of scope, not new styling. Every rule written for
+             a cpop- part, and every generic one about boxes and type, gets a
+             #sec-preop twin.
+             DELIBERATELY NOT COPIED: anything naming cc- (the procedure code
+             picker) or .item. Those carry the banding and the item numbers, she
+             asked for them to be left alone, and a layout rule reaching into a
+             priced list is exactly how a visual change stops being visual. */
+          /* BY WHOLE RULES, NOT BY LINES. These rules span several lines each --
+             the css array above is fragments -- so a line filter kept the
+             opening of a rule and dropped its closing brace, and the pre-op
+             copy came out as invalid CSS: some of it applied, some silently did
+             not, and the labels stayed a size behind. Walk the braces instead
+             and copy complete rules, @media blocks included. */
+          function eachRule(text, fn) {
+            var depth = 0, start = 0;
+            for (var i = 0; i < text.length; i++) {
+              var ch = text[i];
+              if (ch === "{") depth++;
+              else if (ch === "}") {
+                depth--;
+                if (depth === 0) { fn(text.slice(start, i + 1)); start = i + 1; }
+              }
+            }
+          }
+          /* Left alone on purpose: the procedure code picker and anything
+             naming .item. Those carry the banding and the item numbers, she
+             asked for them untouched, and a layout rule reaching into a priced
+             list is how a visual change stops being visual. */
+          var SKIP = /\.cc-|\.item\b|#cor-|#op-|\.cor-|\.csa-|\.sn-/;
+          var preop = [];
+          eachRule(css, function (rule) {
+            if (rule.indexOf("#sec-operative") < 0) return;
+            if (SKIP.test(rule)) return;
+            preop.push(rule.replace(/#sec-operative/g, "#sec-preop"));
+          });
+          preop = preop.join("\n");
+
           var el = document.createElement("style");
-          el.id = "op-skin"; el.textContent = css;
+          el.id = "op-skin"; el.textContent = css + "\n" + preop;
           document.head.appendChild(el);
         }
 

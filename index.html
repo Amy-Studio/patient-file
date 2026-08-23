@@ -5332,6 +5332,22 @@
             '  #sec-operative .cor-group-h { grid-column: 1 / -1; display: flex;',
             '    align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 10px; }',
             '  #sec-operative .cor-tickall { flex: 0 0 auto; }',
+            /* A ONE-LINE ANSWER TAKES ONE COLUMN, AND THE FORM ALREADY SAYS
+               WHICH ONES THEY ARE. Amy, 23 August 2026: "i dont know whether
+               you have checked form fiedls to see whether they could be smaller
+               with use of columns!" -- so it was measured: 23 boxes on this tab
+               never hold more than 45 characters and each took a whole row.
+               The test is not my reading of what a field means. Every field
+               definition already chooses a single-line input or a multi-row
+               textarea, and that choice IS the statement "this answer is one
+               line". A section whose only box is an input takes a column; one
+               with a textarea keeps the width, because wrapping his standing
+               wording into a third of the page makes it harder to read, which
+               is the thing this form exists to make easy. */
+            '  #sec-operative .cor-section:has(input.cor-inp):not(:has(textarea)),',
+            '  #sec-operative .csa-section:has(input.csa-inp):not(:has(textarea)),',
+            '  #sec-operative .sn-section:has(input.sn-inp):not(:has(textarea)) {',
+            '    grid-column: auto; }',
             '  #sec-operative .csa-section:has(input[type="date"]) { grid-column: auto; }',
             '}',
             /* A DATE IS SIX CHARACTERS WIDE. Amy, 23 August 2026: "still a lot

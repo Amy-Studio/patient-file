@@ -5545,6 +5545,7 @@
           try { foldRepeatedNotes(qs("op-forms")); } catch (e) {}
           try { markWhereItGoes(qs("op-forms")); } catch (e) {}
           /* Last, so it measures boxes that are already in their final column. */
+          try { bandToFoot(); } catch (e) {}
           try { fitBoxes(qs("op-forms")); } catch (e) {}
 
         }
@@ -5707,6 +5708,25 @@
             grow();
             if (!t.__fitWired) { t.__fitWired = true; t.addEventListener("input", grow); }
           });
+        }
+
+        /* THE LIST OF WHAT WILL BE MADE BELONGS BESIDE THE BUTTON THAT MAKES IT.
+         *
+         * Amy, 23 August 2026: "and put this at the bottom like you said!"
+         *
+         * The band is built by clinic-surgery-notes.js at the head of its own
+         * panel, which was the right place while the press lived there. The
+         * press is in the tab's foot now, so the band sat two thirds of the way
+         * down the page listing what a button further down would do. Moved, not
+         * rebuilt: it is the same element, and it stays the one thing that
+         * knows what is ready and what is not, because that list is computed
+         * from what the press itself would build. */
+        function bandToFoot() {
+          var band = document.querySelector("#op-notes-inline .sn-pack");
+          var foot = qs("op-footer");
+          if (!band || !foot || band.__atFoot) return;
+          band.__atFoot = true;
+          foot.parentNode.insertBefore(band, foot);
         }
 
         function drawOpFooter(order, patient) {

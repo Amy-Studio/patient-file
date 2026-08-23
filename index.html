@@ -5328,6 +5328,7 @@
             '#sec-operative .cor-unit { font-size: 12px; color: #7a8496; margin-left: 8px; }',
             /* And they sit together, the way the dates do. */
             '#sec-operative .cor-section:has(input[type="time"]),',
+            '#sec-operative .cor-section:has(.cor-computed),',
             '#sec-operative .cor-section:has(.cor-num) { grid-column: auto; }',
 
             '#sec-operative .csa-inp[data-key$="_time"], #sec-operative .cor-inp[data-key$="_time"] {',
@@ -5427,6 +5428,7 @@
              one clinic-surgery-notes.js has just drawn for this venue. */
           try { drawWanted(state.order, state.patient); applyWanted(state.order, state.patient); } catch (e) {}
           try { drawOpFooter(state.order, state.patient); } catch (e) {}
+          try { foldRepeatedNotes(qs("op-forms")); } catch (e) {}
 
         }
 
@@ -5464,6 +5466,37 @@
             await opWaitIdle(btns[i]);
           }
           return true;
+        }
+
+        /* THE SAME SENTENCE, ONCE.
+         *
+         * Amy, 23 August 2026: "cant all these be simplified in how they are
+         * filled out and set up on the page!! i am drip feeding you again".
+         *
+         * The vital signs group printed "On and empty, so the report prints a
+         * ruled line to write on. Switch this section off if it does not belong
+         * on this report." under six boxes in a row, word for word. It is true
+         * of every one of them, which is exactly why it does not need saying
+         * six times: said once for the group it reads as a rule, said six times
+         * it reads as noise and hides the boxes it is about.
+         *
+         * Kept in the DOM, not deleted -- a section that gets switched off, or
+         * typed into, changes its own note, and it has to be there to change.
+         * Only the repeats within one group are hidden, and only while they are
+         * identical: the first one of each wording still shows. */
+        function foldRepeatedNotes(root) {
+          root.querySelectorAll(".cor-group, .csa-body, .sn-doc").forEach(function (group) {
+            var seen = {};
+            group.querySelectorAll(".cor-note, .sn-note, .csa-note").forEach(function (n) {
+              if (n.classList.contains("cor-warn") || n.classList.contains("sn-warn")) return;
+              var t = (n.textContent || "").replace(/\s+/g, " ").trim();
+              if (!t || t.length < 40) return;          /* short notes are specific */
+              if (!seen[t]) { seen[t] = 1; n.dataset.opFirstOf = "1"; return; }
+              seen[t]++;
+              n.dataset.opRepeat = "1";
+              n.style.display = "none";
+            });
+          });
         }
 
         function drawOpFooter(order, patient) {

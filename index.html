@@ -5324,6 +5324,9 @@
                pickers that ARE the answer, like the audit's; here only the
                search is wanted. */
             '#sec-operative .cor-codes .cc-chips { display: none; }',
+            /* Quieter than the question and quieter than its own note: this is
+               a fact about the machinery, not something he has to act on. */
+            '#sec-operative .op-goes { margin: 5px 0 0; font-size: 11px; color: #98a1b0; }',
             '#sec-operative .cc-hits { max-height: 232px; overflow-y: auto; }',
             '#sec-operative .cc-panel { max-width: 640px; }',
 
@@ -5449,6 +5452,7 @@
           try { drawWanted(state.order, state.patient); applyWanted(state.order, state.patient); } catch (e) {}
           try { drawOpFooter(state.order, state.patient); } catch (e) {}
           try { foldRepeatedNotes(qs("op-forms")); } catch (e) {}
+          try { markWhereItGoes(qs("op-forms")); } catch (e) {}
 
         }
 
@@ -5515,6 +5519,61 @@
               seen[t]++;
               n.dataset.opRepeat = "1";
               n.style.display = "none";
+            });
+          });
+        }
+
+        /* WHERE THIS ANSWER GOES, SAID ON THE QUESTION.
+         *
+         * Amy asked for this at the start, and again on 23 August 2026: "if
+         * they are used on multiple forms then make that clear as i asked from
+         * this program at the begining." She had been worried she was answering
+         * the same thing twice; some of it she was, and the rest only LOOKED
+         * like it because nothing said which document a box fed.
+         *
+         * Traced rather than guessed. Every dos_* and per_* answer prints on
+         * its own PDF and again in the PracSuite clinical note, because that
+         * note is scraped from the built page. Every audit answer prints on the
+         * audit PDF and the PracSuite audit note. Six operation-report answers
+         * reach a second document by starting off the audit's -- they are
+         * seeds, not live reads, so the wording says "starts off" and not
+         * "prints on". The letter's own lines go to the letter and nowhere
+         * else: nothing on this tab reaches the post-operative instructions.
+         */
+        var OP_SEEDS_AUDIT = {
+          op_anaesthesia_type: 1, op_abx: 1, op_asa: 1,
+          op_tq_left: 1, op_tq_right: 1, op_item_numbers: 1
+        };
+        function goesToText(host, key) {
+          if (host === "op-inline") return "Prints on the surgical audit summary and the PracSuite audit note.";
+          if (host === "op-report-inline") {
+            return OP_SEEDS_AUDIT[key]
+              ? "Prints on the operation report, and starts off the audit's answer."
+              : "Prints on the operation report.";
+          }
+          if (/^scl_/.test(key)) return "Prints on the surgical completion letter, which goes to another doctor.";
+          if (/^(dos_|per_)/.test(key)) return "Prints on the day's clinical note and again in the PracSuite note.";
+          return "";
+        }
+        function markWhereItGoes(root) {
+          [["op-inline", ".csa-section", "data-sec"],
+           ["op-report-inline", ".cor-section", "data-sec-key"],
+           ["op-notes-inline", ".sn-section", "data-sec-key"]].forEach(function (row) {
+            var panel = qs(row[0]); if (!panel) return;
+            panel.querySelectorAll(row[1]).forEach(function (sec) {
+              if (sec.__goesWired) return;
+              var key = sec.getAttribute(row[2])
+                     || (sec.querySelector("[data-key],[data-sn-key]") || {}).getAttribute
+                        && (sec.querySelector("[data-key],[data-sn-key]").getAttribute("data-key")
+                            || sec.querySelector("[data-key],[data-sn-key]").getAttribute("data-sn-key"))
+                     || "";
+              var text = goesToText(row[0], String(key).replace(/_text$/, ""));
+              if (!text) return;
+              sec.__goesWired = true;
+              var p = document.createElement("p");
+              p.className = "op-goes";
+              p.textContent = text;
+              sec.appendChild(p);
             });
           });
         }

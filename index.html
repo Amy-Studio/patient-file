@@ -5300,6 +5300,15 @@
             '    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 20px; align-items: start; }',
             '  #sec-operative .csa-section, #sec-operative .cor-section,',
             '  #sec-operative .sn-section { grid-column: 1 / -1; min-width: 0; }',
+            /* THE GROUP HEADING IS NOT A COLUMN. Amy, 23 August 2026: "do these
+               padding spaces look strange to you too" -- they did. The heading
+               is a grid child like everything else, so "TIMES AND TOURNIQUET"
+               was taking a whole cell and leaving two thirds of the row empty
+               beside it, and the tick-all button sat marooned under it. It runs
+               the full width, and the questions start on the next row. */
+            '  #sec-operative .cor-group-h { grid-column: 1 / -1; display: flex;',
+            '    align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 10px; }',
+            '  #sec-operative .cor-tickall { flex: 0 0 auto; }',
             '  #sec-operative .csa-section:has(input[type="date"]) { grid-column: auto; }',
             '}',
             /* A DATE IS SIX CHARACTERS WIDE. Amy, 23 August 2026: "still a lot

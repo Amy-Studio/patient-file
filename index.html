@@ -5306,6 +5306,17 @@
                was taking a whole cell and leaving two thirds of the row empty
                beside it, and the tick-all button sat marooned under it. It runs
                the full width, and the questions start on the next row. */
+            /* THE WHOLE PANEL WAS IN COLUMN ONE. #cor-postop is a plain div
+               inside .cor-group, which is the three-column grid, and nothing
+               told it to span -- so ten questions and their prose sat in a
+               third of the width with two thirds empty beside them. It spans;
+               its own body becomes the grid; and the things that are not
+               questions run the full width of that. */
+            '  #sec-operative #cor-postop { grid-column: 1 / -1; }',
+            '  #sec-operative .cpop-body { display: grid; grid-template-columns: repeat(3, 1fr);',
+            '    gap: 0 20px; align-items: start; }',
+            '  #sec-operative .cpop-section { grid-column: 1 / -1; }',
+            '  #sec-operative .cpop-goes, #sec-operative .cpop-foot { grid-column: 1 / -1; }',
             '  #sec-operative .cor-group-h { grid-column: 1 / -1; display: flex;',
             '    align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 10px; }',
             '  #sec-operative .cor-tickall { flex: 0 0 auto; }',
@@ -5332,6 +5343,49 @@
                which does not print, is one list too many. The chips are for
                pickers that ARE the answer, like the audit's; here only the
                search is wanted. */
+            /* THE POST-OPERATIVE INSTRUCTIONS PANEL, brought in line.
+               It is drawn by clinic-preop-plan.js with cpop- classes, inside
+               the operation report's own panel, which is why every rule above
+               missed it: Amy's screenshot had it in one narrow column, still
+               saying ON, with its own Save. Same parts, different names. */
+            '#sec-operative .cpop-section { margin: 0 0 12px; padding: 0 0 11px;',
+            '  border-bottom: 1px solid #f0f2f6; min-width: 0; }',
+            '#sec-operative .cpop-sec-head { display: flex; align-items: center; gap: 10px;',
+            '  margin: 0 0 5px; }',
+            '#sec-operative .cpop-label { font-size: 13px; font-weight: 600; color: #1f3a5f;',
+            '  letter-spacing: 0; text-transform: none; flex: 1; }',
+            '#sec-operative .cpop-section textarea, #sec-operative .cpop-printed {',
+            '  width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px;',
+            '  line-height: 1.6; color: #243447; background: #fff; border: 1px solid #d3dae6;',
+            '  border-radius: 10px; padding: 9px 11px; }',
+            '#sec-operative .cpop-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 7px; }',
+            '#sec-operative .cpop-chip { border-radius: 999px; font-size: 13px; padding: 5px 12px; }',
+            '#sec-operative .cpop-note, #sec-operative .cpop-off-note,',
+            '#sec-operative .cpop-empty-note, #sec-operative .cpop-goes {',
+            '  font-size: 12px; line-height: 1.55; color: #6b7686; margin: 6px 0 0; }',
+            '#sec-operative .cpop-sub-label { font-size: 11px; letter-spacing: .6px;',
+            '  color: #7a8496; text-transform: none; }',
+            '#sec-operative .cpop-mini { border-radius: 999px; font-size: 11px; }',
+            /* The switch here is a <label> wrapping a real checkbox, not a
+               button, so the track and knob go on the label and the box itself
+               is taken out of the picture rather than left sitting beside it. */
+            '#sec-operative .cpop-switch { position: relative; display: inline-flex;',
+            '  align-items: center; gap: 7px; font-size: 11px; font-weight: 600;',
+            '  color: #1e6b4f; cursor: pointer; border: none; background: none; padding: 2px 0; }',
+            '#sec-operative .cpop-switch input { position: absolute; opacity: 0;',
+            '  width: 0; height: 0; }',
+            '#sec-operative .cpop-switch::before { content: ""; width: 30px; height: 18px;',
+            '  border-radius: 999px; background: #1e9e75; flex: 0 0 auto; }',
+            '#sec-operative .cpop-switch::after { content: ""; width: 14px; height: 14px;',
+            '  border-radius: 50%; background: #fff; position: absolute; left: 14px;',
+            '  box-shadow: 0 1px 2px rgba(31,58,95,.3); }',
+            '#sec-operative .cpop-switch.is-off { color: #7a8496; }',
+            '#sec-operative .cpop-switch.is-off::before { background: #c3c9d4; }',
+            '#sec-operative .cpop-switch.is-off::after { left: 2px; }',
+            /* Its "needs a look" mark hangs into the margin, which overhangs a
+               column edge once this is in a grid. */
+            '#sec-operative .cpop-section.look { margin-left: 0; padding-left: 11px;',
+            '  border-left: 3px solid #e0c98a; border-radius: 0; }',
             '#sec-operative .cor-codes .cc-chips { display: none; }',
             /* Quieter than the question and quieter than its own note: this is
                a fact about the machinery, not something he has to act on. */
@@ -5523,7 +5577,7 @@
          * Only the repeats within one group are hidden, and only while they are
          * identical: the first one of each wording still shows. */
         function foldRepeatedNotes(root) {
-          root.querySelectorAll(".cor-group, .csa-body, .sn-doc").forEach(function (group) {
+          root.querySelectorAll(".cor-group, .csa-body, .sn-doc, .cpop-body").forEach(function (group) {
             var seen = {};
             group.querySelectorAll(".cor-note, .sn-note, .csa-note").forEach(function (n) {
               if (n.classList.contains("cor-warn") || n.classList.contains("sn-warn")) return;
@@ -5560,6 +5614,9 @@
         };
         function goesToText(host, key) {
           if (host === "op-inline") return "Prints on the surgical audit summary and the PracSuite audit note.";
+          if (/^postop_/.test(key)) {
+            return "Prints on the patient's post-operative instructions, which go home with them.";
+          }
           if (host === "op-report-inline") {
             return OP_SEEDS_AUDIT[key]
               ? "Prints on the operation report, and starts off the audit's answer."
@@ -5572,6 +5629,11 @@
         function markWhereItGoes(root) {
           [["op-inline", ".csa-section", "data-sec"],
            ["op-report-inline", ".cor-section", "data-sec-key"],
+           /* The post-operative instructions are drawn inside the report's
+              panel by another file, so they were skipped by every pass on this
+              tab -- including this one. They go to the patient, and that is the
+              one destination on this tab that leaves the building with her. */
+           ["op-report-inline", ".cpop-section", "data-sec-key"],
            ["op-notes-inline", ".sn-section", "data-sec-key"]].forEach(function (row) {
             var panel = qs(row[0]); if (!panel) return;
             panel.querySelectorAll(row[1]).forEach(function (sec) {

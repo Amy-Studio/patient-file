@@ -871,6 +871,14 @@
             <h2>Operative</h2>
             <div class="panel-sub">After surgery: the surgical audit for the ACPS database, then the operation
               report and the patient's post-operative instructions.</div>
+            <!-- ONE START FOR THE WHOLE TAB. Amy, 23 August 2026: "why is it doing
+                 them seperately the operation report/audit etc, why not all at once,
+                 - start operative like this". Three cards each offering to start
+                 their own third of the same job is three decisions where there is
+                 one. This holds the single card; #op-forms holds the three forms it
+                 opens, all at once. -->
+            <div id="op-start"></div>
+            <div id="op-forms">
             <h3 class="op-subhead">Surgical audit (ACPS)</h3>
             <div id="op-inline"></div>
             <h3 class="op-subhead">Operation report</h3>
@@ -881,6 +889,7 @@
                  episode report is the rooms one. -->
             <h3 class="op-subhead">Day of surgery documents</h3>
             <div id="op-notes-inline"></div>
+            </div>
           </div>
 
           <!-- Documents -->
@@ -5041,7 +5050,66 @@
          * because they are opened together, but each keeps its own record of
          * which surgery it is showing, so typing in one can never stop the
          * other one being offered a newer surgery. */
-        function mountOperative() {
+        /* HAS ANYTHING ON THIS TAB BEEN STARTED?
+         *
+         * Each of the three modules owns this test for its own column, and each
+         * still draws its own blank state when it is opened alone. This is the
+         * TAB's version of the same question: has any one of them been started
+         * for the surgery on screen. Asking the three modules would mean
+         * loading and mounting them to find out, which is the opposite of what
+         * a blank tab is for. */
+        var _opStarted = {};   // order id -> she has pressed Start this session
+        var _opAsked = {};     // order id -> the "going ahead" question was asked
+        function anyOperativeStarted(order) {
+          if (!order) return false;
+          var skip = { _deleted: 1, __from: 1, __said: 1 };
+          return ["surgical_audit", "operation_report", "surgery_notes"].some(function (col) {
+            var v = order[col];
+            if (!v || typeof v !== "object") return false;
+            return Object.keys(v).some(function (k) {
+              if (skip[k]) return false;
+              var x = v[k];
+              if (x == null) return false;
+              if (x === true) return true;
+              if (Array.isArray(x)) return x.length > 0;
+              return String(x).trim() !== "";
+            });
+          });
+        }
+
+        /* THE SAME QUESTION PRE-OP PLANNING ASKS, and for a stronger reason: an
+         * operation report and an ACPS audit are a record of an operation that
+         * happened, so which surgery they belong to is not a thing to find out
+         * afterwards. Asked AFTER the forms are up, exactly as preopAskWhich
+         * is, so it is never asked over a blank screen. */
+        async function operativeAskWhich() {
+          var live = (state.orders || []).filter(function (o) { return o && o.id && !o.archived_at; });
+          if (live.length < 2) return;
+          if (live.some(function (o) { return o.confirmed_at; })) return;
+          var cur = state.order; if (!cur || !cur.id) return;
+          if (_opAsked[cur.id]) return;
+          _opAsked[cur.id] = true;
+          var name = cur.plan_name || cur.procedure_name || "this surgery";
+          var pick = await pfAskBox({
+            title: "Is this the surgery going ahead?",
+            sub: name,
+            intro: (state.patient && state.patient.full_name ? state.patient.full_name : "This patient") +
+                   " has " + live.length + " surgeries and none is marked as going ahead. " +
+                   "The audit, the operation report and the day's documents are all written for one operation.",
+            choices: [
+              { id: "yes", primary: true, head: "Yes, this one is going ahead",
+                line: "You will then be asked whether to put the others away as not chosen. They are kept either way." },
+              { id: "no", head: "Not yet, just write it up",
+                line: "Nothing is marked. All of it belongs to " + name + " and you can decide later." }
+            ],
+            cancelLabel: "" });
+          if (pick === "yes") await confirmSurgery(cur);
+        }
+
+        function mountOperativeForms() {
+          var forms = qs("op-forms"), card = qs("op-start");
+          if (card) { card.innerHTML = ""; card.style.display = "none"; }
+          if (forms) forms.style.display = "";
           mountSurgeonTab("op-inline", "ClinicSurgeryAudit", _opFor, function (s) { _opFor = s; });
           mountSurgeonTab("op-report-inline", "ClinicOperationReport", _orFor, function (s) { _orFor = s; });
           /* The day of surgery note, the procedure episode report and the
@@ -5049,6 +5117,64 @@
              for the same reason the two above have theirs: typing in one form
              must never stop another being offered a newer surgery. */
           mountSurgeonTab("op-notes-inline", "ClinicSurgeryNotes", _snFor, function (s) { _snFor = s; });
+        }
+
+        function mountOperative() {
+          var order = state.order;
+          var id = order && order.id;
+          var forms = qs("op-forms"), card = qs("op-start");
+          if (!order || anyOperativeStarted(order) || (id && _opStarted[id])) {
+            mountOperativeForms();
+            /* After the forms are up, so it is never asked over a blank screen,
+               and only once anything is actually being written. */
+            try { operativeAskWhich(); } catch (e) {}
+            return;
+          }
+          /* NOTHING STARTED. One card, one button, and the three forms are not
+             mounted at all -- so the tab is genuinely empty rather than three
+             empties stacked up. */
+          if (forms) forms.style.display = "none";
+          if (!card) { mountOperativeForms(); return; }
+          card.style.display = "";
+          var label = (order.plan_name || order.procedure_name) || "this surgery";
+          card.innerHTML =
+            '<div style="border:1px solid #e6e9ee;border-radius:12px;background:#fbfcfd;' +
+            'padding:22px 24px;max-width:640px">' +
+              '<div style="font-size:15px;font-weight:700;color:#234e7d">No operative record yet</div>' +
+              '<div style="font-size:13.5px;color:#4a5a72;line-height:1.6;margin-top:7px">' +
+                'Nothing has been written for <b>' + esc(label) + '</b>.' +
+              '</div>' +
+              '<div style="font-size:13px;color:#4a5a72;line-height:1.6;margin-top:11px">' +
+                'Starting it opens all three together: the ACPS surgical audit, the operation ' +
+                'report with the patient\'s post-operative instructions under it, and the day of ' +
+                'surgery documents. Each one brings this surgery\'s own answers across and arrives ' +
+                'holding the wording it would print, marked as carried over so you can see it was ' +
+                'not typed. Nothing is printed, filed or sent to PracSuite until you say so.' +
+              '</div>' +
+              '<div style="margin-top:16px;display:flex;gap:9px;flex-wrap:wrap;align-items:center">' +
+                /* Styled here rather than with a class: this card is the TAB's, not a
+                   module's, so cor-btn/cpop-btn CSS is not guaranteed to have been
+                   injected when it draws. Same pill, same navy, as the three it
+                   stands in for. */
+                '<button type="button" id="op-start-go" style="border:1px solid #1f3a5f;' +
+                'background:#1f3a5f;color:#fff;border-radius:999px;padding:8px 15px;' +
+                'font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">' +
+                'Start the operative record</button>' +
+              '</div>' +
+            '</div>';
+          var go = qs("op-start-go");
+          if (go) go.addEventListener("click", function () {
+            if (id) _opStarted[id] = true;
+            /* ALL THREE AT ONCE. Each module keeps its own blank state for when
+               it is met on its own; these say the press has already happened,
+               so the tab does not ask the same question three more times. */
+            var a = qs("op-inline"), b = qs("op-report-inline"), c = qs("op-notes-inline");
+            if (a) a.__csaOpened = true;
+            if (b) b.__opCreating = true;
+            if (c) c.__snOpened = true;
+            mountOperativeForms();
+            try { operativeAskWhich(); } catch (e) {}
+          });
         }
         (function () { var n = document.querySelector('.navitem[data-sec="preop"]'); if (n) n.addEventListener("click", mountPreop); })();
         (function () { var n = document.querySelector('.navitem[data-sec="operative"]'); if (n) n.addEventListener("click", mountOperative); })();

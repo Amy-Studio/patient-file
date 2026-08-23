@@ -5202,7 +5202,109 @@
           });
         }
 
+        /* ONE LOOK FOR ONE PAGE.
+         *
+         * Amy, 23 August 2026: "all the sections looking different and having
+         * on prints etc and amber is strange! it should all be uniform."
+         *
+         * The three modules grew their own visual languages -- csa-, cor-, sn-
+         * -- with the same parts under different names and different styling:
+         * three shades of label, three box treatments, two kinds of switch, and
+         * amber shouting on the carried notes, which are the QUIETEST thing on
+         * the page and were the loudest. They are all on one page now, so they
+         * are styled from one place, scoped to this tab so the modules keep
+         * looking like themselves wherever else they are used.
+         *
+         * Deliberately not done by editing the three modules: their own CSS is
+         * still theirs, and one sheet here is one thing to keep uniform rather
+         * than three that drift. */
+        var _opSkinDone = false;
+        function injectOperativeSkin() {
+          if (_opSkinDone) return; _opSkinDone = true;
+          var css = [
+            '#sec-operative .csa-section, #sec-operative .cor-section, #sec-operative .sn-section {',
+            '  margin: 0 0 18px; padding: 0 0 16px; border-bottom: 1px solid #f0f2f6; }',
+            '#sec-operative .csa-head, #sec-operative .cor-head, #sec-operative .sn-head {',
+            '  display: flex; align-items: center; gap: 10px; margin: 0 0 7px; }',
+            '#sec-operative .csa-label, #sec-operative .cor-label, #sec-operative .sn-label {',
+            '  font-size: 13px; font-weight: 600; color: #1f3a5f; letter-spacing: 0; ',
+            '  text-transform: none; flex: 1; }',
+            '#sec-operative .csa-ta, #sec-operative .cor-ta, #sec-operative .sn-ta,',
+            '#sec-operative .csa-inp, #sec-operative .cor-inp, #sec-operative .sn-inp {',
+            '  width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px;',
+            '  line-height: 1.6; color: #243447; background: #fff; border: 1px solid #d3dae6;',
+            '  border-radius: 10px; padding: 9px 11px; }',
+            /* The switch. Two modules drew it two ways and both said their state
+               in words that changed length as you pressed them, so the row moved
+               under the cursor. One pill, one width, state by colour and word. */
+            '#sec-operative .cor-toggle, #sec-operative .sn-toggle {',
+            '  flex: 0 0 auto; min-width: 84px; text-align: center; border-radius: 999px;',
+            '  border: 1px solid #cfe0d6; background: #eef7f1; color: #1e6b4f;',
+            '  font-size: 11px; font-weight: 600; padding: 4px 11px; cursor: pointer; }',
+            '#sec-operative .cor-toggle.off, #sec-operative .sn-toggle.off {',
+            '  border-color: #dfe3ea; background: #f4f5f8; color: #7a8496; }',
+            /* Carried wording is the quietest fact on the page: these words came
+               from another form and nobody typed them. It was amber, which reads
+               as a warning. */
+            '#sec-operative .csa-carried, #sec-operative .cor-carried, #sec-operative .sn-carried {',
+            '  color: #5f6b7f; background: #f7f9fc; border: 1px solid #e6ebf2;',
+            '  border-radius: 8px; padding: 6px 10px; font-size: 12px; line-height: 1.55;',
+            '  margin: 7px 0 0; }',
+            '#sec-operative .sn-ta[data-carried], #sec-operative .sn-inp[data-carried] {',
+            '  background: #fbfcfe; border-left: 3px solid #c9d6e8; }',
+            /* Notes and hints: one size, one colour, one shape. */
+            '#sec-operative .cor-note, #sec-operative .sn-note, #sec-operative .sn-hint,',
+            '#sec-operative .cor-quiet, #sec-operative .sn-quiet, #sec-operative .sn-about {',
+            '  font-size: 12px; line-height: 1.55; color: #6b7686; margin: 6px 0 0; }',
+            /* Amber stays for exactly one thing: something that needs a look. */
+            '#sec-operative .cor-warn, #sec-operative .sn-warn {',
+            '  font-size: 12px; line-height: 1.55; color: #8a6218; background: #fdf6e6;',
+            '  border: 1px solid #f0e0b8; border-radius: 8px; padding: 7px 11px; margin: 7px 0 0; }',
+            /* TWO COLUMNS, AND THE FIELD DECIDES WHICH IT WANTS.
+               Amy, 23 August 2026: "utilize columns to make this form easier to
+               fill out and more presentable proffesionally."
+               A date is a short answer and sat alone on a full-width row, so
+               three dates took three rows and a screen of scrolling. Anything
+               with a paragraph in it -- a textarea, a long chip set -- still
+               gets the whole width, because wrapping his standing wording into
+               a half-width column makes it harder to read, not easier. Decided
+               by what the field CONTAINS rather than by a list of keys here, so
+               a new question lands in the right column without this knowing
+               about it. */
+            '@media (min-width: 900px) {',
+            /* The grid goes on the wrapper that actually HOLDS the questions --
+               .csa-body, .cor-group, .sn-doc -- not on the panel: each module
+               puts one wrapper inside its host, so a grid on the host has a
+               single child and lays out nothing. */
+            '  #sec-operative .csa-body, #sec-operative .cor-group,',
+            '  #sec-operative .sn-doc {',
+            '    display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; align-items: start; }',
+            '  #sec-operative .csa-section, #sec-operative .cor-section, #sec-operative .sn-section {',
+            '    grid-column: auto; min-width: 0; }',
+            '  #sec-operative .csa-section:has(textarea),',
+            '  #sec-operative .cor-section:has(textarea),',
+            '  #sec-operative .sn-section:has(textarea) { grid-column: 1 / -1; }',
+            /* A chip set of two or three fits a column; twenty-five does not. */
+            '  #sec-operative .csa-section:has(.csa-chips > :nth-child(6)),',
+            '  #sec-operative .cor-section:has(.cor-chips > :nth-child(6)) { grid-column: 1 / -1; }',
+            /* Everything that is not a question runs the full width: the bands,
+               the notes about what the press will do, the document headings. */
+            '  #sec-operative .sn-doc-h, #sec-operative .sn-about, #sec-operative .cor-warn,',
+            '  #sec-operative .sn-warn, #sec-operative .sn-pack-band, #sec-operative .csa-foot,',
+            '  #sec-operative .sn-foot, #sec-operative .cor-foot { grid-column: 1 / -1; }',
+            '}',
+            '#sec-operative .csa-chip, #sec-operative .cor-chip {',
+            '  border-radius: 999px; font-size: 12px; padding: 5px 12px; }',
+            '#sec-operative .sn-doc-h { font-size: 12px; letter-spacing: .6px; color: #7a8496;',
+            '  border-bottom: none; padding-bottom: 0; margin: 22px 0 2px; }'
+          ].join("\n");
+          var el = document.createElement("style");
+          el.id = "op-skin"; el.textContent = css;
+          document.head.appendChild(el);
+        }
+
         function mountOperativeForms() {
+          injectOperativeSkin();
           var forms = qs("op-forms"), card = qs("op-start");
           if (card) { card.innerHTML = ""; card.style.display = "none"; }
           if (forms) forms.style.display = "";
@@ -5327,9 +5429,9 @@
              it does not skip the card. */
           if (!order || (id && _opStarted[id])) {
             mountOperativeForms();
-            /* After the forms are up, so it is never asked over a blank screen,
-               and only once anything is actually being written. */
-            try { operativeAskWhich(); } catch (e) {}
+            /* NOT ASKED HERE. Arriving on the tab is not writing anything -- she
+               may be reading it -- and a dialog on every visit is noise. It is
+               asked on the press below, which is the moment it matters. */
             return;
           }
           /* NOTHING STARTED. One card, one button, and the three forms are not

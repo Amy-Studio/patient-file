@@ -879,6 +879,13 @@
                  opens, all at once. -->
             <div id="op-start"></div>
             <div id="op-forms">
+            <!-- WHAT THIS WILL PRODUCE. Amy, 23 August 2026, on the wall of
+                 questions: "i thought there would be a toggle on or off for if i
+                 want the section". Per DOCUMENT, not per question -- the
+                 per-question switches inside the forms are what made it long in
+                 the first place. Untick one here and its questions leave the
+                 page, so what is on screen is only what is going to be made. -->
+            <div id="op-wanted"></div>
             <h3 class="op-subhead">Surgical audit (ACPS)</h3>
             <div id="op-inline"></div>
             <h3 class="op-subhead">Operation report</h3>
@@ -5106,6 +5113,90 @@
           if (pick === "yes") await confirmSurgery(cur);
         }
 
+        /* THE SIX THINGS THIS TAB MAKES, in the order they are written.
+         *
+         * The venue decides which clinical note is drawn -- the day of surgery
+         * note is the hospital list's, the procedure episode report is the
+         * rooms one -- and clinic-surgery-notes.js already owns that rule, so
+         * this asks it rather than keeping a second copy of the answer. The
+         * post-operative instructions are drawn under the operation report by
+         * clinic-preop-plan.js, which is why they share a panel here.
+         */
+        function operativeDocs(order, patient) {
+          var out = [
+            { key: "audit",  title: "Surgical audit summary",     to: "the College",  host: "op-inline",        head: 1 },
+            { key: "report", title: "Operation report",           to: "patient file", host: "op-report-inline", head: 1 },
+            { key: "postop", title: "Post-operative instructions", to: "the patient",  host: "op-report-inline", within: 1 }
+          ];
+          var N = window.ClinicSurgeryNotes;
+          var docs = (N && typeof N.documentsFor === "function") ? N.documentsFor(order, patient) : [];
+          docs.forEach(function (d) {
+            out.push({ key: d.id, title: d.title, host: "op-notes-inline", doc: d.id,
+                       to: d.toAnotherDoctor ? "another doctor" : "patient file and PracSuite" });
+          });
+          return out;
+        }
+
+        /* Ticks are kept per surgery and only for this visit to the page. They
+           are not written to the record: an untick says "not making this one",
+           which is a decision about today's press, not a fact about the
+           operation. Nothing is hidden that has already been written -- see
+           applyWanted. */
+        var _opWanted = {};
+        function wantedFor(id) {
+          if (!_opWanted[id]) _opWanted[id] = {};
+          return _opWanted[id];
+        }
+
+        function applyWanted(order, patient) {
+          var id = (order && order.id) || "_";
+          var want = wantedFor(id);
+          operativeDocs(order, patient).forEach(function (d) {
+            var on = want[d.key] !== false;
+            if (d.doc) {
+              var sec = document.querySelector('#op-notes-inline [data-doc="' + d.doc + '"]');
+              if (sec) sec.style.display = on ? "" : "none";
+              return;
+            }
+            if (d.within) return;   /* drawn inside the report's own panel */
+            var host = qs(d.host);
+            if (host) host.style.display = on ? "" : "none";
+            if (d.head && host && host.previousElementSibling &&
+                host.previousElementSibling.classList.contains("op-subhead")) {
+              host.previousElementSibling.style.display = on ? "" : "none";
+            }
+          });
+        }
+
+        function drawWanted(order, patient) {
+          var host = qs("op-wanted"); if (!host) return;
+          var id = (order && order.id) || "_";
+          var want = wantedFor(id);
+          var rows = operativeDocs(order, patient).map(function (d) {
+            var on = want[d.key] !== false;
+            return '<label style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:13px;cursor:pointer">' +
+                   '<input type="checkbox" data-want="' + esc(d.key) + '"' + (on ? " checked" : "") + '>' +
+                   '<span style="flex:1">' + esc(d.title) + '</span>' +
+                   '<span style="font-size:12px;color:#8a92a3">' + esc(d.to || "") + '</span>' +
+                   '</label>';
+          }).join("");
+          host.innerHTML =
+            '<div style="border:1px solid #e6e9ee;border-radius:12px;background:#fbfcfd;' +
+            'padding:16px 20px;margin:0 0 18px;max-width:640px">' +
+              '<div style="font-size:13px;font-weight:700;color:#234e7d">What this will produce</div>' +
+              '<div style="font-size:12px;color:#8a92a3;margin:3px 0 10px">' +
+                'Untick one and it is not made, and its questions leave the page. ' +
+                'Nothing already written is lost by unticking.</div>' +
+              rows +
+            '</div>';
+          host.querySelectorAll("[data-want]").forEach(function (cb) {
+            cb.addEventListener("change", function () {
+              want[cb.getAttribute("data-want")] = cb.checked;
+              applyWanted(order, patient);
+            });
+          });
+        }
+
         function mountOperativeForms() {
           var forms = qs("op-forms"), card = qs("op-start");
           if (card) { card.innerHTML = ""; card.style.display = "none"; }
@@ -5117,6 +5208,9 @@
              for the same reason the two above have theirs: typing in one form
              must never stop another being offered a newer surgery. */
           mountSurgeonTab("op-notes-inline", "ClinicSurgeryNotes", _snFor, function (s) { _snFor = s; });
+          /* After the panels, because the list of the day's documents is the
+             one clinic-surgery-notes.js has just drawn for this venue. */
+          try { drawWanted(state.order, state.patient); applyWanted(state.order, state.patient); } catch (e) {}
         }
 
         function mountOperative() {

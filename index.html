@@ -886,16 +886,23 @@
                  the first place. Untick one here and its questions leave the
                  page, so what is on screen is only what is going to be made. -->
             <div id="op-wanted"></div>
-            <h3 class="op-subhead">Surgical audit (ACPS)</h3>
+            <!-- NO SUBHEADINGS. Amy, 23 August 2026: "but we said we didnt want
+                 3 sections!!!!" -- and she is right. Three headings over three
+                 panels with three feet is what made one operation read as three
+                 jobs. The list above says what is being made; the page below is
+                 one page of questions, and the foot is one foot. -->
             <div id="op-inline"></div>
-            <h3 class="op-subhead">Operation report</h3>
             <div id="op-report-inline"></div>
             <!-- The three documents written on the same day as the report.
                  Which of the two clinical notes is drawn follows the venue:
                  the day of surgery note is the hospital list's, the procedure
                  episode report is the rooms one. -->
-            <h3 class="op-subhead">Day of surgery documents</h3>
             <div id="op-notes-inline"></div>
+            <!-- ONE FOOT FOR THE WHOLE TAB. Amy, 19 August 2026: "everything
+                 created should go in the create and save." There were four
+                 Saves on this screen, one per record, and she met them as four
+                 separate decisions about one operation. -->
+            <div id="op-footer"></div>
             </div>
           </div>
 
@@ -5161,10 +5168,8 @@
             if (d.within) return;   /* drawn inside the report's own panel */
             var host = qs(d.host);
             if (host) host.style.display = on ? "" : "none";
-            if (d.head && host && host.previousElementSibling &&
-                host.previousElementSibling.classList.contains("op-subhead")) {
-              host.previousElementSibling.style.display = on ? "" : "none";
-            }
+            /* No heading to hide with it any more: the panels are unlabelled
+               and the list above is what names them. */
           });
         }
 
@@ -5201,6 +5206,18 @@
           var forms = qs("op-forms"), card = qs("op-start");
           if (card) { card.innerHTML = ""; card.style.display = "none"; }
           if (forms) forms.style.display = "";
+          /* THE WHOLE PAGE IS OPEN, OR NONE OF IT IS.
+           *
+           * Each module still owns a blank state for when it is met on its own,
+           * but on this tab the decision has already been made -- either by
+           * pressing Start above, or by something already being written. Left
+           * to themselves the three would each draw their own "start me" card,
+           * which is the three sections back again. Amy, 23 August 2026: "but
+           * we said we didnt want 3 sections!!!!" */
+          var a = qs("op-inline"), b = qs("op-report-inline"), c = qs("op-notes-inline");
+          if (a) a.__csaOpened = true;
+          if (b) b.__opCreating = true;
+          if (c) c.__snOpened = true;
           mountSurgeonTab("op-inline", "ClinicSurgeryAudit", _opFor, function (s) { _opFor = s; });
           mountSurgeonTab("op-report-inline", "ClinicOperationReport", _orFor, function (s) { _orFor = s; });
           /* The day of surgery note, the procedure episode report and the
@@ -5211,6 +5228,91 @@
           /* After the panels, because the list of the day's documents is the
              one clinic-surgery-notes.js has just drawn for this venue. */
           try { drawWanted(state.order, state.patient); applyWanted(state.order, state.patient); } catch (e) {}
+          try { drawOpFooter(state.order, state.patient); } catch (e) {}
+        }
+
+        /* THE FOUR SAVES, DRIVEN FROM ONE BUTTON.
+         *
+         * Each module keeps its own save: the read-back-merge, the guards
+         * about unread wording, the refusal when a column is missing. Those
+         * are the parts that must not be reimplemented in a second place --
+         * a copy here would be a second answer to "what may be written", and
+         * that is how the screens drifted apart before. So this presses their
+         * buttons in turn and waits for each, rather than saving anything
+         * itself. The buttons are hidden, not removed, for the same reason. */
+        function opSaveButtons() {
+          return [qs("csi-save"), qs("cor-save"), qs("sn-save")].filter(function (b) {
+            if (!b) return false;
+            var panel = b.closest("#op-inline, #op-report-inline, #op-notes-inline");
+            return !panel || panel.style.display !== "none";     /* unticked panels are not saved */
+          });
+        }
+        function opWaitIdle(btn) {
+          return new Promise(function (done) {
+            var tries = 0;
+            (function poll() {
+              if (!btn.disabled || ++tries > 60) return done();
+              setTimeout(poll, 100);
+            })();
+          });
+        }
+        async function opSaveAll(status) {
+          var btns = opSaveButtons();
+          if (!btns.length) { status("Nothing open to save."); return false; }
+          for (var i = 0; i < btns.length; i++) {
+            status("Saving " + (i + 1) + " of " + btns.length + "…");
+            btns[i].click();
+            await opWaitIdle(btns[i]);
+          }
+          return true;
+        }
+
+        function drawOpFooter(order, patient) {
+          var host = qs("op-footer"); if (!host) return;
+          /* Their own feet stay in the DOM -- the modules read their own status
+             lines -- but the buttons she used to meet four of are not offered. */
+          ["csi-save", "cor-save", "sn-save", "csi-print"].forEach(function (id) {
+            var b = qs(id); if (b) b.style.display = "none";
+          });
+          var pack = qs("sn-pack-go"); if (pack) pack.style.display = "none";
+
+          host.innerHTML =
+            '<div style="border-top:1px solid #e6e9ee;margin-top:22px;padding:14px 0;display:flex;' +
+            'gap:9px;align-items:center;flex-wrap:wrap;max-width:640px">' +
+              '<span id="op-foot-status" style="font-size:12.5px;color:#4a5a72;margin-right:auto"></span>' +
+              '<button type="button" id="op-save-stop" style="border:1px solid #d3dae6;background:#fff;' +
+              'color:#1f3a5f;border-radius:999px;padding:8px 15px;font-family:inherit;font-size:13px;' +
+              'font-weight:600;cursor:pointer">Save and stop</button>' +
+              '<button type="button" id="op-create-all" style="border:1px solid #1f3a5f;background:#1f3a5f;' +
+              'color:#fff;border-radius:999px;padding:8px 15px;font-family:inherit;font-size:13px;' +
+              'font-weight:600;cursor:pointer">Create all and send</button>' +
+            '</div>';
+
+          var st = qs("op-foot-status");
+          var say = function (m) { if (st) st.textContent = m || ""; };
+
+          qs("op-save-stop").addEventListener("click", async function () {
+            var ok = await opSaveAll(say);
+            if (!ok) return;
+            var t = new Date();
+            var hh = t.getHours(), mm = String(t.getMinutes()).padStart(2, "0");
+            var ampm = hh >= 12 ? "pm" : "am"; hh = hh % 12 || 12;
+            say("Saved at " + hh + ":" + mm + ampm + ". You can close this and come back to it.");
+          });
+
+          qs("op-create-all").addEventListener("click", async function () {
+            /* SAVED FIRST, ALWAYS. The pack builds from the RECORD, so anything
+               typed and not saved would be left out of the documents without
+               anybody being told. */
+            var ok = await opSaveAll(say);
+            if (!ok) return;
+            say("Saved. Building the documents…");
+            var p = qs("sn-pack-go");
+            if (!p) { say("The day's documents are not open, so there is nothing to create."); return; }
+            if (p.disabled) { say("Nothing is ready to create yet — see what is still marked below."); return; }
+            p.click();
+            say("");
+          });
         }
 
         function mountOperative() {

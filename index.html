@@ -5237,12 +5237,32 @@
             /* The switch. Two modules drew it two ways and both said their state
                in words that changed length as you pressed them, so the row moved
                under the cursor. One pill, one width, state by colour and word. */
+            /* A SWITCH THAT LOOKS LIKE A SWITCH. Amy, 23 August 2026: "included
+               theres no obvious way how to turn that off hence why i suggested a
+               toggle?" -- it was a pill with a word in it, which reads as a
+               badge saying what the section IS, not a control for changing it.
+               A track and a knob that slides, with the word beside it, so it is
+               obvious both that it can be pressed and which way it is set. */
             '#sec-operative .cor-toggle, #sec-operative .sn-toggle {',
-            '  flex: 0 0 auto; min-width: 84px; text-align: center; border-radius: 999px;',
-            '  border: 1px solid #cfe0d6; background: #eef7f1; color: #1e6b4f;',
-            '  font-size: 11px; font-weight: 600; padding: 4px 11px; cursor: pointer; }',
-            '#sec-operative .cor-toggle.off, #sec-operative .sn-toggle.off {',
-            '  border-color: #dfe3ea; background: #f4f5f8; color: #7a8496; }',
+            '  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;',
+            '  border: none; background: none; padding: 2px 0; cursor: pointer;',
+            '  font-size: 11px; font-weight: 600; color: #1e6b4f; }',
+            '#sec-operative .cor-toggle::before, #sec-operative .sn-toggle::before {',
+            '  content: ""; width: 30px; height: 18px; border-radius: 999px;',
+            '  background: #1e9e75; position: relative; flex: 0 0 auto;',
+            '  transition: background .12s ease; }',
+            '#sec-operative .cor-toggle::after, #sec-operative .sn-toggle::after {',
+            '  content: ""; width: 14px; height: 14px; border-radius: 50%; background: #fff;',
+            '  position: absolute; margin-left: 14px; transition: margin-left .12s ease;',
+            '  box-shadow: 0 1px 2px rgba(31,58,95,.3); }',
+            '#sec-operative .cor-toggle, #sec-operative .sn-toggle { position: relative; }',
+            '#sec-operative .cor-toggle.off, #sec-operative .sn-toggle.off { color: #7a8496; }',
+            '#sec-operative .cor-toggle.off::before, #sec-operative .sn-toggle.off::before {',
+            '  background: #c3c9d4; }',
+            '#sec-operative .cor-toggle.off::after, #sec-operative .sn-toggle.off::after {',
+            '  margin-left: 2px; }',
+            '#sec-operative .cor-toggle:focus-visible, #sec-operative .sn-toggle:focus-visible {',
+            '  outline: 2px solid #1f3a5f; outline-offset: 2px; border-radius: 999px; }',
             /* Carried wording is the quietest fact on the page: these words came
                from another form and nobody typed them. It was amber, which reads
                as a warning. */

@@ -5287,6 +5287,17 @@
                08/09/2026. Short answers get the width they need and no more, so
                the eye has less to cross between the label and the box. */
             '#sec-operative input[type="date"] { max-width: 190px; }',
+            /* Clocks, numbers and their units. A time is five characters and a
+               temperature is four; neither needs the width of the page. */
+            '#sec-operative input[type="time"] { max-width: 128px; }',
+            '#sec-operative .cor-range { display: flex; align-items: center; gap: 9px; }',
+            '#sec-operative .cor-range-to { font-size: 12px; color: #7a8496; }',
+            '#sec-operative .cor-num { max-width: 116px; }',
+            '#sec-operative .cor-unit { font-size: 12px; color: #7a8496; margin-left: 8px; }',
+            /* And they sit together, the way the dates do. */
+            '#sec-operative .cor-section:has(input[type="time"]),',
+            '#sec-operative .cor-section:has(.cor-num) { grid-column: auto; }',
+
             '#sec-operative .csa-inp[data-key$="_time"], #sec-operative .cor-inp[data-key$="_time"] {',
             '  max-width: 190px; }',
             /* Tighter, and the rhythm the same everywhere. Ninety questions at
@@ -5298,6 +5309,54 @@
             '  margin: 0 0 5px; }',
             '#sec-operative .csa-chips, #sec-operative .cor-chips {',
             '  display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 7px; }',
+            /* ONE TYPE SCALE AND ONE SET OF CORNERS.
+               Measured on this tab: ten different text sizes (10, 10.5, 11,
+               11.5, 12, 12.5, 13, 13.5, 14, 16) and seven corner radii. Amy
+               has already been through this once on the branch beside this one
+               -- "Forty-seven buttons wearing nine text sizes, now wearing
+               three", "Thirteen different corner radii read as sloppy, so now
+               there are four" -- and that work is not on this branch. Same
+               discipline, applied here, rather than waiting for the merge.
+               Four sizes: 11 marks, 12 explains, 13 is the answer, 15 heads.
+               Three corners: a pill, a box, a card. */
+            '#sec-operative, #sec-operative * { font-size: 13px; }',
+            '#sec-operative .csa-label, #sec-operative .cor-label, #sec-operative .sn-label,',
+            '#sec-operative .csa-ta, #sec-operative .cor-ta, #sec-operative .sn-ta,',
+            '#sec-operative .csa-inp, #sec-operative .cor-inp, #sec-operative .sn-inp,',
+            '#sec-operative .csa-chip, #sec-operative .cor-chip { font-size: 13px; }',
+            '#sec-operative .cor-note, #sec-operative .sn-note, #sec-operative .sn-hint,',
+            '#sec-operative .cor-quiet, #sec-operative .sn-quiet, #sec-operative .sn-about,',
+            '#sec-operative .csa-carried, #sec-operative .cor-carried, #sec-operative .sn-carried,',
+            '#sec-operative .cor-warn, #sec-operative .sn-warn { font-size: 12px; }',
+            '#sec-operative .cor-toggle, #sec-operative .sn-toggle,',
+            '#sec-operative .sn-doc-h, #sec-operative .csa-mk, #sec-operative .mk {',
+            '  font-size: 11px; }',
+            '#sec-operative h2, #sec-operative h3 { font-size: 15px; }',
+            /* Corners. The odd one out was a half-round on the code chips,
+               0 6px 6px 0, which is a shape nothing else on the page has. */
+            '#sec-operative .csa-chip, #sec-operative .cor-chip,',
+            '#sec-operative .cor-toggle, #sec-operative .sn-toggle { border-radius: 999px; }',
+            '#sec-operative .csa-ta, #sec-operative .cor-ta, #sec-operative .sn-ta,',
+            '#sec-operative .csa-inp, #sec-operative .cor-inp, #sec-operative .sn-inp,',
+            '#sec-operative .csa-carried, #sec-operative .cor-carried, #sec-operative .sn-carried,',
+            '#sec-operative .cor-warn, #sec-operative .sn-warn { border-radius: 10px; }',
+            /* The seven, named. Notes were 7px, 8px and 9px depending on which
+               module drew them; the "needs a look" marker was 0 6px 6px 0,
+               which is a rounded corner on a single-sided border -- it reads as
+               a mistake because it is one. A left rule is square. */
+            '#sec-operative .cor-note, #sec-operative .sn-note, #sec-operative .cpop-note,',
+            '#sec-operative .cpop-mini, #sec-operative .cc-q, #sec-operative .cc-hits,',
+            '#sec-operative .cor-sel, #sec-operative .cor-tpl-list { border-radius: 10px; }',
+            '#sec-operative .cor-note.cor-off, #sec-operative .sn-note.sn-off,',
+            '#sec-operative .cpop-note.cpop-off-note, #sec-operative .cor-section.look,',
+            '#sec-operative .sn-section.look, #sec-operative .cpop-section.look {',
+            '  border-radius: 0; }',
+            '#sec-operative .cpop-btn { border-radius: 999px; }',
+            '#sec-operative .cpop-goes { font-size: 12px; }',
+            /* The last stray: 12.5px set inline, a half-step nothing else uses. */
+            '#sec-operative [style*="12.5px"] { font-size: 12px; }',
+            /* A one-line answer does not need a four-line box. */
+            '#sec-operative textarea { min-height: 62px; }',
             '#sec-operative .csa-chip, #sec-operative .cor-chip {',
             '  border-radius: 999px; font-size: 12px; padding: 5px 12px; }',
             '#sec-operative .sn-doc-h { font-size: 12px; letter-spacing: .6px; color: #7a8496;',
@@ -5386,7 +5445,7 @@
           host.innerHTML =
             '<div style="border-top:1px solid #e6e9ee;margin-top:22px;padding:14px 0;display:flex;' +
             'gap:9px;align-items:center;flex-wrap:wrap;max-width:640px">' +
-              '<span id="op-foot-status" style="font-size:12.5px;color:#4a5a72;margin-right:auto"></span>' +
+              '<span id="op-foot-status" style="font-size:12px;color:#4a5a72;margin-right:auto"></span>' +
               '<button type="button" id="op-save-stop" style="border:1px solid #d3dae6;background:#fff;' +
               'color:#1f3a5f;border-radius:999px;padding:8px 15px;font-family:inherit;font-size:13px;' +
               'font-weight:600;cursor:pointer">Save and stop</button>' +

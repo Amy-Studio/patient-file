@@ -5475,7 +5475,12 @@
          * buttons in turn and waits for each, rather than saving anything
          * itself. The buttons are hidden, not removed, for the same reason. */
         function opSaveButtons() {
-          return [qs("csi-save"), qs("cor-save"), qs("sn-save")].filter(function (b) {
+          /* ⚠ FOUR SAVES, NOT THREE. The post-operative instructions are drawn
+             INSIDE the operation report's panel by clinic-preop-plan.js, with
+             its own id and its own column, and this list did not know about it.
+             So "Save and stop" saved three records and silently skipped the one
+             that goes home with the patient. Found by review, 23 August 2026. */
+          return [qs("csi-save"), qs("cor-save"), qs("cpo-save"), qs("sn-save")].filter(function (b) {
             if (!b) return false;
             var panel = b.closest("#op-inline, #op-report-inline, #op-notes-inline");
             return !panel || panel.style.display !== "none";     /* unticked panels are not saved */
@@ -5591,7 +5596,7 @@
           var host = qs("op-footer"); if (!host) return;
           /* Their own feet stay in the DOM -- the modules read their own status
              lines -- but the buttons she used to meet four of are not offered. */
-          ["csi-save", "cor-save", "sn-save", "csi-print", "csi-copy"].forEach(function (id) {
+          ["csi-save", "cor-save", "cpo-save", "sn-save", "csi-print", "csi-copy"].forEach(function (id) {
             var b = qs(id); if (b) b.style.display = "none";
           });
           var pack = qs("sn-pack-go"); if (pack) pack.style.display = "none";

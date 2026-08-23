@@ -5625,6 +5625,43 @@
             })();
           });
         }
+        /* ⚠ DID THE SAVE ACTUALLY LAND? The documents are built from the RECORD,
+         * and this waited only for the Save buttons to free up.
+         *
+         * Amy, 23 August 2026: "the docuemns being produced dont really contain
+         * anything in them at all". They contained what the record held at the
+         * instant the press read it. Her surgical audit summary was built at
+         * 10:11:30 from a row that did not finish saving until 10:11:46 --
+         * sixteen seconds of her answers missing from a document filed against
+         * a patient, with nothing said about it.
+         *
+         * Three of the four saves announce themselves with a
+         * clinic:surgeon-orders:changed event and the day's-documents one does
+         * not, so this does not trust a signal. It reads the row's updated_at
+         * before and after, and waits for it to move. If it never moves the
+         * press does NOT build: a document made from answers that are not on
+         * the record is the fault this whole tab exists to prevent. */
+        async function opStamp(orderId) {
+          try {
+            var c = window.ClinicAuth && window.ClinicAuth.getClient && window.ClinicAuth.getClient();
+            if (!c || !orderId) return null;
+            var r = await c.from("surgeon_orders").select("updated_at").eq("id", orderId).single();
+            return (r && r.data && r.data.updated_at) || null;
+          } catch (e) { return null; }
+        }
+        async function opWaitSaved(orderId, before, status) {
+          if (!orderId || !before) return true;      /* nothing to compare against */
+          for (var i = 0; i < 40; i++) {             /* about ten seconds */
+            await new Promise(function (r) { setTimeout(r, 250); });
+            var now = await opStamp(orderId);
+            if (now && now !== before) return true;
+          }
+          status("The answers have not finished saving, so nothing was made. A document built "
+               + "from answers that are not on the record is exactly what this refuses to do. "
+               + "Press Save and stop, wait for it to say saved, then try again.");
+          return false;
+        }
+
         async function opSaveAll(status) {
           var btns = opSaveButtons();
           if (!btns.length) { status("Nothing open to save."); return false; }
@@ -5811,8 +5848,12 @@
             /* SAVED FIRST, ALWAYS. The pack builds from the RECORD, so anything
                typed and not saved would be left out of the documents without
                anybody being told. */
+            var _id = (state.order && state.order.id) || null;
+            var _before = await opStamp(_id);
             var ok = await opSaveAll(say);
             if (!ok) return;
+            say("Saved. Checking it landed…");
+            if (!(await opWaitSaved(_id, _before, say))) return;
             say("Saved. Building the documents…");
             var p = qs("sn-pack-go");
             if (!p) { say("The day's documents are not open, so there is nothing to create."); return; }

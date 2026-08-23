@@ -5772,8 +5772,26 @@
             var p = qs("sn-pack-go");
             if (!p) { say("The day's documents are not open, so there is nothing to create."); return; }
             if (p.disabled) { say("Nothing is ready to create yet — see what is still marked below."); return; }
+            /* ⚠ AND THEN IT SAID NOTHING. Amy, 23 August 2026, on her first real
+               press: "it looked like it was producing documents it was going
+               through numbers, then nothing appeared in the documents but one
+               document".
+               What happened was right -- one of the five was ready and the
+               guard refused four -- but this cleared its own status the instant
+               it handed over, and the pack's own status line sits inside the
+               band. So the outcome of the press was on screen nowhere she was
+               looking. It now waits for the pack's status and repeats it here,
+               under the button she pressed. */
             p.click();
-            say("");
+            say("Working\u2026");
+            var band = qs("sn-pack-status");
+            var tries = 0;
+            (function watch() {
+              if (++tries > 600) { say(""); return; }
+              var t = band && band.textContent ? band.textContent.trim() : "";
+              if (t) { say(t); }
+              setTimeout(watch, 250);
+            })();
           });
         }
 

@@ -5304,27 +5304,6 @@
                pickers that ARE the answer, like the audit's; here only the
                search is wanted. */
             '#sec-operative .cor-codes .cc-chips { display: none; }',
-            /* A FOLDED QUESTION IS ONE LINE. Everything it holds is still in
-               the DOM and still collected -- this hides it from the eye, not
-               from the save. */
-            '#sec-operative .csa-section.is-folded > *:not(.op-fold),',
-            '#sec-operative .cor-section.is-folded > *:not(.op-fold),',
-            '#sec-operative .sn-section.is-folded > *:not(.op-fold) { display: none; }',
-            '#sec-operative .csa-section.is-folded, #sec-operative .cor-section.is-folded,',
-            '#sec-operative .sn-section.is-folded { margin: 0; padding: 0;',
-            '  border-bottom: 1px solid #f4f6f9; }',
-            '#sec-operative .op-fold { display: flex; align-items: baseline; gap: 10px;',
-            '  padding: 7px 0; min-width: 0; }',
-            '#sec-operative .op-fold-lab { flex: 0 0 auto; font-size: 12px;',
-            '  color: #4a5a72; min-width: 168px; }',
-            '#sec-operative .op-fold-says { flex: 1 1 auto; font-size: 12px; color: #98a1b0;',
-            '  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }',
-            '#sec-operative .op-fold-open { flex: 0 0 auto; border: 1px solid #dfe3ea;',
-            '  background: #fff; color: #4a5a72; border-radius: 999px; padding: 3px 11px;',
-            '  font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }',
-
-            /* A search panel the height of the page buries the box it is
-               filling. Ten rows, then scroll. */
             '#sec-operative .cc-hits { max-height: 232px; overflow-y: auto; }',
             '#sec-operative .cc-panel { max-width: 640px; }',
 
@@ -5448,14 +5427,7 @@
              one clinic-surgery-notes.js has just drawn for this venue. */
           try { drawWanted(state.order, state.patient); applyWanted(state.order, state.patient); } catch (e) {}
           try { drawOpFooter(state.order, state.patient); } catch (e) {}
-          try {
-            var f = foldSettled(qs("op-forms"));
-            var st = qs("op-foot-status");
-            if (st && f.folded) {
-              st.textContent = f.open + " to look at. " + f.folded +
-                " already say what they will print \u2014 press Change on any of them.";
-            }
-          } catch (e) {}
+
         }
 
         /* THE FOUR SAVES, DRIVEN FROM ONE BUTTON.
@@ -5492,61 +5464,6 @@
             await opWaitIdle(btns[i]);
           }
           return true;
-        }
-
-        /* SHOW WHAT NEEDS HIM, FOLD WHAT DOES NOT.
-         *
-         * Eighty-eight boxes, and most of them hold standing wording nobody has
-         * changed and nobody needs to. Amy, 23 August 2026: "its very messy and
-         * long", "have you done everything and the checks to make more
-         * concise?" -- and on 20 August, the rule this follows: "a note says
-         * check all fields are done (check ones in red) then he has to approve
-         * the ones he didnt adjust".
-         *
-         * NOTHING IS REMOVED AND NOTHING IS HIDDEN FROM THE DOCUMENTS. A folded
-         * question is one line saying what it will print, and one press opens
-         * it. Folded only when it is BOTH untouched and not waiting for a tick,
-         * so anything marked "needs a look", switched off, carried over, or
-         * typed in by him stays open where he can see it.
-         */
-        function foldSettled(root) {
-          var folded = 0, open = 0;
-          root.querySelectorAll(".csa-section, .cor-section, .sn-section").forEach(function (sec) {
-            if (sec.__foldWired) return;
-            var wants = sec.classList.contains("look")            /* needs a tick */
-                     || sec.classList.contains("off")             /* switched off */
-                     || sec.querySelector("[data-carried], .csa-carried, .cor-carried, .sn-carried");
-            var box = sec.querySelector("textarea, input:not([type=hidden]):not([type=checkbox])");
-            var typed = false;
-            if (box) {
-              var stock = box.getAttribute("data-stock") || box.getAttribute("data-derived")
-                       || box.getAttribute("data-standing") || box.getAttribute("data-was");
-              typed = stock != null && String(box.value || "").trim() !== String(stock).trim();
-            }
-            if (wants || typed || !box) { open++; return; }
-            sec.__foldWired = true;
-            folded++;
-            var label = (sec.querySelector(".csa-label, .cor-label, .sn-label") || {}).textContent || "";
-            var says = String(box.value || "").replace(/\s+/g, " ").trim();
-            var bar = document.createElement("div");
-            bar.className = "op-fold";
-            bar.innerHTML =
-              '<span class="op-fold-lab"></span>' +
-              '<span class="op-fold-says"></span>' +
-              '<button type="button" class="op-fold-open">Change</button>';
-            bar.querySelector(".op-fold-lab").textContent = label;
-            bar.querySelector(".op-fold-says").textContent =
-              says ? (says.length > 90 ? says.slice(0, 87) + "\u2026" : says) : "prints a ruled line";
-            sec.classList.add("is-folded");
-            sec.insertBefore(bar, sec.firstChild);
-            bar.querySelector(".op-fold-open").addEventListener("click", function () {
-              sec.classList.remove("is-folded");
-              bar.remove();
-              sec.__foldWired = false;
-              if (box.focus) box.focus();
-            });
-          });
-          return { folded: folded, open: open };
         }
 
         function drawOpFooter(order, patient) {

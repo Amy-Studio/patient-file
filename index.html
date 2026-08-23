@@ -5260,39 +5260,44 @@
             '#sec-operative .cor-warn, #sec-operative .sn-warn {',
             '  font-size: 12px; line-height: 1.55; color: #8a6218; background: #fdf6e6;',
             '  border: 1px solid #f0e0b8; border-radius: 8px; padding: 7px 11px; margin: 7px 0 0; }',
-            /* TWO COLUMNS, AND THE FIELD DECIDES WHICH IT WANTS.
-               Amy, 23 August 2026: "utilize columns to make this form easier to
-               fill out and more presentable proffesionally."
-               A date is a short answer and sat alone on a full-width row, so
-               three dates took three rows and a screen of scrolling. Anything
-               with a paragraph in it -- a textarea, a long chip set -- still
-               gets the whole width, because wrapping his standing wording into
-               a half-width column makes it harder to read, not easier. Decided
-               by what the field CONTAINS rather than by a list of keys here, so
-               a new question lands in the right column without this knowing
-               about it. */
+            /* SIDE BY SIDE ONLY WHERE IT IS DELIBERATE.
+               Amy, 23 August 2026: "youve added columns in other sections of
+               the form very randomly" -- and it was random. The rule was "no
+               paragraph in it, so it takes a column", which paired whatever
+               happened to sit next to whatever, and read as an accident because
+               it was one.
+               Full width is the default now. A field opts IN to the narrow row,
+               and only the ones that are genuinely a short answer in a run do:
+               the three dates, and the tourniquet times. Everything else keeps
+               the width, so the page reads as one column with two deliberate
+               exceptions rather than a scatter. */
             '@media (min-width: 900px) {',
-            /* The grid goes on the wrapper that actually HOLDS the questions --
-               .csa-body, .cor-group, .sn-doc -- not on the panel: each module
-               puts one wrapper inside its host, so a grid on the host has a
-               single child and lays out nothing. */
             '  #sec-operative .csa-body, #sec-operative .cor-group,',
             '  #sec-operative .sn-doc {',
-            '    display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; align-items: start; }',
-            '  #sec-operative .csa-section, #sec-operative .cor-section, #sec-operative .sn-section {',
-            '    grid-column: auto; min-width: 0; }',
-            '  #sec-operative .csa-section:has(textarea),',
-            '  #sec-operative .cor-section:has(textarea),',
-            '  #sec-operative .sn-section:has(textarea) { grid-column: 1 / -1; }',
-            /* A chip set of two or three fits a column; twenty-five does not. */
-            '  #sec-operative .csa-section:has(.csa-chips > :nth-child(6)),',
-            '  #sec-operative .cor-section:has(.cor-chips > :nth-child(6)) { grid-column: 1 / -1; }',
-            /* Everything that is not a question runs the full width: the bands,
-               the notes about what the press will do, the document headings. */
-            '  #sec-operative .sn-doc-h, #sec-operative .sn-about, #sec-operative .cor-warn,',
-            '  #sec-operative .sn-warn, #sec-operative .sn-pack-band, #sec-operative .csa-foot,',
-            '  #sec-operative .sn-foot, #sec-operative .cor-foot { grid-column: 1 / -1; }',
+            /* Three columns so the three dates land on ONE line rather than
+               two and a widow. Nothing else uses them: everything spans the
+               full three unless it opts out. */
+            '    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 20px; align-items: start; }',
+            '  #sec-operative .csa-section, #sec-operative .cor-section,',
+            '  #sec-operative .sn-section { grid-column: 1 / -1; min-width: 0; }',
+            '  #sec-operative .csa-section:has(input[type="date"]) { grid-column: auto; }',
             '}',
+            /* A DATE IS SIX CHARACTERS WIDE. Amy, 23 August 2026: "still a lot
+               of space for calander date??" -- it was taking half the page for
+               08/09/2026. Short answers get the width they need and no more, so
+               the eye has less to cross between the label and the box. */
+            '#sec-operative input[type="date"] { max-width: 190px; }',
+            '#sec-operative .csa-inp[data-key$="_time"], #sec-operative .cor-inp[data-key$="_time"] {',
+            '  max-width: 190px; }',
+            /* Tighter, and the rhythm the same everywhere. Ninety questions at
+               18px apart is a screen of air; the reading still needs room, so
+               the gap moved and the line-height did not. */
+            '#sec-operative .csa-section, #sec-operative .cor-section, #sec-operative .sn-section {',
+            '  margin: 0 0 12px; padding: 0 0 11px; }',
+            '#sec-operative .csa-head, #sec-operative .cor-head, #sec-operative .sn-head {',
+            '  margin: 0 0 5px; }',
+            '#sec-operative .csa-chips, #sec-operative .cor-chips {',
+            '  display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 7px; }',
             '#sec-operative .csa-chip, #sec-operative .cor-chip {',
             '  border-radius: 999px; font-size: 12px; padding: 5px 12px; }',
             '#sec-operative .sn-doc-h { font-size: 12px; letter-spacing: .6px; color: #7a8496;',

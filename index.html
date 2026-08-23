@@ -5271,7 +5271,7 @@
           var host = qs("op-footer"); if (!host) return;
           /* Their own feet stay in the DOM -- the modules read their own status
              lines -- but the buttons she used to meet four of are not offered. */
-          ["csi-save", "cor-save", "sn-save", "csi-print"].forEach(function (id) {
+          ["csi-save", "cor-save", "sn-save", "csi-print", "csi-copy"].forEach(function (id) {
             var b = qs(id); if (b) b.style.display = "none";
           });
           var pack = qs("sn-pack-go"); if (pack) pack.style.display = "none";
@@ -5319,7 +5319,13 @@
           var order = state.order;
           var id = order && order.id;
           var forms = qs("op-forms"), card = qs("op-start");
-          if (!order || anyOperativeStarted(order) || (id && _opStarted[id])) {
+          /* BLANK UNTIL SHE PRESSES IT. FULL STOP. Amy, 23 August 2026: "it is
+             blank till i press create or start!" -- not "blank unless something
+             happens to be written already", which is what this said before and
+             is why she kept arriving at a wall of questions. Something already
+             written changes what the card SAYS and what its button is called;
+             it does not skip the card. */
+          if (!order || (id && _opStarted[id])) {
             mountOperativeForms();
             /* After the forms are up, so it is never asked over a blank screen,
                and only once anything is actually being written. */
@@ -5333,12 +5339,17 @@
           if (!card) { mountOperativeForms(); return; }
           card.style.display = "";
           var label = (order.plan_name || order.procedure_name) || "this surgery";
+          var already = anyOperativeStarted(order);
           card.innerHTML =
             '<div style="border:1px solid #e6e9ee;border-radius:12px;background:#fbfcfd;' +
             'padding:22px 24px;max-width:640px">' +
-              '<div style="font-size:15px;font-weight:700;color:#234e7d">No operative record yet</div>' +
+              '<div style="font-size:15px;font-weight:700;color:#234e7d">' +
+                (already ? 'Started for this surgery' : 'No operative record yet') + '</div>' +
               '<div style="font-size:13.5px;color:#4a5a72;line-height:1.6;margin-top:7px">' +
-                'Nothing has been written for <b>' + esc(label) + '</b>.' +
+                (already
+                  ? 'Some of it is already written for <b>' + esc(label) + '</b>. Nothing is lost by ' +
+                    'leaving this page, and opening it does not change anything.'
+                  : 'Nothing has been written for <b>' + esc(label) + '</b>.') +
               '</div>' +
               '<div style="font-size:13px;color:#4a5a72;line-height:1.6;margin-top:11px">' +
                 'Starting it opens all three together: the ACPS surgical audit, the operation ' +
@@ -5355,7 +5366,7 @@
                 '<button type="button" id="op-start-go" style="border:1px solid #1f3a5f;' +
                 'background:#1f3a5f;color:#fff;border-radius:999px;padding:8px 15px;' +
                 'font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">' +
-                'Start the operative record</button>' +
+                (already ? 'Open and continue' : 'Start the operative record') + '</button>' +
               '</div>' +
             '</div>';
           var go = qs("op-start-go");
